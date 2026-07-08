@@ -12,7 +12,7 @@ USB only, user-mode.** This constraint is absolute.
 - Do NOT use popup question dialogs. Ask inline in plain chat, one question at a time.
 - Avoid the words "honest", "honestly", "genuinely", "straightforward".
 - **One change at a time, then let the user test on the physical machine, then commit.** Do not batch many untested changes — that already cost a multi-hour unrecoverable break once. Commit (or tag) after each verified-good state so any regression is a `git diff` away, not a guess.
-- Terminology: the machine is a **Die Cutter** / **Digital Fabrication Tool** (never "cutter"/"cutting" — negative connotation in schools). Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication Tool** (mixed case). Show the mat/page in inches as whole numbers.
+- Terminology: the machine is a **die cutter** / **Digital Fabrication Tool**. Always write the full term **"die cutter"** — never abbreviate or truncate to "cutter" (or use "cutting"). In schools the bare word "cutter" can evoke self-harm (a teen who slashes their arms); the full "die cutter" keeps the meaning unambiguous. Applies to UI text, code comments, and chat. Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication Tool** (mixed case). Show the mat/page in inches as whole numbers.
 
 ## Files
 - **DieCutter.cs** — USB + GPGL engine. Opens the cutter via the `usbprint.sys`
@@ -104,7 +104,9 @@ blade 7, 2 passes.
   a "Open from Library" linkage that fetches a design SVG by URL.
 
 ## Gotcha
-The project previously lived in a Dropbox-synced folder, which corrupted large
-Write/Edit saves (NUL bytes, truncation) and dehydrated files to cloud-only
-placeholders. In a plain git checkout this shouldn't recur, but still verify file
-integrity after big edits (brace balance for .cs; file ends with </html>).
+The project now lives in a plain (non-Dropbox) git checkout, so edit files
+directly with the Write/Edit tools — no need to route saves through bash/python,
+and Python is not installed here. (It formerly lived in a Dropbox-synced folder
+that corrupted large saves with NUL bytes/truncation and dehydrated files to
+cloud-only placeholders; that no longer applies.) A quick integrity glance after
+big edits is still cheap: brace balance for .cs, file ends with </html>.
