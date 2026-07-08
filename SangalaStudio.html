@@ -203,23 +203,29 @@ function marksSVG(){
 }
 function printSheet(){
   let inner;
-  if(printFile && svgText){
-    // hide the machine lines (red cut outlines + red dashed folds) so the inkjet
-    // prints only the artwork, the way Studio sets their line weight to 0. Red
-    // FILLED shapes (e.g. window panes) are artwork and are kept.
-    const doc=new DOMParser().parseFromString(svgText,"image/svg+xml");
-    doc.querySelectorAll("path,rect,line,polyline,polygon,circle,ellipse").forEach(el=>{
-      if(!isRed(cprop(el,"stroke","stroke"))) return;
-      const dashed=(cprop(el,"stroke-dasharray","stroke-dasharray")||"none")!=="none";
-      const fill=cprop(el,"fill","fill");
-      if(dashed || !fill || fill==="none") el.style.setProperty("stroke","none","important");
+  if(printFile && svgDoc){
+    // Print reflects the CURRENT per-object kinds (Edit mode may have changed them):
+    // cut & score are machine lines and are hidden; everything else prints - print
+    // objects (including cut/score reassigned to Print) plus any non-object artwork
+    // (fills, images, text). We hide by object kind, not by red-ness, so conversions
+    // carry through. Mutate the retained doc, serialize, then restore it so editing
+    // and geometry stay intact.
+    const kindByEl=new Map(); objects.forEach(o=>{ if(o.el) kindByEl.set(o.el,o.kind); });
+    const svg=svgDoc.documentElement, restore=[];
+    svg.querySelectorAll("path,rect,line,polyline,polygon,circle,ellipse").forEach(el=>{
+      const k=kindByEl.get(el);
+      if(k==="cut"||k==="score"){
+        restore.push([el, el.style.getPropertyValue("stroke"), el.style.getPropertyPriority("stroke")]);
+        el.style.setProperty("stroke","none","important");
+      }
     });
-    const cleaned=new XMLSerializer().serializeToString(doc.documentElement);
+    const cleaned=new XMLSerializer().serializeToString(svg);
+    restore.forEach(function(r){ r[1]?r[0].style.setProperty("stroke",r[1],r[2]):r[0].style.removeProperty("stroke"); });
     inner='<div style="position:relative;width:'+PAGE_LW+'mm;height:'+PAGE_LH+'mm">'
       +'<div style="position:absolute;left:0;top:0">'+cleaned+'</div>'
       +'<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+'</svg>'
       +'</div>';
-    say("Opening the print dialog (artwork only + registration marks). Print at 100% / Actual size.");
+    say("Opening the print dialog (artwork + registration marks). Print at 100% / Actual size.");
   } else {
     const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
     let paths="";
@@ -478,7 +484,9 @@ function refreshEditPanel(){
 }
 function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
   draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
-function deleteSel(){ const o=selObj(); if(!o) return; objects=objects.filter(x=>x.id!==o.id); selId=null;
+function deleteSel(){ const o=selObj(); if(!o) return;
+  if(o.el&&o.el.remove) o.el.remove();          // drop it from the retained doc too, so it neither cuts nor prints
+  objects=objects.filter(x=>x.id!==o.id); selId=null;
   draw(); refreshEditPanel(); say("Deleted the selected object."); }
 $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
