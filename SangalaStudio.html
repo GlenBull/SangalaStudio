@@ -160,7 +160,7 @@
 (function(){
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
-let svgDoc=null, svgHolder=null, objSeq=0;   // retained parsed SVG doc + its hidden container; per-object id counter
+let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let editMode=false, selId=null;              // Edit mode toggle + currently selected object id
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
@@ -203,24 +203,14 @@ function marksSVG(){
 }
 function printSheet(){
   let inner;
-  if(printFile && svgDoc){
+  if(printFile && svgEl){
     // Print reflects the CURRENT per-object kinds (Edit mode may have changed them):
     // cut & score are machine lines and are hidden; everything else prints - print
     // objects (including cut/score reassigned to Print) plus any non-object artwork
     // (fills, images, text). We hide by object kind, not by red-ness, so conversions
     // carry through. Mutate the retained doc, serialize, then restore it so editing
     // and geometry stay intact.
-    const kindByEl=new Map(); objects.forEach(o=>{ if(o.el) kindByEl.set(o.el,o.kind); });
-    const svg=svgDoc.documentElement, restore=[];
-    svg.querySelectorAll("path,rect,line,polyline,polygon,circle,ellipse").forEach(el=>{
-      const k=kindByEl.get(el);
-      if(k==="cut"||k==="score"){
-        restore.push([el, el.style.getPropertyValue("stroke"), el.style.getPropertyPriority("stroke")]);
-        el.style.setProperty("stroke","none","important");
-      }
-    });
-    const cleaned=new XMLSerializer().serializeToString(svg);
-    restore.forEach(function(r){ r[1]?r[0].style.setProperty("stroke",r[1],r[2]):r[0].style.removeProperty("stroke"); });
+    const cleaned=machineHiddenSVG();
     inner='<div style="position:relative;width:'+PAGE_LW+'mm;height:'+PAGE_LH+'mm">'
       +'<div style="position:absolute;left:0;top:0">'+cleaned+'</div>'
       +'<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+'</svg>'
@@ -262,7 +252,7 @@ function classifyKind(el){
   const fill=cprop(el,"fill","fill");
   return (!fill||fill==="none") ? "cut" : "print";
 }
-function clearDoc(){ if(svgHolder) svgHolder.remove(); svgHolder=null; svgDoc=null; }
+function clearDoc(){ if(svgHolder) svgHolder.remove(); svgHolder=null; svgDoc=null; svgEl=null; }
 function loadSVG(text){
   svgText=text;
   const doc=new DOMParser().parseFromString(text,"image/svg+xml");
@@ -271,7 +261,7 @@ function loadSVG(text){
   clearDoc();
   const holder=document.createElement("div");holder.style.cssText="position:absolute;left:-9999px;top:0";
   holder.appendChild(svg);document.body.appendChild(holder);
-  svgDoc=doc; svgHolder=holder;   // retain the parsed doc + rendered container so geometry APIs keep working for later edits
+  svgDoc=doc; svgHolder=holder; svgEl=svg;   // svgEl is the live <svg> now inside holder; doc.documentElement goes null once svg is adopted, so keep this direct ref
   const vb=svg.viewBox&&svg.viewBox.baseVal;
   if(!svg.getAttribute("width")&&vb&&vb.width>0){svg.setAttribute("width",vb.width+"px");svg.setAttribute("height",vb.height+"px");}
   const scale=svgScaleMm(svg);
@@ -302,13 +292,11 @@ function loadSVG(text){
     // silo files classify by line style; a plain (no-red) design cuts every shape (old behaviour).
     const kind = silo ? classifyKind(el) : "cut";
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
-    objects.push({id:++objSeq, el:el, kind:kind, poly:poly});
+    objects.push({id:++objSeq, el:el, kind:kind, orig:kind, poly:poly});
   });
   if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
   if(!silo) normalize();
-  if(silo && svgText){ bgImg=new Image(); bgImg.onload=function(){draw();};
-    bgImg.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgText); }
-  else bgImg=null;
+  bgImg=null; renderBg();
   draw(); refreshEditPanel();
   const nc=cutObjs().length, ns=scoreObjs().length;
   say(silo ? ("Loaded "+nc+" cut + "+ns+" score line"+(ns!==1?"s":"")+". Ready when you are.")
@@ -371,6 +359,40 @@ function bodyOf(header,cutPl,scorePl){
   return L.join("\n");
 }
 function bbox(pl){let a=1e9,b=1e9,c=-1e9,d=-1e9;pl.forEach(p=>p.forEach(q=>{a=Math.min(a,q[0]);b=Math.min(b,q[1]);c=Math.max(c,q[0]);d=Math.max(d,q[1]);}));return[a,b,c,d];}
+
+// serialize the retained doc with machine lines (cut & score) hidden, per current
+// object kinds. Shared by the inkjet Print path and the on-screen preview background
+// so the two always agree. Mutates the live doc, serializes, then restores it.
+const PRINT_LINE_COLOR="#808080";   // color for cut/fold lines reassigned to Print (later: user-selectable)
+function machineHiddenSVG(){
+  const byEl=new Map(); objects.forEach(o=>{ if(o.el) byEl.set(o.el,o); });
+  const svg=svgEl, restore=[];
+  const touch=el=>restore.push([el, el.getAttribute("style")]);   // snapshot the whole style attr so any change reverts
+  svg.querySelectorAll("path,rect,line,polyline,polygon,circle,ellipse").forEach(el=>{
+    const o=byEl.get(el); if(!o) return;
+    if(o.kind==="cut"||o.kind==="score"){                 // machine lines don't print
+      touch(el); el.style.setProperty("stroke","none","important");
+    } else if(o.kind==="print" && o.orig!=="print"){      // a cut/fold reassigned to Print -> draw it as a solid grey line
+      touch(el);
+      el.style.setProperty("stroke",PRINT_LINE_COLOR,"important");
+      el.style.setProperty("stroke-dasharray","none","important");
+      el.style.setProperty("fill","none","important");
+    }
+    // original print artwork (o.orig==="print") is left exactly as imported
+  });
+  const out=new XMLSerializer().serializeToString(svg);
+  restore.forEach(function(r){ r[1]==null?r[0].removeAttribute("style"):r[0].setAttribute("style",r[1]); });
+  return out;
+}
+// rebuild the preview background raster from the retained doc so the canvas shows
+// the true current state (edits/deletions included). Keep the old raster on screen
+// until the new one decodes to avoid a white flash.
+function renderBg(){
+  if(!(printFile && svgEl)){ bgImg=null; return; }
+  const img=new Image();
+  img.onload=function(){ bgImg=img; draw(); };
+  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(machineHiddenSVG());
+}
 
 function draw(){
   const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
@@ -455,7 +477,7 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
-$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
+$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 function closeTest(){$("testmenu").style.display="none";}
@@ -483,11 +505,11 @@ function refreshEditPanel(){
   $("ePrint").classList.toggle("on", !!o && o.kind==="print");
 }
 function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
-  draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
+  renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
 function deleteSel(){ const o=selObj(); if(!o) return;
   if(o.el&&o.el.remove) o.el.remove();          // drop it from the retained doc too, so it neither cuts nor prints
   objects=objects.filter(x=>x.id!==o.id); selId=null;
-  draw(); refreshEditPanel(); say("Deleted the selected object."); }
+  renderBg(); draw(); refreshEditPanel(); say("Deleted the selected object."); }
 $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
