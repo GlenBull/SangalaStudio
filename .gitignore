@@ -1,0 +1,17 @@
+# Build output
+*.exe
+
+# Temp / diagnostic files
+_*.png
+_*.svg
+
+# Local snapshot scheme (superseded by git history)
+versions/
+
+# OS / Dropbox / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.dropbox
+.dropbox.attr
+~$*

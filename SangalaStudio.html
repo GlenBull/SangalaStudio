@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sangala Studio</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#26303a;background:#37587a}
+  .denim{background-color:#3f6b8e;
+    background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 4px),
+                     repeating-linear-gradient(-45deg,rgba(0,0,0,.06) 0 2px,transparent 2px 4px);}
+  .cork{background-color:#c7a06a;
+    background-image:radial-gradient(rgba(120,80,40,.30) 1px,transparent 1.4px),
+                     radial-gradient(rgba(90,60,30,.22) 1px,transparent 1.4px);
+    background-size:7px 7px,11px 11px;background-position:0 0,3px 5px;}
+  .marker{font-family:"Ink Free","Segoe Print","Bradley Hand","Comic Sans MS",cursive;}
+
+  header{display:flex;align-items:center;gap:.6rem;padding:.45rem .8rem;border-bottom:3px solid #2c4a66}
+  .logo{color:#fff}
+  .logo b{font-size:1.5rem;line-height:1;display:block}
+  .logo small{font-size:.66rem;opacity:.85;letter-spacing:.02em}
+  .tools{display:flex;gap:.4rem;margin-left:1rem}
+  .tbtn{display:flex;flex-direction:column;align-items:center;gap:2px;width:74px;cursor:pointer;background:none;border:none}
+  .tbtn .glyph{width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;
+        background:linear-gradient(#ffffff,#e7ecf2);border:1px solid #b7c1cd;box-shadow:inset 0 1px 0 #fff,0 2px 3px rgba(0,0,0,.28)}
+  .tbtn:hover .glyph{background:linear-gradient(#ffffff,#dbe6f3)}
+  .tbtn.on .glyph{background:linear-gradient(#bfe3ff,#8fcaf5);border-color:#3f8fd0;box-shadow:inset 0 1px 0 #fff,0 0 0 2px rgba(63,143,208,.45),0 2px 3px rgba(0,0,0,.28)}
+  .menu{background:#efe0c4;border:2px solid #d8c4a0;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.3);padding:.3rem;flex-direction:column;gap:.15rem}
+  .menu button{font-size:.92rem;text-align:left;padding:.45rem .8rem;border:none;background:none;border-radius:6px;cursor:pointer;color:#5a4a34;white-space:nowrap}
+  .menu button:hover{background:#e0cfa8}
+  .tbtn small{font-size:.64rem;color:#eaf1f8;line-height:1.05;text-align:center}
+  .spacer{flex:1}
+  .conn{color:#eaf1f8;font-size:.82rem;text-align:right;max-width:280px}
+
+  .stage{display:grid;grid-template-columns:1fr 300px;gap:.7rem;padding:.7rem}
+  #setup{position:fixed;z-index:30;display:none;width:272px}
+  .panel{border-radius:12px;padding:.7rem;border:2px solid #d8c4a0;background:#efe0c4;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+  .panel h2{margin:.1rem 0 .5rem;font-size:1.05rem;color:#7a3b12}
+  label.fld{display:block;font-size:.8rem;color:#6b5a44;margin:.5rem 0 .1rem}
+  select,input[type=number]{font-size:1rem;padding:.2rem .3rem;border:1px solid #cbb78f;border-radius:6px;background:#fffaf0;width:100%}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+  .board{border-radius:12px;padding:14px;border:6px solid #8a6a44;box-shadow:inset 0 0 24px rgba(60,40,20,.4)}
+  canvas{display:block;margin:0 auto;max-width:100%;max-height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:#fff}
+  .go{width:100%;font-size:1.5rem;font-weight:800;color:#fff;background:linear-gradient(#1fa85a,#178047);
+      border:1px solid #0f6e34;border-radius:14px;padding:1rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 6px rgba(0,0,0,.3)}
+  .go:disabled{opacity:.5;cursor:default}
+  .jbtn{width:46px;height:38px;font-size:1.05rem;border-radius:9px;border:1px solid #b7c1cd;background:linear-gradient(#fff,#e7ecf2);box-shadow:inset 0 1px 0 #fff,0 2px 3px rgba(0,0,0,.22);cursor:pointer}
+  .jbtn:hover{background:linear-gradient(#fff,#dbe6f3)}
+  #bar{height:12px;background:#e3d6bd;border-radius:6px;overflow:hidden;margin:.6rem 0}
+  #barfill{height:100%;width:0;background:#1fa85a;transition:width .2s}
+  #status{font-size:.92rem;color:#5a4a34;min-height:2.4rem;line-height:1.4}
+  .hint{font-size:.76rem;color:#6b5a44;margin-top:.5rem}
+  @page{size:Letter;margin:0}
+  #printarea{display:none}
+  @media print{ body>*{display:none!important} #printarea{display:block!important} #printarea svg{width:215.9mm;height:279.4mm} }
+</style>
+</head>
+<body class="denim">
+<header class="denim">
+  <div class="logo"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
+  <div class="tools">
+    <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
+    <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
+    <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
+    <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
+    <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
+    <button class="tbtn" id="bSetup"><span class="glyph">⚙️</span><small>Setup</small></button>
+  </div>
+  <div class="spacer"></div>
+  <div class="conn" id="conn">Not connected</div>
+  <input type="file" id="file" accept=".svg" style="display:none">
+</header>
+
+<div id="setup" class="panel">
+    <h2 class="marker">Material</h2>
+    <select id="material">
+      <option>Paper</option><option>Cardstock</option><option>Heavy cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
+    </select>
+    <div class="two">
+      <div><label class="fld">Force</label><input type="number" id="force" min="1" max="33" value="14"></div>
+      <div><label class="fld">Speed</label><input type="number" id="speed" min="1" max="30" value="8"></div>
+    </div>
+    <div class="two">
+      <div><label class="fld">Blade</label><input type="number" id="blade" min="0" max="10" value="3"></div>
+      <div><label class="fld">Passes</label><input type="number" id="passes" min="1" max="4" value="1"></div>
+    </div>
+    <div class="two">
+      <div><label class="fld">Scale %</label><input type="number" id="scale" min="10" max="1000" value="100"></div>
+      <div></div>
+    </div>
+    <label class="fld" style="margin-top:.6rem">Units</label>
+    <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
+    <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
+    <div class="two">
+      <div><label class="fld">From left</label><input type="number" id="offx" min="0" max="8" step="0.1" value="0.5"></div>
+      <div><label class="fld">From top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
+    </div>
+    <div class="hint">Set your material and position, then close Setup and press Make it.</div>
+  </div>
+
+<div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <button id="mTest">⬜ Test square</button>
+  <button id="mScan">🎯 Scan test</button>
+  <button id="mManual">🕹️ Manual align</button>
+</div>
+<div id="jogpanel" class="panel" style="position:fixed;z-index:30;display:none;width:250px">
+    <h2 class="marker">Manual registration</h2>
+    <div class="hint" style="margin-top:0">Jog the tool over the top-left <b>square</b>, then Read marks. The machine finds the other two from there.</div>
+    <label class="fld">Step</label>
+    <select id="jogstep"><option value="1">1 mm</option><option value="0.25">0.25 mm (fine)</option><option value="5">5 mm</option></select>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.3rem;margin:.6rem 0;justify-items:center;align-items:center">
+      <span></span><button class="jbtn" id="jUp">▲</button><span></span>
+      <button class="jbtn" id="jLeft">◀</button><span id="jpos" style="font-size:.72rem;color:#6b5a44;text-align:center">15.9,<br>15.9</span><button class="jbtn" id="jRight">▶</button>
+      <span></span><button class="jbtn" id="jDown">▼</button><span></span>
+    </div>
+    <div class="two" style="margin:.2rem 0 .1rem">
+      <div><label class="fld">X dist mm</label><input type="number" id="mdx" step="0.5" value="184.1"></div>
+      <div><label class="fld">Y dist mm</label><input type="number" id="mdy" step="0.5" value="247.6"></div>
+    </div>
+    <button class="go" id="jRead" style="font-size:1rem;padding:.5rem;background:linear-gradient(#2d7bb8,#1f5c8f);border-color:#17466b">Read marks</button>
+    <button class="go" id="jCut" style="font-size:1rem;padding:.5rem;margin-top:.4rem" disabled>Cut aligned</button>
+    <div id="jstatus" class="hint" style="margin-top:.5rem">Not started.</div>
+</div>
+<div class="stage">
+  <div class="board cork">
+    <canvas id="cv" width="560" height="760"></canvas>
+  </div>
+
+  <div class="panel">
+    <h2 class="marker">Fabricate</h2>
+    <button class="go" id="make" disabled>Make it!</button>
+    <div id="bar"><div id="barfill"></div></div>
+    <div id="status">Connect to the Die Cutter to begin.</div>
+  </div>
+</div>
+
+<div id="printarea"></div>
+<script>
+"use strict";
+(function(){
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+let MAT_W=203, MAT_H=305, design=[], scoreLines=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
+const $=id=>document.getElementById(id);
+const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
+
+function say(t){$("status").innerHTML=t;}
+let units="in";
+function offMM(v){return units==="in"?v*25.4:v;}
+function fmtn(v){return Math.round(v*100)/100;}
+function matLabel(){return units==="in"?("Mat "+Math.round(MAT_W/25.4)+" x "+Math.round(MAT_H/25.4)+" inches"):("Mat "+Math.round(MAT_W)+" x "+Math.round(MAT_H)+" mm");}
+function applyRanges(){const ox=$("offx"),oy=$("offy");
+  if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(MAT_W/25.4);oy.max=fmtn(MAT_H/25.4);}
+  else{ox.step=oy.step=1;ox.max=Math.round(MAT_W);oy.max=Math.round(MAT_H);}}
+function setUnits(u){
+  const oxmm=offMM(+$("offx").value), oymm=offMM(+$("offy").value);
+  units=u; applyRanges();
+  $("offx").value = u==="in"?fmtn(oxmm/25.4):Math.round(oxmm);
+  $("offy").value = u==="in"?fmtn(oymm/25.4):Math.round(oymm);
+  $("posHead").textContent="Position ("+u+")";
+  draw();
+}
+
+/* ---------- print-and-cut registration marks (Silhouette spec) ---------- */
+const MARK_LEN=20, MARK_TH=0.5, SQUARE_SZ=5, INSET=15.9, PAGE_LW=215.9, PAGE_LH=279.4;  // Letter portrait, mm. SQUARE_SZ = Silhouette-standard 5mm corner square; MARK_LEN = 20mm L-bracket legs
+function marksSVG(){
+  const L=MARK_LEN,T=MARK_TH,S=SQUARE_SZ,I=INSET,W=PAGE_LW,H=PAGE_LH,f='fill="#000"';
+  return `<rect x="${I}" y="${I}" width="${S}" height="${S}" ${f}/>`
+    +`<rect x="${W-I-L}" y="${I}" width="${L}" height="${T}" ${f}/>`
+    +`<rect x="${W-I-T}" y="${I}" width="${T}" height="${L}" ${f}/>`
+    +`<rect x="${I}" y="${H-I-T}" width="${L}" height="${T}" ${f}/>`
+    +`<rect x="${I}" y="${H-I-L}" width="${T}" height="${L}" ${f}/>`;
+}
+function printSheet(){
+  let inner;
+  if(printFile && svgText){
+    // hide the machine lines (red cut outlines + red dashed folds) so the inkjet
+    // prints only the artwork, the way Studio sets their line weight to 0. Red
+    // FILLED shapes (e.g. window panes) are artwork and are kept.
+    const doc=new DOMParser().parseFromString(svgText,"image/svg+xml");
+    doc.querySelectorAll("path,rect,line,polyline,polygon,circle,ellipse").forEach(el=>{
+      if(!isRed(cprop(el,"stroke","stroke"))) return;
+      const dashed=(cprop(el,"stroke-dasharray","stroke-dasharray")||"none")!=="none";
+      const fill=cprop(el,"fill","fill");
+      if(dashed || !fill || fill==="none") el.style.setProperty("stroke","none","important");
+    });
+    const cleaned=new XMLSerializer().serializeToString(doc.documentElement);
+    inner='<div style="position:relative;width:'+PAGE_LW+'mm;height:'+PAGE_LH+'mm">'
+      +'<div style="position:absolute;left:0;top:0">'+cleaned+'</div>'
+      +'<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+'</svg>'
+      +'</div>';
+    say("Opening the print dialog (artwork only + registration marks). Print at 100% / Actual size.");
+  } else {
+    const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
+    let paths="";
+    design.forEach(p=>{let d="";p.forEach((q,i)=>{d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" ";});paths+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>';});
+    inner='<svg xmlns="http://www.w3.org/2000/svg" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+paths+'</svg>';
+    say(design.length?"Opening the print dialog (marks + design). Print at 100% / Actual size.":"Opening the print dialog (registration marks). Print at 100% / Actual size.");
+  }
+  document.getElementById("printarea").innerHTML=inner;
+  setTimeout(function(){window.print();},60);
+}
+
+/* ---------- SVG -> mm polylines (browser flattens curves) ---------- */
+function svgScaleMm(svg){
+  // real-world millimetres per SVG user unit, from width/viewBox (handles mm, pt, in, px)
+  const vb=svg.viewBox&&svg.viewBox.baseVal;
+  function toMm(v){ if(!v)return null; const m=/^\s*([\d.]+)\s*(mm|cm|in|pt|px|)\s*$/.exec(v); if(!m)return null;
+    const x=parseFloat(m[1]),u=m[2]||"px";
+    return u==="mm"?x:u==="cm"?x*10:u==="in"?x*25.4:u==="pt"?x*25.4/72:x*25.4/96; }
+  const wmm=toMm(svg.getAttribute("width"));
+  if(vb&&vb.width>0&&wmm) return wmm/vb.width;
+  return 25.4/96;
+}
+function cprop(el,prop,attr){ // inline style first, then presentation attribute
+  const s=el.style&&el.style.getPropertyValue(prop);
+  return ((s&&s.length)?s:(el.getAttribute(attr)||"")).trim().toLowerCase();
+}
+function isRed(c){ c=(c||"").replace(/\s+/g,""); return c==="#ff0000"||c==="#f00"||c==="red"||c==="rgb(255,0,0)"; }
+function loadSVG(text){
+  svgText=text;
+  const doc=new DOMParser().parseFromString(text,"image/svg+xml");
+  const svg=doc.documentElement;
+  if(svg.nodeName!=="svg"){say("That file doesn't look like an SVG.");return;}
+  const holder=document.createElement("div");holder.style.cssText="position:absolute;left:-9999px;top:0";
+  holder.appendChild(svg);document.body.appendChild(holder);
+  const vb=svg.viewBox&&svg.viewBox.baseVal;
+  if(!svg.getAttribute("width")&&vb&&vb.width>0){svg.setAttribute("width",vb.width+"px");svg.setAttribute("height",vb.height+"px");}
+  const scale=svgScaleMm(svg);
+  const els=[...svg.querySelectorAll("path,rect,circle,ellipse,line,polygon,polyline")];
+  // Silhouette print-and-cut files mark cut lines in red. If none are red, treat
+  // it as a plain design and cut every shape (old behaviour).
+  let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
+  const silo = red>0; printFile = silo;
+  design=[]; scoreLines=[];
+  const rootPt=svg.createSVGPoint();
+  const PX2MM=25.4/96;
+  function sample(el){
+    const len=el.getTotalLength?el.getTotalLength():0; if(!len) return null;
+    const m=el.getCTM(); const sc=m?Math.hypot(m.a,m.b):1;
+    // getCTM() maps to pixel space -> convert px->mm; if no CTM the raw points are
+    // already in user units -> convert with the svg's mm-per-unit scale.
+    const mmlen = m ? len*sc*PX2MM : len*scale;
+    const n=Math.max(8,Math.ceil(mmlen*4)); const poly=[];
+    for(let i=0;i<=n;i++){const p=el.getPointAtLength(len*i/n);rootPt.x=p.x;rootPt.y=p.y;
+      let X,Y;
+      if(m){const q=rootPt.matrixTransform(m); X=q.x*PX2MM; Y=q.y*PX2MM;}
+      else { X=p.x*scale; Y=p.y*scale; }
+      if(!isFinite(X)||!isFinite(Y)) return null;   // bad point -> skip the whole path (no mangled shapes)
+      poly.push([X,Y]);}
+    return poly.length>=2?simplify(poly,0.08):null;
+  }
+  els.forEach(el=>{
+    let bucket;
+    if(silo){
+      if(!isRed(cprop(el,"stroke","stroke"))) return;          // ignore black frames, textures
+      const dashed = (cprop(el,"stroke-dasharray","stroke-dasharray")||"none")!=="none";
+      const fill = cprop(el,"fill","fill");
+      const unfilled = !fill||fill==="none";
+      if(dashed) bucket=scoreLines;                            // dashed red = fold / score
+      else if(unfilled) bucket=design;                        // solid red outline = cut
+      else return;                                            // solid red filled = printed panes
+    } else { bucket=design; }
+    const poly=sample(el); if(poly) bucket.push(poly);
+  });
+  holder.remove();
+  if(!design.length&&!scoreLines.length){say("No cut lines found in that SVG.");return;}
+  if(!silo) normalize();
+  if(silo && svgText){ bgImg=new Image(); bgImg.onload=function(){draw();};
+    bgImg.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgText); }
+  else bgImg=null;
+  draw();
+  say(silo ? ("Loaded "+design.length+" cut + "+scoreLines.length+" score line"+(scoreLines.length!==1?"s":"")+". Ready when you are.")
+           : ("Loaded "+design.length+" shape"+(design.length!==1?"s":"")+". Ready when you are."));
+}
+function normalize(){let mx=1e9,my=1e9;
+  design.concat(scoreLines).forEach(p=>p.forEach(q=>{mx=Math.min(mx,q[0]);my=Math.min(my,q[1]);}));
+  if(mx===1e9)return;
+  design=design.map(p=>p.map(q=>[q[0]-mx,q[1]-my]));
+  scoreLines=scoreLines.map(p=>p.map(q=>[q[0]-mx,q[1]-my]));}
+
+function placeAndOrder(arr){
+  const s=printFile?1:((+$("scale").value||100)/100), ox=printFile?0:offMM(+$("offx").value), oy=printFile?0:offMM(+$("offy").value);
+  let pl=arr.map(p=>p.map(q=>[q[0]*s+ox,q[1]*s+oy]));
+  const ordered=[],todo=pl.slice(); let cur=[0,0];
+  while(todo.length){let bi=0,bd=1e18;todo.forEach((p,i)=>{const d=(p[0][0]-cur[0])**2+(p[0][1]-cur[1])**2;if(d<bd){bd=d;bi=i;}});
+    const p=todo.splice(bi,1)[0];ordered.push(p);cur=p[p.length-1];}
+  return ordered;
+}
+function placed(){return placeAndOrder(design);}
+function placedScore(){return placeAndOrder(scoreLines);}
+function hdrStr(pen){ return [Math.round(+$("force").value)||0, Math.round(+$("speed").value)||0, Math.round(+$("blade").value)||0, pen, Math.max(1,Math.round(+$("passes").value)||1)].join(","); }
+function simplify(pts,tol){
+  if(pts.length<3) return pts;
+  const keep=new Array(pts.length).fill(false); keep[0]=keep[pts.length-1]=true;
+  const st=[[0,pts.length-1]];
+  while(st.length){ const seg=st.pop(),a=seg[0],b=seg[1];
+    const ax=pts[a][0],ay=pts[a][1],bx=pts[b][0],by=pts[b][1],dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy;
+    let md=0,idx=-1;
+    for(let i=a+1;i<b;i++){ const px=pts[i][0],py=pts[i][1]; let d;
+      if(len2===0) d=Math.hypot(px-ax,py-ay);
+      else { const t=((px-ax)*dx+(py-ay)*dy)/len2,cx=ax+t*dx,cy=ay+t*dy; d=Math.hypot(px-cx,py-cy); }
+      if(d>md){md=d;idx=i;} }
+    if(md>tol&&idx>=0){ keep[idx]=true; st.push([a,idx]); st.push([idx,b]); } }
+  const out=[]; for(let i=0;i<pts.length;i++) if(keep[i]) out.push(pts[i]); return out;
+}
+function perforate(paths,dash,gap){
+  const out=[];
+  (paths||[]).forEach(p=>{ let mode=1,rem=dash,cur=null;
+    const flush=()=>{ if(cur&&cur.length>=2) out.push(cur); cur=null; };
+    for(let i=0;i+1<p.length;i++){ const ax=p[i][0],ay=p[i][1],bx=p[i+1][0],by=p[i+1][1];
+      const L=Math.hypot(bx-ax,by-ay); if(L<1e-9) continue;
+      const ux=(bx-ax)/L,uy=(by-ay)/L; let done=0;
+      while(done<L){ const step=Math.min(rem,L-done);
+        if(mode===1){ if(!cur) cur=[[ax+ux*done,ay+uy*done]]; cur.push([ax+ux*(done+step),ay+uy*(done+step)]); }
+        done+=step; rem-=step;
+        if(rem<=1e-9){ if(mode===1) flush(); mode^=1; rem=mode?dash:gap; } } }
+    flush(); });
+  return out;
+}
+function pathsToLines(pl){return pl.map(p=>p.map(q=>q[0].toFixed(2)+","+q[1].toFixed(2)).join(" "));}
+function bodyOf(header,cutPl,scorePl){
+  let L=[header].concat(pathsToLines(cutPl));
+  if(scorePl&&scorePl.length){ L.push("---SCORE---"); L=L.concat(pathsToLines(scorePl)); }
+  return L.join("\n");
+}
+function bbox(pl){let a=1e9,b=1e9,c=-1e9,d=-1e9;pl.forEach(p=>p.forEach(q=>{a=Math.min(a,q[0]);b=Math.min(b,q[1]);c=Math.max(c,q[0]);d=Math.max(d,q[1]);}));return[a,b,c,d];}
+
+function draw(){
+  const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
+  cv.height=900; cv.width=Math.round(900*dw/dh);
+  const k=cv.height/dh;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
+  if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
+  ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,cv.width,cv.height);
+  ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);
+  const sl=placedScore();
+  ctx.strokeStyle="#2a6bd0";ctx.lineWidth=1;ctx.setLineDash([4,3]);
+  sl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  ctx.setLineDash([]);
+  ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
+  const pl=placed();
+  pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  if(showMarks){
+    ctx.fillStyle="#111"; const I=INSET,S=SQUARE_SZ,L=MARK_LEN,T=MARK_TH,W=PAGE_LW,H=PAGE_LH,tt=Math.max(1.5,T*k);
+    ctx.fillRect(I*k,I*k,S*k,S*k);
+    ctx.fillRect((W-I-L)*k,I*k,L*k,tt); ctx.fillRect((W-I-T)*k,I*k,tt,L*k);
+    ctx.fillRect(I*k,(H-I-T)*k,L*k,tt); ctx.fillRect(I*k,(H-I-L)*k,tt,L*k);
+  }
+  const chk=pl.concat(sl);
+  if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
+}
+
+/* ---------- helper calls ---------- */
+async function connect(){
+  say("Connecting...");
+  try{
+    const r=await fetch("/connect"); const j=await r.json();
+    if(j.ok){connected=true;MAT_W=j.width||203;$("conn").textContent="Connected: "+j.model+" ("+j.fw+")";
+      $("make").disabled=false;say("Connected. Open a design or load the test square.");draw();}
+    else{connected=false;$("conn").textContent="Not connected";say("Could not connect: "+j.error);}
+  }catch(e){say("Could not reach the helper: "+e.message);}
+}
+async function makeIt(){
+  if(!connected){say("Connect to the Die Cutter first.");return;}
+  const m=MATS[$("material").value], pen=m[3];
+  let pl, spl, url;
+  if(showMarks){
+    // marks on -> register to the printed marks, then cut/score in that frame
+    if(printFile){ pl=placed(); spl=placedScore(); }
+    else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
+      pl=design.map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
+      spl=scoreLines.map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+    url="/printcut";
+  } else {
+    // marks off -> plain cut, no registration
+    pl=placed(); spl=placedScore(); url="/cut";
+  }
+  if(!pl.length && !spl.length){say("Open a design or load the test square first.");return;}
+  const body=bodyOf(hdrStr(pen), pl, perforate(spl,4,1.2));
+  $("make").disabled=true;
+  say(showMarks?"Registering to the printed marks, then making it...":(pen?"Drawing...":"Making..."));
+  let poll=setInterval(async()=>{try{const s=await(await fetch("/status")).json();
+    say(s.status);const mm=/(\d+)%/.exec(s.status);if(mm)$("barfill").style.width=mm[1]+"%";}catch(e){}},400);
+  try{
+    const r=await(await fetch(url,{method:"POST",body:body})).json();
+    clearInterval(poll);
+    if(r.ok){$("barfill").style.width="100%";say(showMarks?"Done - the cut lands on the printed design.":"Done! Unload the mat.");}
+    else say("Problem: "+r.error);
+  }catch(e){clearInterval(poll);say("Could not send to the helper: "+e.message);}
+  $("make").disabled=false;
+}
+
+/* ---------- wiring ---------- */
+function applyMat(){const m=MATS[$("material").value];$("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1);}
+$("material").onchange=applyMat;
+["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
+$("units").onchange=e=>setUnits(e.target.value);
+$("bConnect").onclick=connect;
+$("bOpen").onclick=()=>$("file").click();
+$("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
+$("mTest").onclick=()=>{closeTest();design=[[[0,0],[30,0],[30,30],[0,30],[0,0]]];scoreLines=[];printFile=false;draw();say("Test square loaded (30 mm).");};
+$("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
+  if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
+function closeTest(){$("testmenu").style.display="none";}
+$("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
+  if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
+document.addEventListener("click",(e)=>{const t=$("testmenu");if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("bTestMenu").contains(e.target))t.style.display="none";});
+$("make").onclick=makeIt;
+$("bPrint").onclick=printSheet;
+$("bMarks").onclick=()=>{ showMarks=!showMarks; $("bMarks").classList.toggle("on",showMarks); draw();
+  say(showMarks?"Registration marks ON - shown in the preview and included when you Print.":"Registration marks OFF - preview and print omit them."); };
+$("bMarks").classList.toggle("on",showMarks);
+$("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
+  say("Scanning for registration marks...");
+  try{const r=await(await fetch("/scan",{method:"POST",body:""})).json();
+    if(r.ok)say("Scan result: "+(r.result==="0"?"marks FOUND":("machine replied '"+r.result+"'")));
+    else say("Scan error: "+r.error);
+  }catch(e){say("Scan failed: "+e.message);}};
+/* ---------- manual registration ---------- */
+let mReady=false;
+function jbody(){const m=MATS[$("material").value];return hdrStr(m[3]);}
+function jpos(r){$("jpos").innerHTML=(+r.x).toFixed(1)+",<br>"+(+r.y).toFixed(1);}
+$("mManual").onclick=async()=>{closeTest();
+  if(!connected){say("Connect to the Die Cutter first.");return;}
+  const jp=$("jogpanel"),rb=$("bTestMenu").getBoundingClientRect();
+  jp.style.left=Math.max(8,rb.left-30)+"px";jp.style.top=(rb.bottom+8)+"px";jp.style.display="block";
+  mReady=false;$("jCut").disabled=true;$("jstatus").textContent="Setting up - the tool will move to the square...";
+  try{const r=await(await fetch("/manualstart",{method:"POST",body:jbody()})).json();
+    if(r.ok){jpos(r);$("jstatus").textContent="Jog the tool onto the square, then Read marks.";}
+    else $("jstatus").textContent="Problem: "+r.error;
+  }catch(e){$("jstatus").textContent="Failed: "+e.message;}
+};
+async function jog(dx,dy){
+  try{const r=await(await fetch("/jog",{method:"POST",body:dx+","+dy})).json();
+    if(r.ok)jpos(r); else $("jstatus").textContent="Problem: "+r.error;
+  }catch(e){$("jstatus").textContent="Jog failed: "+e.message;}
+}
+function jstep(){return +$("jogstep").value;}
+$("jUp").onclick=()=>jog(0,-jstep());
+$("jDown").onclick=()=>jog(0,jstep());
+$("jLeft").onclick=()=>jog(-jstep(),0);
+$("jRight").onclick=()=>jog(jstep(),0);
+$("jRead").onclick=async()=>{
+  mReady=false;$("jCut").disabled=true;
+  $("jstatus").textContent="Reading the marks...";
+  const dist=(+$("mdy").value)+","+(+$("mdx").value);   // len(Y),wid(X)
+  try{const r=await(await fetch("/manualread",{method:"POST",body:dist})).json();
+    if(r.ok&&r.found){mReady=true;$("jCut").disabled=false;$("jstatus").textContent="All three marks FOUND. Press Cut aligned.";}
+    else if(r.ok&&r.result==="1"){$("jstatus").innerHTML="Locked the square, but missed the next mark. If it overshot to the <b>right</b>, lower X dist a few mm; if it missed <b>low</b>, lower Y dist. Then Read again.";}
+    else if(r.ok){$("jstatus").textContent="Didn't lock the square (replied '"+r.result+"'). Re-jog onto it and read again.";}
+    else $("jstatus").textContent="Error: "+r.error;
+  }catch(e){$("jstatus").textContent="Read failed: "+e.message;}
+};
+$("jCut").onclick=async()=>{
+  if(!mReady){$("jstatus").textContent="Read the marks first.";return;}
+  if(!design.length){$("jstatus").textContent="Load and print a design first.";return;}
+  let pl, spl;
+  if(printFile){ pl=placed(); spl=placedScore(); }
+  else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
+    pl=design.map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
+    spl=scoreLines.map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+  const body=bodyOf(jbody(), pl, perforate(spl,4,1.2));
+  $("jstatus").textContent="Cutting on the printed design...";
+  const poll=setInterval(async()=>{try{const st=await(await fetch("/status")).json();$("jstatus").textContent=st.status;}catch(e){}},400);
+  try{const r=await(await fetch("/manualcut",{method:"POST",body:body})).json();clearInterval(poll);
+    $("jstatus").textContent=r.ok?"Done - the cut should land on the printed design.":("Problem: "+r.error);
+  }catch(e){clearInterval(poll);$("jstatus").textContent="Failed: "+e.message;}
+};
+applyMat(); draw();
+})();
+</script>
+</body>
+</html>
