@@ -63,6 +63,7 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
+    <button class="tbtn" id="bEdit"><span class="glyph">✏️</span><small>Edit</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
     <button class="tbtn" id="bSetup"><span class="glyph">⚙️</span><small>Setup</small></button>
@@ -142,6 +143,7 @@
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
 let svgDoc=null, svgHolder=null, objSeq=0;   // retained parsed SVG doc + its hidden container; per-object id counter
+let editMode=false, selId=null;              // Edit mode toggle + currently selected object id
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
@@ -254,7 +256,7 @@ function loadSVG(text){
   // it as a plain design and cut every shape (old behaviour).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
-  objects=[];
+  objects=[]; selId=null;
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
   function sample(el){
@@ -293,9 +295,15 @@ function normalize(){let mx=1e9,my=1e9;
   if(mx===1e9)return;
   objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]);});}
 
+// per-object placement WITHOUT reordering — same scale/offset math as placeAndOrder.
+// used for the Edit-mode overlay + hit-testing so object identity is preserved.
+function placeParams(){ return { s:printFile?1:((+$("scale").value||100)/100), ox:printFile?0:offMM(+$("offx").value), oy:printFile?0:offMM(+$("offy").value) }; }
+function placePoly(poly){ const pp=placeParams(); return poly.map(q=>[q[0]*pp.s+pp.ox, q[1]*pp.s+pp.oy]); }
+function segDist(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
+  let t=l2?((px-ax)*dx+(py-ay)*dy)/l2:0; t=t<0?0:t>1?1:t;
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy)); }
 function placeAndOrder(arr){
-  const s=printFile?1:((+$("scale").value||100)/100), ox=printFile?0:offMM(+$("offx").value), oy=printFile?0:offMM(+$("offy").value);
-  let pl=arr.map(p=>p.map(q=>[q[0]*s+ox,q[1]*s+oy]));
+  let pl=arr.map(placePoly);
   const ordered=[],todo=pl.slice(); let cur=[0,0];
   while(todo.length){let bi=0,bd=1e18;todo.forEach((p,i)=>{const d=(p[0][0]-cur[0])**2+(p[0][1]-cur[1])**2;if(d<bd){bd=d;bi=i;}});
     const p=todo.splice(bi,1)[0];ordered.push(p);cur=p[p.length-1];}
@@ -362,6 +370,15 @@ function draw(){
     ctx.fillRect((W-I-L)*k,I*k,L*k,tt); ctx.fillRect((W-I-T)*k,I*k,tt,L*k);
     ctx.fillRect(I*k,(H-I-T)*k,L*k,tt); ctx.fillRect(I*k,(H-I-L)*k,tt,L*k);
   }
+  if(editMode){
+    const stroke=o=>{const p=placePoly(o.poly);ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();};
+    // reveal print objects (normally invisible in the overlay) so they can be selected/converted
+    ctx.strokeStyle="rgba(110,110,110,.75)";ctx.lineWidth=1;ctx.setLineDash([2,2]);
+    printObjs().forEach(stroke); ctx.setLineDash([]);
+    // highlight the selected object on top of everything
+    if(selId!=null){const o=objects.find(o=>o.id===selId);
+      if(o){ctx.save();ctx.strokeStyle="#00b3ff";ctx.lineWidth=3;ctx.shadowColor="#00b3ff";ctx.shadowBlur=6;stroke(o);ctx.restore();}}
+  }
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
 }
@@ -414,7 +431,7 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
-$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];printFile=false;bgImg=null;draw();say("Test square loaded (30 mm).");};
+$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 function closeTest(){$("testmenu").style.display="none";}
@@ -426,6 +443,23 @@ $("bPrint").onclick=printSheet;
 $("bMarks").onclick=()=>{ showMarks=!showMarks; $("bMarks").classList.toggle("on",showMarks); draw();
   say(showMarks?"Registration marks ON - shown in the preview and included when you Print.":"Registration marks OFF - preview and print omit them."); };
 $("bMarks").classList.toggle("on",showMarks);
+/* ---------- Edit mode: click an object to select it ---------- */
+$("bEdit").onclick=()=>{ editMode=!editMode; $("bEdit").classList.toggle("on",editMode);
+  cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw();
+  say(editMode?"Edit mode ON - click an object to select it. Print-only lines are shown dashed grey."
+             :"Edit mode OFF."); };
+cv.addEventListener("click",(e)=>{
+  if(!editMode) return;
+  const dh=printFile?PAGE_LH:MAT_H, k=cv.height/dh, rect=cv.getBoundingClientRect();
+  const mmx=(e.clientX-rect.left)*(cv.width/rect.width)/k, mmy=(e.clientY-rect.top)*(cv.height/rect.height)/k;
+  let best=null,bd=1e18;
+  objects.forEach(o=>{ const p=placePoly(o.poly);
+    if(p.length===1){ const d=Math.hypot(mmx-p[0][0],mmy-p[0][1]); if(d<bd){bd=d;best=o;} return; }
+    for(let i=0;i+1<p.length;i++){ const d=segDist(mmx,mmy,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
+  if(best && bd*k<=8){ selId=best.id; say("Selected a "+best.kind+" object."); }   // within 8 px of a line
+  else { selId=null; say("Nothing there - click closer to a line."); }
+  draw();
+});
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
   say("Scanning for registration marks...");
   try{const r=await(await fetch("/scan",{method:"POST",body:""})).json();
