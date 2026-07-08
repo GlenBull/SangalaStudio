@@ -418,10 +418,7 @@ function draw(){
   }
   if(editMode){
     const stroke=o=>{const p=placePoly(o.poly);ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();};
-    // reveal print objects (normally invisible in the overlay) so they can be selected/converted
-    ctx.strokeStyle="rgba(110,110,110,.75)";ctx.lineWidth=1;ctx.setLineDash([2,2]);
-    printObjs().forEach(stroke); ctx.setLineDash([]);
-    // highlight the selected object on top of everything
+    // print objects already show in the raster background; only the selected object is highlighted here
     if(selId!=null){const o=objects.find(o=>o.id===selId);
       if(o){ctx.save();ctx.strokeStyle="#00b3ff";ctx.lineWidth=3;ctx.shadowColor="#00b3ff";ctx.shadowBlur=6;stroke(o);ctx.restore();}}
   }
@@ -516,7 +513,7 @@ $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
 $("bEdit").onclick=()=>{ editMode=!editMode; $("bEdit").classList.toggle("on",editMode);
   cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw(); refreshEditPanel();
-  say(editMode?"Edit mode ON - click an object to select it. Print-only lines are shown dashed grey."
+  say(editMode?"Edit mode ON - click an object in the preview to select it."
              :"Edit mode OFF."); };
 cv.addEventListener("click",(e)=>{
   if(!editMode) return;
