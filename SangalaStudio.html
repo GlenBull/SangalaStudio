@@ -140,9 +140,19 @@
 "use strict";
 (function(){
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
-let MAT_W=203, MAT_H=305, design=[], scoreLines=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
+let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
+let svgDoc=null, svgHolder=null, objSeq=0;   // retained parsed SVG doc + its hidden container; per-object id counter
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
+// Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
+// el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
+// and poly is the flattened mm polyline cache used for preview + the die cutter.
+const cutObjs   =()=>objects.filter(o=>o.kind==="cut");
+const scoreObjs =()=>objects.filter(o=>o.kind==="score");
+const printObjs =()=>objects.filter(o=>o.kind==="print");
+const cutPolys  =()=>cutObjs().map(o=>o.poly);
+const scorePolys=()=>scoreObjs().map(o=>o.poly);
+const printPolys=()=>printObjs().map(o=>o.poly);
 
 function say(t){$("status").innerHTML=t;}
 let units="in";
@@ -193,9 +203,9 @@ function printSheet(){
   } else {
     const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
     let paths="";
-    design.forEach(p=>{let d="";p.forEach((q,i)=>{d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" ";});paths+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>';});
+    cutPolys().forEach(p=>{let d="";p.forEach((q,i)=>{d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" ";});paths+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>';});
     inner='<svg xmlns="http://www.w3.org/2000/svg" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+paths+'</svg>';
-    say(design.length?"Opening the print dialog (marks + design). Print at 100% / Actual size.":"Opening the print dialog (registration marks). Print at 100% / Actual size.");
+    say(cutPolys().length?"Opening the print dialog (marks + design). Print at 100% / Actual size.":"Opening the print dialog (registration marks). Print at 100% / Actual size.");
   }
   document.getElementById("printarea").innerHTML=inner;
   setTimeout(function(){window.print();},60);
@@ -217,13 +227,25 @@ function cprop(el,prop,attr){ // inline style first, then presentation attribute
   return ((s&&s.length)?s:(el.getAttribute(attr)||"")).trim().toLowerCase();
 }
 function isRed(c){ c=(c||"").replace(/\s+/g,""); return c==="#ff0000"||c==="#f00"||c==="red"||c==="rgb(255,0,0)"; }
+// classify one element per the CLAUDE.md conventions: red solid unfilled = cut,
+// red dashed = score/fold, everything else (black frames, textures, red filled panes) = print.
+function classifyKind(el){
+  if(!isRed(cprop(el,"stroke","stroke"))) return "print";
+  const dashed=(cprop(el,"stroke-dasharray","stroke-dasharray")||"none")!=="none";
+  if(dashed) return "score";
+  const fill=cprop(el,"fill","fill");
+  return (!fill||fill==="none") ? "cut" : "print";
+}
+function clearDoc(){ if(svgHolder) svgHolder.remove(); svgHolder=null; svgDoc=null; }
 function loadSVG(text){
   svgText=text;
   const doc=new DOMParser().parseFromString(text,"image/svg+xml");
   const svg=doc.documentElement;
   if(svg.nodeName!=="svg"){say("That file doesn't look like an SVG.");return;}
+  clearDoc();
   const holder=document.createElement("div");holder.style.cssText="position:absolute;left:-9999px;top:0";
   holder.appendChild(svg);document.body.appendChild(holder);
+  svgDoc=doc; svgHolder=holder;   // retain the parsed doc + rendered container so geometry APIs keep working for later edits
   const vb=svg.viewBox&&svg.viewBox.baseVal;
   if(!svg.getAttribute("width")&&vb&&vb.width>0){svg.setAttribute("width",vb.width+"px");svg.setAttribute("height",vb.height+"px");}
   const scale=svgScaleMm(svg);
@@ -232,7 +254,7 @@ function loadSVG(text){
   // it as a plain design and cut every shape (old behaviour).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
-  design=[]; scoreLines=[];
+  objects=[];
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
   function sample(el){
@@ -251,33 +273,25 @@ function loadSVG(text){
     return poly.length>=2?simplify(poly,0.08):null;
   }
   els.forEach(el=>{
-    let bucket;
-    if(silo){
-      if(!isRed(cprop(el,"stroke","stroke"))) return;          // ignore black frames, textures
-      const dashed = (cprop(el,"stroke-dasharray","stroke-dasharray")||"none")!=="none";
-      const fill = cprop(el,"fill","fill");
-      const unfilled = !fill||fill==="none";
-      if(dashed) bucket=scoreLines;                            // dashed red = fold / score
-      else if(unfilled) bucket=design;                        // solid red outline = cut
-      else return;                                            // solid red filled = printed panes
-    } else { bucket=design; }
-    const poly=sample(el); if(poly) bucket.push(poly);
+    // silo files classify by line style; a plain (no-red) design cuts every shape (old behaviour).
+    const kind = silo ? classifyKind(el) : "cut";
+    const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
+    objects.push({id:++objSeq, el:el, kind:kind, poly:poly});
   });
-  holder.remove();
-  if(!design.length&&!scoreLines.length){say("No cut lines found in that SVG.");return;}
+  if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
   if(!silo) normalize();
   if(silo && svgText){ bgImg=new Image(); bgImg.onload=function(){draw();};
     bgImg.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgText); }
   else bgImg=null;
   draw();
-  say(silo ? ("Loaded "+design.length+" cut + "+scoreLines.length+" score line"+(scoreLines.length!==1?"s":"")+". Ready when you are.")
-           : ("Loaded "+design.length+" shape"+(design.length!==1?"s":"")+". Ready when you are."));
+  const nc=cutObjs().length, ns=scoreObjs().length;
+  say(silo ? ("Loaded "+nc+" cut + "+ns+" score line"+(ns!==1?"s":"")+". Ready when you are.")
+           : ("Loaded "+nc+" shape"+(nc!==1?"s":"")+". Ready when you are."));
 }
 function normalize(){let mx=1e9,my=1e9;
-  design.concat(scoreLines).forEach(p=>p.forEach(q=>{mx=Math.min(mx,q[0]);my=Math.min(my,q[1]);}));
+  objects.forEach(o=>o.poly.forEach(q=>{mx=Math.min(mx,q[0]);my=Math.min(my,q[1]);}));
   if(mx===1e9)return;
-  design=design.map(p=>p.map(q=>[q[0]-mx,q[1]-my]));
-  scoreLines=scoreLines.map(p=>p.map(q=>[q[0]-mx,q[1]-my]));}
+  objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]);});}
 
 function placeAndOrder(arr){
   const s=printFile?1:((+$("scale").value||100)/100), ox=printFile?0:offMM(+$("offx").value), oy=printFile?0:offMM(+$("offy").value);
@@ -287,8 +301,8 @@ function placeAndOrder(arr){
     const p=todo.splice(bi,1)[0];ordered.push(p);cur=p[p.length-1];}
   return ordered;
 }
-function placed(){return placeAndOrder(design);}
-function placedScore(){return placeAndOrder(scoreLines);}
+function placed(){return placeAndOrder(cutPolys());}
+function placedScore(){return placeAndOrder(scorePolys());}
 function hdrStr(pen){ return [Math.round(+$("force").value)||0, Math.round(+$("speed").value)||0, Math.round(+$("blade").value)||0, pen, Math.max(1,Math.round(+$("passes").value)||1)].join(","); }
 function simplify(pts,tol){
   if(pts.length<3) return pts;
@@ -370,8 +384,8 @@ async function makeIt(){
     // marks on -> register to the printed marks, then cut/score in that frame
     if(printFile){ pl=placed(); spl=placedScore(); }
     else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
-      pl=design.map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
-      spl=scoreLines.map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+      pl=cutPolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
+      spl=scorePolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
     url="/printcut";
   } else {
     // marks off -> plain cut, no registration
@@ -400,7 +414,7 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
-$("mTest").onclick=()=>{closeTest();design=[[[0,0],[30,0],[30,30],[0,30],[0,0]]];scoreLines=[];printFile=false;draw();say("Test square loaded (30 mm).");};
+$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];printFile=false;bgImg=null;draw();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 function closeTest(){$("testmenu").style.display="none";}
@@ -455,12 +469,12 @@ $("jRead").onclick=async()=>{
 };
 $("jCut").onclick=async()=>{
   if(!mReady){$("jstatus").textContent="Read the marks first.";return;}
-  if(!design.length){$("jstatus").textContent="Load and print a design first.";return;}
+  if(!cutPolys().length){$("jstatus").textContent="Load and print a design first.";return;}
   let pl, spl;
   if(printFile){ pl=placed(); spl=placedScore(); }
   else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
-    pl=design.map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
-    spl=scoreLines.map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+    pl=cutPolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
+    spl=scorePolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
   const body=bodyOf(jbody(), pl, perforate(spl,4,1.2));
   $("jstatus").textContent="Cutting on the printed design...";
   const poll=setInterval(async()=>{try{const st=await(await fetch("/status")).json();$("jstatus").textContent=st.status;}catch(e){}},400);
