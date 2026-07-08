@@ -47,6 +47,12 @@
   .go:disabled{opacity:.5;cursor:default}
   .jbtn{width:46px;height:38px;font-size:1.05rem;border-radius:9px;border:1px solid #b7c1cd;background:linear-gradient(#fff,#e7ecf2);box-shadow:inset 0 1px 0 #fff,0 2px 3px rgba(0,0,0,.22);cursor:pointer}
   .jbtn:hover{background:linear-gradient(#fff,#dbe6f3)}
+  .ebtn{font-size:.9rem;padding:.5rem;border-radius:9px;border:1px solid #b7c1cd;background:linear-gradient(#fff,#e7ecf2);box-shadow:inset 0 1px 0 #fff,0 2px 3px rgba(0,0,0,.22);cursor:pointer;color:#26303a}
+  .ebtn:hover{background:linear-gradient(#fff,#dbe6f3)}
+  .ebtn:disabled{opacity:.45;cursor:default;box-shadow:none}
+  .ebtn.on{background:linear-gradient(#bfe3ff,#8fcaf5);border-color:#3f8fd0;box-shadow:inset 0 1px 0 #fff,0 0 0 2px rgba(63,143,208,.4)}
+  .ebtn.danger{color:#8a1c1c}
+  .ebtn.danger:hover:not(:disabled){background:linear-gradient(#fff,#f3dbdb)}
   #bar{height:12px;background:#e3d6bd;border-radius:6px;overflow:hidden;margin:.6rem 0}
   #barfill{height:100%;width:0;background:#1fa85a;transition:width .2s}
   #status{font-size:.92rem;color:#5a4a34;min-height:2.4rem;line-height:1.4}
@@ -62,8 +68,8 @@
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
-    <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bEdit"><span class="glyph">✏️</span><small>Edit</small></button>
+    <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
     <button class="tbtn" id="bSetup"><span class="glyph">⚙️</span><small>Setup</small></button>
@@ -133,6 +139,18 @@
     <button class="go" id="make" disabled>Make it!</button>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
+    <div id="editpanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
+      <h2 class="marker" style="margin-top:0">Selected object</h2>
+      <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
+      <div class="two" style="margin-top:.5rem">
+        <button class="ebtn" id="eCut" disabled>✂️ Cut</button>
+        <button class="ebtn" id="eScore" disabled>⁝ Score / Fold</button>
+      </div>
+      <div class="two" style="margin-top:.4rem">
+        <button class="ebtn" id="ePrint" disabled>🖨️ Print only</button>
+        <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -285,7 +303,7 @@ function loadSVG(text){
   if(silo && svgText){ bgImg=new Image(); bgImg.onload=function(){draw();};
     bgImg.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svgText); }
   else bgImg=null;
-  draw();
+  draw(); refreshEditPanel();
   const nc=cutObjs().length, ns=scoreObjs().length;
   say(silo ? ("Loaded "+nc+" cut + "+ns+" score line"+(ns!==1?"s":"")+". Ready when you are.")
            : ("Loaded "+nc+" shape"+(nc!==1?"s":"")+". Ready when you are."));
@@ -431,7 +449,7 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
-$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();say("Test square loaded (30 mm).");};
+$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 function closeTest(){$("testmenu").style.display="none";}
@@ -444,8 +462,30 @@ $("bMarks").onclick=()=>{ showMarks=!showMarks; $("bMarks").classList.toggle("on
   say(showMarks?"Registration marks ON - shown in the preview and included when you Print.":"Registration marks OFF - preview and print omit them."); };
 $("bMarks").classList.toggle("on",showMarks);
 /* ---------- Edit mode: click an object to select it ---------- */
+const KIND_LABEL={cut:"cut",score:"score / fold",print:"print-only"};
+function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
+function refreshEditPanel(){
+  const panel=$("editpanel");
+  if(!editMode){ panel.style.display="none"; return; }
+  panel.style.display="block";
+  const o=selObj();
+  $("editinfo").textContent = o ? ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:")
+                                : "Click an object in the preview to select it.";
+  ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=!o);
+  $("eCut").classList.toggle("on",   !!o && o.kind==="cut");
+  $("eScore").classList.toggle("on", !!o && o.kind==="score");
+  $("ePrint").classList.toggle("on", !!o && o.kind==="print");
+}
+function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
+  draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
+function deleteSel(){ const o=selObj(); if(!o) return; objects=objects.filter(x=>x.id!==o.id); selId=null;
+  draw(); refreshEditPanel(); say("Deleted the selected object."); }
+$("eCut").onclick=()=>setKind("cut");
+$("eScore").onclick=()=>setKind("score");
+$("ePrint").onclick=()=>setKind("print");
+$("eDelete").onclick=deleteSel;
 $("bEdit").onclick=()=>{ editMode=!editMode; $("bEdit").classList.toggle("on",editMode);
-  cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw();
+  cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw(); refreshEditPanel();
   say(editMode?"Edit mode ON - click an object to select it. Print-only lines are shown dashed grey."
              :"Edit mode OFF."); };
 cv.addEventListener("click",(e)=>{
@@ -456,9 +496,9 @@ cv.addEventListener("click",(e)=>{
   objects.forEach(o=>{ const p=placePoly(o.poly);
     if(p.length===1){ const d=Math.hypot(mmx-p[0][0],mmy-p[0][1]); if(d<bd){bd=d;best=o;} return; }
     for(let i=0;i+1<p.length;i++){ const d=segDist(mmx,mmy,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
-  if(best && bd*k<=8){ selId=best.id; say("Selected a "+best.kind+" object."); }   // within 8 px of a line
+  if(best && bd*k<=8){ selId=best.id; say("Selected a "+KIND_LABEL[best.kind]+" object."); }   // within 8 px of a line
   else { selId=null; say("Nothing there - click closer to a line."); }
-  draw();
+  draw(); refreshEditPanel();
 });
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
   say("Scanning for registration marks...");
