@@ -69,6 +69,7 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bEdit"><span class="glyph">✏️</span><small>Edit</small></button>
+    <button class="tbtn" id="bAdd"><span class="glyph">➕</span><small>Add</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
@@ -104,6 +105,17 @@
       <div><label class="fld">From top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
     </div>
     <div class="hint">Set your material and position, then close Setup and press Make it.</div>
+  </div>
+
+<div id="addpanel" class="panel" style="position:fixed;z-index:31;display:none;width:230px">
+    <h2 class="marker">Add shape</h2>
+    <h2 class="marker" style="font-size:.9rem;margin-top:.5rem">Rectangle</h2>
+    <div class="two">
+      <div><label class="fld">Width mm</label><input type="number" id="rectW" min="1" step="0.1" value="24"></div>
+      <div><label class="fld">Height mm</label><input type="number" id="rectH" min="1" step="0.1" value="16"></div>
+    </div>
+    <button class="go" id="addRect" style="margin-top:.6rem;font-size:1rem;padding:.5rem">Add rectangle</button>
+    <div class="hint">Drops a cut rectangle at the top-left. Use Position to place it, Edit to change or delete it. Default 24 x 16 mm = a 2 x 3 brick footprint.</div>
   </div>
 
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
@@ -477,6 +489,19 @@ $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
 $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
+/* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
+// Mirrors the Test-square pattern (el:null, hand-built poly in mm): the shape previews
+// and cuts from its poly without needing a live SVG node. kind defaults to cut.
+$("bAdd").onclick=()=>{const p=$("addpanel"),r=$("bAdd").getBoundingClientRect();const open=p.style.display!=="block";
+  if(open){p.style.left=Math.max(8,r.left-30)+"px";p.style.top=(r.bottom+8)+"px";}p.style.display=open?"block":"none";};
+function addRect(w,h){
+  const poly=[[0,0],[w,0],[w,h],[0,h],[0,0]];   // top-left at origin; Position places it
+  objects.push({id:++objSeq,el:null,kind:"cut",orig:"cut",poly:poly});
+  selId=objSeq; bgImg=null; draw(); refreshEditPanel();
+  say("Added a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle. Use Position to place it; Edit to change or delete.");
+}
+$("addRect").onclick=()=>{const w=+$("rectW").value,h=+$("rectH").value;
+  if(!(w>0&&h>0)){say("Enter a width and height in mm.");return;} addRect(w,h);};
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
   if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
