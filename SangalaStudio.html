@@ -186,6 +186,7 @@
         <button class="ebtn" id="ePrint" disabled>🖨️ Print only</button>
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
       </div>
+      <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
     </div>
   </div>
 </div>
@@ -621,6 +622,21 @@ $("bMarks").classList.toggle("on",showMarks);
 /* ---------- Edit mode: click an object to select it ---------- */
 const KIND_LABEL={cut:"cut",score:"score / fold",print:"print-only"};
 function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
+// readout of the selected shape's dimensions in whole mm, as a 2-column table with
+// right-justified numbers so they line up (rect: W/H | X/Y; circle: ⌀ | center).
+// Returns HTML; "" hides the box.
+function dimText(o){
+  if(!o||!o.el) return "";
+  const t=o.el.tagName.toLowerCase(), R=s=>Math.round(+o.el.getAttribute(s)||0);
+  let rows;
+  if(t==="rect") rows=[[["Width",R("width")],["X",R("x")]],[["Height",R("height")],["Y",R("y")]]];
+  else if(t==="circle") rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0))],["X",R("cx")]],[null,["Y",R("cy")]]];
+  else return "";
+  const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td><td style="text-align:right;padding-left:.35rem"><b>'+p[1]+'</b></td><td style="padding-left:.15rem;color:#8a7350">mm</td>')
+                 :'<td></td><td></td><td></td>';
+  return '<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+}
+function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
 function refreshEditPanel(){
   const panel=$("editpanel");
   if(!editMode){ panel.style.display="none"; return; }
@@ -628,6 +644,7 @@ function refreshEditPanel(){
   const o=selObj();
   $("editinfo").textContent = o ? ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:")
                                 : "Click an object in the preview to select it.";
+  showDims(o);
   ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=!o);
   $("eCut").classList.toggle("on",   !!o && o.kind==="cut");
   $("eScore").classList.toggle("on", !!o && o.kind==="score");
@@ -701,7 +718,7 @@ window.addEventListener("mousemove",(e)=>{
     el.setAttribute("cx",fmtn(cx)); el.setAttribute("cy",fmtn(cy)); el.setAttribute("r",fmtn(r));
     drag.obj.poly=circlePoly(cx,cy,r);
   }
-  drag.moved=true; draw();
+  drag.moved=true; draw(); showDims(drag.obj);
 });
 window.addEventListener("mouseup",()=>{
   if(!drag) return;
