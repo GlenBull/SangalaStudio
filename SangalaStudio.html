@@ -147,6 +147,7 @@
     <div class="ltitle marker">Tools</div>
     <button class="ltbtn" id="tRect" title="Rectangle">▭<small>Rect</small></button>
     <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
+    <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
   </div>
   <div class="board cork">
     <canvas id="cv" width="560" height="760"></canvas>
@@ -547,16 +548,16 @@ async function saveBlob(blob,suggestedName,desc,ext){
   setTimeout(()=>URL.revokeObjectURL(url),1000); return suggestedName;
 }
 /* ---------- 3D: extrude rectangles to boxes and write ASCII STL (mm; Z up) ---------- */
-function boxTris(x,y,w,h,z){   // 8 corners -> 12 triangles, outward winding
-  const x1=x+w, y1=y+h, Z=z, v=[[x,y,0],[x1,y,0],[x1,y1,0],[x,y1,0],[x,y,Z],[x1,y,Z],[x1,y1,Z],[x,y1,Z]];
+function boxTris(x,y,w,h,z0,z1){   // 8 corners -> 12 triangles, outward winding; spans z0..z1
+  const x1=x+w, y1=y+h, v=[[x,y,z0],[x1,y,z0],[x1,y1,z0],[x,y1,z0],[x,y,z1],[x1,y,z1],[x1,y1,z1],[x,y1,z1]];
   const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
   return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
 }
-function cylTris(cx,cy,r,z){   // triangle-fan caps + wall quads; outward winding, Z up
-  const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), Z=z, CB=[cx,cy,0], CT=[cx,cy,Z], P=[], tris=[];
+function cylTris(cx,cy,r,z0,z1){   // triangle-fan caps + wall quads; outward winding, Z up; spans z0..z1
+  const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), CB=[cx,cy,z0], CT=[cx,cy,z1], P=[], tris=[];
   for(let i=0;i<n;i++){const a=2*Math.PI*i/n; P.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
   for(let i=0;i<n;i++){ const j=(i+1)%n;
-    const bi=[P[i][0],P[i][1],0], bj=[P[j][0],P[j][1],0], ti=[P[i][0],P[i][1],Z], tj=[P[j][0],P[j][1],Z];
+    const bi=[P[i][0],P[i][1],z0], bj=[P[j][0],P[j][1],z0], ti=[P[i][0],P[i][1],z1], tj=[P[j][0],P[j][1],z1];
     tris.push([CT,ti,tj]);   // top cap +Z
     tris.push([CB,bj,bi]);   // bottom cap -Z
     tris.push([bi,bj,tj], [bi,tj,ti]);   // side wall
@@ -579,8 +580,9 @@ async function exportSTL(){
   if(!solids.length){ say("No 3D objects yet - give a shape a Depth (Z) above 0 first."); return; }
   let tris=[];
   solids.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase();
-    tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),g("data-z"))
-                                : cylTris(g("cx"),g("cy"),g("r"),g("data-z"))); });
+    const z0=g("data-z0"), z1=z0+g("data-z");   // base .. base+depth
+    tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1)
+                                : cylTris(g("cx"),g("cy"),g("r"),z0,z1)); });
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
   if(name) say("Exported "+name+" - "+solids.length+" solid"+(solids.length!==1?"s":"")+", "+tris.length+" triangles.");
 }
@@ -634,6 +636,20 @@ function startDraw(e){
   d.obj=o; d.moved=false; d.draw=true; drag=d;
   e.preventDefault(); draw(); refreshEditPanel();
 }
+// one-click 2x3 LEGO brick: 24x16x9.6 mm body + six 4.8 mm studs (1.8 tall) on the 8 mm grid at base 9.6
+function makeBrick(){
+  ensureDoc(); if(activeTool!=="select") setTool("select");   // a generator, not a drag tool
+  const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
+  const body=svgNode("rect",{x:0,y:0,width:W,height:H,"data-z":bodyZ,"data-z0":0});
+  objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[0,0],[W,0],[W,H],[0,H],[0,0]]});
+  const bodyId=objSeq;
+  for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=ins+cx*U, py=ins+ry*U;
+    const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ});
+    objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r)}); }
+  selId=bodyId; bgImg=null; draw(); refreshEditPanel();
+  say("Added a 2 x 3 LEGO brick: 24 x 16 x 9.6 mm body + six 4.8 mm studs.");
+}
+$("tBrick").onclick=makeBrick;
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
@@ -659,9 +675,9 @@ function dimText(o){
   const t=o.el.tagName.toLowerCase(), R=s=>Math.round((+o.el.getAttribute(s)||0)*10)/10;   // pairs: [label, mm value (0.1 res), dim key]
   let rows;
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
-    if(mode3D) rows.push([["Depth",R("data-z"),"z"],null]); }   // Z extrusion, 3D mode only
+    if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }   // Z extrusion, 3D mode only
   else if(t==="circle"){ rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
-    if(mode3D) rows.push([["Depth",R("data-z"),"z"],null]); }
+    if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
   else return "";
   const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="0.1" data-dim="'+p[2]+'" value="'+p[1]+'"></td>'
@@ -673,7 +689,7 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v){
   const o=selObj(); if(!o||!o.el) return;
-  if(dim==="z"){ o.el.setAttribute("data-z",fmtn(Math.max(0,v))); showDims(o); return; }   // extrusion depth; no 2D change
+  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); showDims(o); return; }   // depth / base Z; no 2D change
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
