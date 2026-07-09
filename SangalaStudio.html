@@ -552,6 +552,17 @@ function boxTris(x,y,w,h,z){   // 8 corners -> 12 triangles, outward winding
   const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
   return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
 }
+function cylTris(cx,cy,r,z){   // triangle-fan caps + wall quads; outward winding, Z up
+  const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), Z=z, CB=[cx,cy,0], CT=[cx,cy,Z], P=[], tris=[];
+  for(let i=0;i<n;i++){const a=2*Math.PI*i/n; P.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
+  for(let i=0;i<n;i++){ const j=(i+1)%n;
+    const bi=[P[i][0],P[i][1],0], bj=[P[j][0],P[j][1],0], ti=[P[i][0],P[i][1],Z], tj=[P[j][0],P[j][1],Z];
+    tris.push([CT,ti,tj]);   // top cap +Z
+    tris.push([CB,bj,bi]);   // bottom cap -Z
+    tris.push([bi,bj,tj], [bi,tj,ti]);   // side wall
+  }
+  return tris;
+}
 function stlAscii(tris,name){
   const nrm=(a,b,c)=>{ const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
     let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,L=Math.hypot(nx,ny,nz)||1; return [nx/L,ny/L,nz/L]; };
@@ -563,12 +574,15 @@ function stlAscii(tris,name){
   return s+"endsolid "+name+"\n";
 }
 async function exportSTL(){
-  const solids=objects.filter(o=>o.el&&o.el.tagName.toLowerCase()==="rect"&&(+o.el.getAttribute("data-z")||0)>0);
-  if(!solids.length){ say("No 3D objects yet - give a rectangle a Depth (Z) above 0 first."); return; }
+  const has3D=o=>o.el&&/^(rect|circle)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0;
+  const solids=objects.filter(has3D);
+  if(!solids.length){ say("No 3D objects yet - give a shape a Depth (Z) above 0 first."); return; }
   let tris=[];
-  solids.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0; tris=tris.concat(boxTris(g("x"),g("y"),g("width"),g("height"),g("data-z"))); });
+  solids.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase();
+    tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),g("data-z"))
+                                : cylTris(g("cx"),g("cy"),g("r"),g("data-z"))); });
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
-  if(name) say("Exported "+name+" - "+solids.length+" box"+(solids.length!==1?"es":"")+", "+tris.length+" triangles.");
+  if(name) say("Exported "+name+" - "+solids.length+" solid"+(solids.length!==1?"s":"")+", "+tris.length+" triangles.");
 }
 $("bStl").onclick=exportSTL;
 $("mode3d").onchange=e=>{ mode3D=e.target.checked; $("bStl").style.display=mode3D?"":"none"; refreshEditPanel(); };
@@ -646,7 +660,8 @@ function dimText(o){
   let rows;
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],null]); }   // Z extrusion, 3D mode only
-  else if(t==="circle") rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
+  else if(t==="circle"){ rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
+    if(mode3D) rows.push([["Depth",R("data-z"),"z"],null]); }
   else return "";
   const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="0.1" data-dim="'+p[2]+'" value="'+p[1]+'"></td>'
