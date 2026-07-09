@@ -75,6 +75,7 @@
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
+    <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bEdit"><span class="glyph">✏️</span><small>Edit</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
@@ -509,6 +510,37 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
+// Save SVG: serialize the retained doc with the viewBox cropped to the design's
+// bounding box (mm), so Tinkercad imports at true size. Nodes save as-is (cut
+// styling); Edit's kind reassignment isn't yet reflected in the saved styles.
+// showSaveFilePicker (a native Save As - choose folder + name) works on the
+// localhost secure context; falls back to a plain download otherwise.
+async function saveSVG(){
+  if(!svgEl||!objects.length){say("Add a shape first, then Save SVG.");return;}
+  const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
+  const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
+  const clone=svgEl.cloneNode(true);
+  clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
+  clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
+  const xml='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(clone);
+  const blob=new Blob([xml],{type:"image/svg+xml"});
+  const size=" ("+w+" x "+h+" mm).";
+  if(window.showSaveFilePicker){
+    let handle;
+    try{ handle=await window.showSaveFilePicker({suggestedName:"sangala-design.svg",
+      types:[{description:"SVG image",accept:{"image/svg+xml":[".svg"]}}]}); }
+    catch(e){ if(e&&e.name==="AbortError") return; say("Could not open Save dialog: "+e.message); return; }
+    try{ const ws=await handle.createWritable(); await ws.write(blob); await ws.close();
+      say("Saved "+handle.name+size); }
+    catch(e){ say("Save failed: "+e.message); }
+    return;
+  }
+  const url=URL.createObjectURL(blob);   // fallback: download to the default folder
+  const a=document.createElement("a"); a.href=url; a.download="sangala-design.svg"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  say("Saved sangala-design.svg"+size);
+}
+$("bSave").onclick=saveSVG;
 $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
