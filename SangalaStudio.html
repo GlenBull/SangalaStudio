@@ -347,6 +347,16 @@ function normalize(){let mx=1e9,my=1e9;
 // used for the Edit-mode overlay + hit-testing so object identity is preserved.
 function placeParams(){ return { s:printFile?1:((+$("scale").value||100)/100), ox:printFile?0:offMM(+$("offx").value), oy:printFile?0:offMM(+$("offy").value) }; }
 function placePoly(poly){ const pp=placeParams(); return poly.map(q=>[q[0]*pp.s+pp.ox, q[1]*pp.s+pp.oy]); }
+// Inkscape-style node handles for a selected object, in design mm (pre-placement).
+// Type-appropriate: rect -> 4 corners; circle -> 4 cardinal points; else poly vertices.
+function shapeNodes(o){
+  const el=o.el, t=el&&el.tagName&&el.tagName.toLowerCase(), N=s=>+el.getAttribute(s)||0;
+  if(t==="rect"){const x=N("x"),y=N("y"),w=N("width"),h=N("height"); return [[x,y],[x+w,y],[x+w,y+h],[x,y+h]];}
+  if(t==="circle"){const cx=N("cx"),cy=N("cy"),r=N("r"); return [[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]];}
+  const p=o.poly.slice();   // fallback: poly vertices, minus the duplicated closing point
+  if(p.length>1&&p[0][0]===p[p.length-1][0]&&p[0][1]===p[p.length-1][1]) p.pop();
+  return p;
+}
 function segDist(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
   let t=l2?((px-ax)*dx+(py-ay)*dy)/l2:0; t=t<0?0:t>1?1:t;
   return Math.hypot(px-(ax+t*dx), py-(ay+t*dy)); }
@@ -456,7 +466,11 @@ function draw(){
     const stroke=o=>{const p=placePoly(o.poly);ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();};
     // print objects already show in the raster background; only the selected object is highlighted here
     if(selId!=null){const o=objects.find(o=>o.id===selId);
-      if(o){ctx.save();ctx.strokeStyle="#00b3ff";ctx.lineWidth=3;ctx.shadowColor="#00b3ff";ctx.shadowBlur=6;stroke(o);ctx.restore();}}
+      if(o){ctx.save();ctx.strokeStyle="#00b3ff";ctx.lineWidth=3;ctx.shadowColor="#00b3ff";ctx.shadowBlur=6;stroke(o);ctx.restore();
+        const nodes=placePoly(shapeNodes(o)),hs=4;   // square node handles at the shape's defining points
+        ctx.save();ctx.fillStyle="#fff";ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
+        nodes.forEach(q=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);ctx.fill();ctx.stroke();});
+        ctx.restore();}}
   }
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
