@@ -659,26 +659,31 @@ cv.addEventListener("click",(e)=>{
   else { selId=null; say("Nothing there - click closer to a line."); }
   draw(); refreshEditPanel();
 });
-/* ---------- drag a rectangle corner to resize (anchor the opposite corner) ---------- */
+/* ---------- drag a rectangle: corner handle resizes, body moves ---------- */
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
   if(!editMode||selId==null) return;
   const o=objects.find(x=>x.id===selId);
-  if(!o||!o.el||o.el.tagName.toLowerCase()!=="rect") return;   // corner-resize is rect-only for now
-  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o));     // display-mm corners TL,TR,BR,BL
+  if(!o||!o.el||o.el.tagName.toLowerCase()!=="rect") return;   // resize/move is rect-only for now
+  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();   // display-mm corners TL,TR,BR,BL
   let hit=-1,bd=8;
   disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8 px of a handle
-  if(hit<0) return;
-  drag={obj:o, anchor:shapeNodes(o)[(hit+2)%4], moved:false};   // opposite corner stays put
-  cv.style.cursor="nwse-resize"; e.preventDefault();
+  if(hit>=0){ drag={mode:"resize", obj:o, anchor:shapeNodes(o)[(hit+2)%4], moved:false};   // opposite corner stays put
+    cv.style.cursor="nwse-resize"; e.preventDefault(); return; }
+  const xs=disp.map(q=>q[0]), ys=disp.map(q=>q[1]);   // no corner -> if inside the rect, start a move
+  if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys)){
+    const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s, tl=shapeNodes(o)[0];   // grab offset from the top-left corner
+    drag={mode:"move", obj:o, grab:[dx-tl[0], dy-tl[1]], moved:false};
+    cv.style.cursor="move"; e.preventDefault(); }
 });
 window.addEventListener("mousemove",(e)=>{
   if(!drag) return;
-  const {mx,my}=evtMM(e), pp=placeParams();
+  const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
-  const ax=drag.anchor[0], ay=drag.anchor[1];
-  const x=Math.min(ax,dx), y=Math.min(ay,dy), w=Math.max(0.5,Math.abs(dx-ax)), h=Math.max(0.5,Math.abs(dy-ay));
-  const el=drag.obj.el;
+  let x,y,w,h;
+  if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
+    x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
+  else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1]; }
   el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
   drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
   drag.moved=true; draw();
@@ -686,7 +691,8 @@ window.addEventListener("mousemove",(e)=>{
 window.addEventListener("mouseup",()=>{
   if(!drag) return;
   if(drag.moved){ suppressClick=true; const el=drag.obj.el;
-    say("Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."); }
+    say(drag.mode==="move" ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
+                           : "Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."); }
   drag=null; cv.style.cursor=editMode?"crosshair":"default";
 });
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
