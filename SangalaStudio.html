@@ -77,7 +77,6 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
-    <button class="tbtn" id="bEdit"><span class="glyph">✏️</span><small>Edit</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
@@ -199,7 +198,7 @@
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
-let editMode=false, selId=null;              // Edit mode toggle + currently selected object id
+let selId=null;              // currently selected object id (null = nothing selected)
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
@@ -464,14 +463,12 @@ function draw(){
     ctx.fillRect((W-I-L)*k,I*k,L*k,tt); ctx.fillRect((W-I-T)*k,I*k,tt,L*k);
     ctx.fillRect(I*k,(H-I-T)*k,L*k,tt); ctx.fillRect(I*k,(H-I-L)*k,tt,L*k);
   }
-  if(editMode){
-    // the selected object keeps its normal line; selection is shown by node handles only
-    if(selId!=null){const o=objects.find(o=>o.id===selId);
-      if(o){const nodes=placePoly(shapeNodes(o)),hs=4;   // selection = square node handles at the shape's defining points
-        ctx.save();ctx.fillStyle="#fff";ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
-        nodes.forEach(q=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);ctx.fill();ctx.stroke();});
-        ctx.restore();}}
-  }
+  // the selected object keeps its normal line; selection is shown by node handles only
+  if(selId!=null){const o=objects.find(o=>o.id===selId);
+    if(o){const nodes=placePoly(shapeNodes(o)),hs=4;   // selection = square node handles at the shape's defining points
+      ctx.save();ctx.fillStyle="#fff";ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
+      nodes.forEach(q=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);ctx.fill();ctx.stroke();});
+      ctx.restore();}}
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
 }
@@ -658,17 +655,15 @@ function applyDim(dim,v){
 $("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: survives readout rebuilds
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
 function refreshEditPanel(){
-  const panel=$("editpanel");
-  if(!editMode){ panel.style.display="none"; return; }
+  const panel=$("editpanel"), o=selObj();
+  if(!o){ panel.style.display="none"; return; }   // panel appears only while a shape is selected
   panel.style.display="block";
-  const o=selObj();
-  $("editinfo").textContent = o ? ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:")
-                                : "Click an object in the preview to select it.";
+  $("editinfo").textContent = "Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:";
   showDims(o);
-  ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=!o);
-  $("eCut").classList.toggle("on",   !!o && o.kind==="cut");
-  $("eScore").classList.toggle("on", !!o && o.kind==="score");
-  $("ePrint").classList.toggle("on", !!o && o.kind==="print");
+  ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
+  $("eCut").classList.toggle("on",   o.kind==="cut");
+  $("eScore").classList.toggle("on", o.kind==="score");
+  $("ePrint").classList.toggle("on", o.kind==="print");
 }
 function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
   renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
@@ -680,15 +675,10 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
-$("bEdit").onclick=()=>{ editMode=!editMode; $("bEdit").classList.toggle("on",editMode);
-  cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw(); refreshEditPanel();
-  say(editMode?"Edit mode ON - click an object in the preview to select it."
-             :"Edit mode OFF."); };
 // pointer -> display mm (same math the selection uses), plus k = px per mm
 function evtMM(e){ const dh=printFile?PAGE_LH:MAT_H, k=cv.height/dh, r=cv.getBoundingClientRect();
   return { mx:(e.clientX-r.left)*(cv.width/r.width)/k, my:(e.clientY-r.top)*(cv.height/r.height)/k, k }; }
 cv.addEventListener("click",(e)=>{
-  if(!editMode) return;
   if(suppressClick){ suppressClick=false; return; }   // don't reselect/deselect right after a resize drag
   const {mx,my,k}=evtMM(e);
   let best=null,bd=1e18;
@@ -704,7 +694,7 @@ cv.addEventListener("click",(e)=>{
 // circle: cardinal handle changes radius (center fixed), body moves the center.
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
-  if(!editMode||selId==null) return;
+  if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase(); if(t!=="rect"&&t!=="circle") return;
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams(), N=s=>+o.el.getAttribute(s)||0;
@@ -750,7 +740,7 @@ window.addEventListener("mouseup",()=>{
         ? "Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."
         : "Radius "+el.getAttribute("r")+" mm (diameter "+fmtn(2*(+el.getAttribute("r")))+" mm).";
     say(msg); }
-  drag=null; cv.style.cursor=editMode?"crosshair":"default";
+  drag=null; cv.style.cursor="default";
 });
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
   say("Scanning for registration marks...");
