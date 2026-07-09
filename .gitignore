@@ -15,3 +15,6 @@ desktop.ini
 .dropbox
 .dropbox.attr
 ~$*
+
+# Claude Code: commit shared settings.json, ignore machine-specific local settings
+.claude/settings.local.json
