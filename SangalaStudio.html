@@ -77,6 +77,7 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
+    <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
@@ -112,6 +113,9 @@
       <div><label class="fld">From top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
     </div>
     <div class="hint">Set your material and position, then close Setup and press Make it.</div>
+    <label class="fld" style="margin-top:.7rem;display:flex;align-items:center;gap:.4rem;cursor:pointer">
+      <input type="checkbox" id="mode3d" style="width:auto"> Enable 3D (extrude &amp; STL export)</label>
+    <div class="hint" style="margin-top:.2rem">For 3D printing only. Leave off for die-cutter (2D) work.</div>
   </div>
 
 
@@ -177,6 +181,7 @@ const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
+let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
@@ -530,6 +535,43 @@ async function saveSVG(){
   say("Saved sangala-design.svg"+size);
 }
 $("bSave").onclick=saveSVG;
+// native Save As (choose folder + name) with plain-download fallback; returns saved name or null
+async function saveBlob(blob,suggestedName,desc,ext){
+  if(window.showSaveFilePicker){
+    let h; try{ h=await window.showSaveFilePicker({suggestedName:suggestedName,types:[{description:desc,accept:{"application/octet-stream":[ext]}}]}); }
+    catch(e){ if(e&&e.name==="AbortError")return null; say("Could not open Save dialog: "+e.message); return null; }
+    try{ const ws=await h.createWritable(); await ws.write(blob); await ws.close(); return h.name; }
+    catch(e){ say("Save failed: "+e.message); return null; }
+  }
+  const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=suggestedName; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); return suggestedName;
+}
+/* ---------- 3D: extrude rectangles to boxes and write ASCII STL (mm; Z up) ---------- */
+function boxTris(x,y,w,h,z){   // 8 corners -> 12 triangles, outward winding
+  const x1=x+w, y1=y+h, Z=z, v=[[x,y,0],[x1,y,0],[x1,y1,0],[x,y1,0],[x,y,Z],[x1,y,Z],[x1,y1,Z],[x,y1,Z]];
+  const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
+  return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
+}
+function stlAscii(tris,name){
+  const nrm=(a,b,c)=>{ const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+    let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,L=Math.hypot(nx,ny,nz)||1; return [nx/L,ny/L,nz/L]; };
+  let s="solid "+name+"\n";
+  tris.forEach(t=>{ const n=nrm(t[0],t[1],t[2]);
+    s+="facet normal "+n[0]+" "+n[1]+" "+n[2]+"\n outer loop\n";
+    t.forEach(p=>{ s+="  vertex "+p[0]+" "+p[1]+" "+p[2]+"\n"; });
+    s+=" endloop\nendfacet\n"; });
+  return s+"endsolid "+name+"\n";
+}
+async function exportSTL(){
+  const solids=objects.filter(o=>o.el&&o.el.tagName.toLowerCase()==="rect"&&(+o.el.getAttribute("data-z")||0)>0);
+  if(!solids.length){ say("No 3D objects yet - give a rectangle a Depth (Z) above 0 first."); return; }
+  let tris=[];
+  solids.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0; tris=tris.concat(boxTris(g("x"),g("y"),g("width"),g("height"),g("data-z"))); });
+  const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
+  if(name) say("Exported "+name+" - "+solids.length+" box"+(solids.length!==1?"es":"")+", "+tris.length+" triangles.");
+}
+$("bStl").onclick=exportSTL;
+$("mode3d").onchange=e=>{ mode3D=e.target.checked; $("bStl").style.display=mode3D?"":"none"; refreshEditPanel(); };
 $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
@@ -602,7 +644,8 @@ function dimText(o){
   if(!o||!o.el) return "";
   const t=o.el.tagName.toLowerCase(), R=s=>Math.round((+o.el.getAttribute(s)||0)*10)/10;   // pairs: [label, mm value (0.1 res), dim key]
   let rows;
-  if(t==="rect") rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
+  if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
+    if(mode3D) rows.push([["Depth",R("data-z"),"z"],null]); }   // Z extrusion, 3D mode only
   else if(t==="circle") rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
   else return "";
   const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td>'
@@ -615,6 +658,7 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v){
   const o=selObj(); if(!o||!o.el) return;
+  if(dim==="z"){ o.el.setAttribute("data-z",fmtn(Math.max(0,v))); showDims(o); return; }   // extrusion depth; no 2D change
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
