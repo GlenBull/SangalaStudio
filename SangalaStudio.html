@@ -595,12 +595,15 @@ function addRect(w,h){
   const el=svgNode("rect",{x:0,y:0,width:w,height:h});   // top-left at origin
   addShape(el,[[0,0],[w,0],[w,h],[0,h],[0,0]], "a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle");
 }
+function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
+  const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
+  for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
+  return poly;
+}
 function addCircle(d,cx,cy){
   ensureDoc();
   const r=d/2, el=svgNode("circle",{cx:cx,cy:cy,r:r});
-  const n=Math.max(32,Math.ceil(Math.PI*d*2)), poly=[];   // ~2 pts/mm of circumference, min 32
-  for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
-  addShape(el,poly, "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
+  addShape(el,circlePoly(cx,cy,r), "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
 }
 $("addRect").onclick=()=>{const w=+$("rectW").value,h=+$("rectH").value;
   if(!(w>0&&h>0)){say("Enter a width and height in mm.");return;} addRect(w,h);};
@@ -659,40 +662,57 @@ cv.addEventListener("click",(e)=>{
   else { selId=null; say("Nothing there - click closer to a line."); }
   draw(); refreshEditPanel();
 });
-/* ---------- drag a rectangle: corner handle resizes, body moves ---------- */
+/* ---------- drag a shape: a handle resizes, the body moves ---------- */
+// rect: corner handle resizes (opposite corner anchored), body moves.
+// circle: cardinal handle changes radius (center fixed), body moves the center.
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
   if(!editMode||selId==null) return;
-  const o=objects.find(x=>x.id===selId);
-  if(!o||!o.el||o.el.tagName.toLowerCase()!=="rect") return;   // resize/move is rect-only for now
-  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();   // display-mm corners TL,TR,BR,BL
+  const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
+  const t=o.el.tagName.toLowerCase(); if(t!=="rect"&&t!=="circle") return;
+  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams(), N=s=>+o.el.getAttribute(s)||0;
   let hit=-1,bd=8;
   disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8 px of a handle
-  if(hit>=0){ drag={mode:"resize", obj:o, anchor:shapeNodes(o)[(hit+2)%4], moved:false};   // opposite corner stays put
+  if(hit>=0){   // resize
+    drag = t==="rect" ? {mode:"resize",shape:"rect",obj:o,anchor:shapeNodes(o)[(hit+2)%4],moved:false}
+                      : {mode:"resize",shape:"circle",obj:o,center:[N("cx"),N("cy")],moved:false};
     cv.style.cursor="nwse-resize"; e.preventDefault(); return; }
-  const xs=disp.map(q=>q[0]), ys=disp.map(q=>q[1]);   // no corner -> if inside the rect, start a move
-  if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys)){
-    const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s, tl=shapeNodes(o)[0];   // grab offset from the top-left corner
-    drag={mode:"move", obj:o, grab:[dx-tl[0], dy-tl[1]], moved:false};
+  const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;   // pointer in design mm
+  let inside,ref;
+  if(t==="rect"){ const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);
+    inside=mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys); ref=shapeNodes(o)[0]; }
+  else { ref=[N("cx"),N("cy")]; inside=Math.hypot(dx-ref[0],dy-ref[1])<=N("r"); }
+  if(inside){ drag={mode:"move",shape:t,obj:o,grab:[dx-ref[0],dy-ref[1]],moved:false};
     cv.style.cursor="move"; e.preventDefault(); }
 });
 window.addEventListener("mousemove",(e)=>{
   if(!drag) return;
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
-  let x,y,w,h;
-  if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
-    x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
-  else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1]; }
-  el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
-  drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
+  if(drag.shape==="rect"){ let x,y,w,h;
+    if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
+      x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
+    else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1]; }
+    el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
+    drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
+  } else { let cx,cy,r;
+    if(drag.mode==="resize"){ cx=drag.center[0]; cy=drag.center[1]; r=Math.max(0.25,Math.hypot(dx-cx,dy-cy)); }
+    else { r=+el.getAttribute("r")||0; cx=dx-drag.grab[0]; cy=dy-drag.grab[1]; }
+    el.setAttribute("cx",fmtn(cx)); el.setAttribute("cy",fmtn(cy)); el.setAttribute("r",fmtn(r));
+    drag.obj.poly=circlePoly(cx,cy,r);
+  }
   drag.moved=true; draw();
 });
 window.addEventListener("mouseup",()=>{
   if(!drag) return;
-  if(drag.moved){ suppressClick=true; const el=drag.obj.el;
-    say(drag.mode==="move" ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
-                           : "Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."); }
+  if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
+    if(drag.mode==="move") msg = drag.shape==="rect"
+        ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
+        : "Moved center to ("+el.getAttribute("cx")+", "+el.getAttribute("cy")+") mm.";
+    else msg = drag.shape==="rect"
+        ? "Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."
+        : "Radius "+el.getAttribute("r")+" mm (diameter "+fmtn(2*(+el.getAttribute("r")))+" mm).";
+    say(msg); }
   drag=null; cv.style.cursor=editMode?"crosshair":"default";
 });
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
