@@ -463,11 +463,9 @@ function draw(){
     ctx.fillRect(I*k,(H-I-T)*k,L*k,tt); ctx.fillRect(I*k,(H-I-L)*k,tt,L*k);
   }
   if(editMode){
-    const stroke=o=>{const p=placePoly(o.poly);ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();};
-    // print objects already show in the raster background; only the selected object is highlighted here
+    // the selected object keeps its normal line; selection is shown by node handles only
     if(selId!=null){const o=objects.find(o=>o.id===selId);
-      if(o){ctx.save();ctx.strokeStyle="#00b3ff";ctx.lineWidth=3;ctx.shadowColor="#00b3ff";ctx.shadowBlur=6;stroke(o);ctx.restore();
-        const nodes=placePoly(shapeNodes(o)),hs=4;   // square node handles at the shape's defining points
+      if(o){const nodes=placePoly(shapeNodes(o)),hs=4;   // selection = square node handles at the shape's defining points
         ctx.save();ctx.fillStyle="#fff";ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
         nodes.forEach(q=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);ctx.fill();ctx.stroke();});
         ctx.restore();}}
