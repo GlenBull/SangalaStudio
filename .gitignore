@@ -8,6 +8,9 @@ _*.svg
 # Local snapshot scheme (superseded by git history)
 versions/
 
+# Binary design docs — live in Dropbox, not the repo
+Houses/*.docx
+
 # OS / Dropbox / editor cruft
 .DS_Store
 Thumbs.db
