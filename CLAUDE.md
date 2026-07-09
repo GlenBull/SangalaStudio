@@ -14,6 +14,17 @@ USB only, user-mode.** This constraint is absolute.
 - **One change at a time, then let the user test on the physical machine, then commit.** Do not batch many untested changes — that already cost a multi-hour unrecoverable break once. Commit (or tag) after each verified-good state so any regression is a `git diff` away, not a guess.
 - Terminology: the machine is a **die cutter** / **Digital Fabrication Tool**. Always write the full term **"die cutter"** — never abbreviate or truncate to "cutter" (or use "cutting"). In schools the bare word "cutter" can evoke self-harm (a teen who slashes their arms); the full "die cutter" keeps the meaning unambiguous. Applies to UI text, code comments, and chat. Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication Tool** (mixed case). Show the mat/page in inches as whole numbers.
 
+## Approval & git safety
+- **Auto-approve (standing consent):** work confined to this repo, the temp
+  scratch folder, and pushing commits to this GitHub repo. No need to ask.
+- **Always ask first:** anything outside the repo (other drives, the user's
+  Dropbox), system/account settings, network to anywhere other than this GitHub
+  repo, and any history-losing git — force-push, hard reset that drops commits,
+  branch deletion.
+- **Commit and push after each verified-good change** — one change, verify it's
+  good (see line-14 physical-test rule for machine-facing changes), then commit
+  and push so any regression is a `git diff` away, not a guess.
+
 ## Files
 - **DieCutter.cs** — USB + GPGL engine. Opens the cutter via the `usbprint.sys`
   device interface (SetupDi* + CreateFile, user-mode, no admin). Classes: Native
