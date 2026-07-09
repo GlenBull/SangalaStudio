@@ -644,17 +644,50 @@ $("bEdit").onclick=()=>{ editMode=!editMode; $("bEdit").classList.toggle("on",ed
   cv.style.cursor=editMode?"crosshair":"default"; if(!editMode) selId=null; draw(); refreshEditPanel();
   say(editMode?"Edit mode ON - click an object in the preview to select it."
              :"Edit mode OFF."); };
+// pointer -> display mm (same math the selection uses), plus k = px per mm
+function evtMM(e){ const dh=printFile?PAGE_LH:MAT_H, k=cv.height/dh, r=cv.getBoundingClientRect();
+  return { mx:(e.clientX-r.left)*(cv.width/r.width)/k, my:(e.clientY-r.top)*(cv.height/r.height)/k, k }; }
 cv.addEventListener("click",(e)=>{
   if(!editMode) return;
-  const dh=printFile?PAGE_LH:MAT_H, k=cv.height/dh, rect=cv.getBoundingClientRect();
-  const mmx=(e.clientX-rect.left)*(cv.width/rect.width)/k, mmy=(e.clientY-rect.top)*(cv.height/rect.height)/k;
+  if(suppressClick){ suppressClick=false; return; }   // don't reselect/deselect right after a resize drag
+  const {mx,my,k}=evtMM(e);
   let best=null,bd=1e18;
   objects.forEach(o=>{ const p=placePoly(o.poly);
-    if(p.length===1){ const d=Math.hypot(mmx-p[0][0],mmy-p[0][1]); if(d<bd){bd=d;best=o;} return; }
-    for(let i=0;i+1<p.length;i++){ const d=segDist(mmx,mmy,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
+    if(p.length===1){ const d=Math.hypot(mx-p[0][0],my-p[0][1]); if(d<bd){bd=d;best=o;} return; }
+    for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
   if(best && bd*k<=8){ selId=best.id; say("Selected a "+KIND_LABEL[best.kind]+" object."); }   // within 8 px of a line
   else { selId=null; say("Nothing there - click closer to a line."); }
   draw(); refreshEditPanel();
+});
+/* ---------- drag a rectangle corner to resize (anchor the opposite corner) ---------- */
+let drag=null, suppressClick=false;
+cv.addEventListener("mousedown",(e)=>{
+  if(!editMode||selId==null) return;
+  const o=objects.find(x=>x.id===selId);
+  if(!o||!o.el||o.el.tagName.toLowerCase()!=="rect") return;   // corner-resize is rect-only for now
+  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o));     // display-mm corners TL,TR,BR,BL
+  let hit=-1,bd=8;
+  disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8 px of a handle
+  if(hit<0) return;
+  drag={obj:o, anchor:shapeNodes(o)[(hit+2)%4], moved:false};   // opposite corner stays put
+  cv.style.cursor="nwse-resize"; e.preventDefault();
+});
+window.addEventListener("mousemove",(e)=>{
+  if(!drag) return;
+  const {mx,my}=evtMM(e), pp=placeParams();
+  const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
+  const ax=drag.anchor[0], ay=drag.anchor[1];
+  const x=Math.min(ax,dx), y=Math.min(ay,dy), w=Math.max(0.5,Math.abs(dx-ax)), h=Math.max(0.5,Math.abs(dy-ay));
+  const el=drag.obj.el;
+  el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
+  drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
+  drag.moved=true; draw();
+});
+window.addEventListener("mouseup",()=>{
+  if(!drag) return;
+  if(drag.moved){ suppressClick=true; const el=drag.obj.el;
+    say("Resized to "+el.getAttribute("width")+" x "+el.getAttribute("height")+" mm."); }
+  drag=null; cv.style.cursor=editMode?"crosshair":"default";
 });
 $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");return;}
   say("Scanning for registration marks...");
