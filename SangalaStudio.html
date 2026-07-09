@@ -114,28 +114,6 @@
     <div class="hint">Set your material and position, then close Setup and press Make it.</div>
   </div>
 
-<div id="addpanel" class="panel" style="position:fixed;z-index:31;display:none;width:230px">
-    <h2 class="marker">Add shape</h2>
-    <h2 class="marker" style="font-size:.9rem;margin-top:.5rem">Rectangle</h2>
-    <div class="two">
-      <div><label class="fld">Width mm</label><input type="number" id="rectW" min="1" step="0.1" value="24"></div>
-      <div><label class="fld">Height mm</label><input type="number" id="rectH" min="1" step="0.1" value="16"></div>
-    </div>
-    <button class="go" id="addRect" style="margin-top:.6rem;font-size:1rem;padding:.5rem">Add rectangle</button>
-    <div class="hint">Drops a cut rectangle at the top-left. Use Position to place it, Edit to change or delete it. Default 24 x 16 mm = a 2 x 3 brick footprint.</div>
-  </div>
-
-<div id="circpanel" class="panel" style="position:fixed;z-index:31;display:none;width:230px">
-    <h2 class="marker">Add shape</h2>
-    <h2 class="marker" style="font-size:.9rem;margin-top:.5rem">Circle</h2>
-    <div><label class="fld">Diameter mm</label><input type="number" id="circD" min="0.5" step="0.1" value="4.8"></div>
-    <div class="two" style="margin-top:.1rem">
-      <div><label class="fld">Center X mm</label><input type="number" id="circX" step="0.1" value="4"></div>
-      <div><label class="fld">Center Y mm</label><input type="number" id="circY" step="0.1" value="4"></div>
-    </div>
-    <button class="go" id="addCirc" style="margin-top:.6rem;font-size:1rem;padding:.5rem">Add circle</button>
-    <div class="hint">Center X / Y are measured from the design's top-left (the brick's corner). Default 4.8 mm at (4, 4) = the first stud of a 2 x 3 brick; studs step 8 mm.</div>
-  </div>
 
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test square</button>
@@ -576,38 +554,35 @@ function svgNode(name,attrs){
   el.setAttribute("fill","none"); el.setAttribute("stroke","#ff0000"); el.setAttribute("stroke-width","0.2");
   svgEl.appendChild(el); return el;
 }
-// one shape-tool panel open at a time; anchor it to the right of its tool button
-function toolPanel(panel,btn,other,otherBtn){const p=$(panel),b=$(btn),o=$(other),ob=$(otherBtn);
-  const open=p.style.display!=="block",r=b.getBoundingClientRect();
-  o.style.display="none"; ob.classList.remove("on");
-  if(open){p.style.left=(r.right+8)+"px";p.style.top=r.top+"px";}
-  p.style.display=open?"block":"none"; b.classList.toggle("on",open);}
-$("tRect").onclick=()=>toolPanel("addpanel","tRect","circpanel","tCirc");
-$("tCirc").onclick=()=>toolPanel("circpanel","tCirc","addpanel","tRect");
-function addShape(el,poly,desc){
-  objects.push({id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly});
-  selId=objSeq; bgImg=null; draw(); refreshEditPanel();
-  say("Added "+desc+". Use Position to place it; Edit to change or delete.");
+/* ---------- tool selection (Select / Rect / Circle) ---------- */
+let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag on canvas to draw
+function setTool(t){ activeTool=t;
+  ["tRect","tCirc"].forEach(id=>$(id).classList.remove("on"));
+  if(t==="rect") $("tRect").classList.add("on"); else if(t==="circle") $("tCirc").classList.add("on");
+  cv.style.cursor = t==="select" ? "default" : "crosshair";
+  if(t!=="select"){ selId=null; refreshEditPanel(); draw(); }   // a draw tool clears any selection
 }
-function addRect(w,h){
+// click a tool to activate it; click the same tool again to deactivate (back to select)
+$("tRect").onclick=()=>setTool(activeTool==="rect"?"select":"rect");
+$("tCirc").onclick=()=>setTool(activeTool==="circle"?"select":"circle");
+// begin drawing: create a zero-size shape at the start point, then the resize drag grows it
+function startDraw(e){
   ensureDoc();
-  const el=svgNode("rect",{x:0,y:0,width:w,height:h});   // top-left at origin
-  addShape(el,[[0,0],[w,0],[w,h],[0,h],[0,0]], "a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle");
+  const {mx,my}=evtMM(e), pp=placeParams();
+  const sx=(mx-pp.ox)/pp.s, sy=(my-pp.oy)/pp.s;   // start point in design mm
+  let el,poly,d;
+  if(activeTool==="rect"){ el=svgNode("rect",{x:sx,y:sy,width:0,height:0});
+    poly=[[sx,sy],[sx,sy],[sx,sy],[sx,sy],[sx,sy]]; d={mode:"resize",shape:"rect",anchor:[sx,sy]}; }
+  else { el=svgNode("circle",{cx:sx,cy:sy,r:0}); poly=circlePoly(sx,sy,0); d={mode:"resize",shape:"circle",center:[sx,sy]}; }
+  const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id;
+  d.obj=o; d.moved=false; d.draw=true; drag=d;
+  e.preventDefault(); draw(); refreshEditPanel();
 }
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
   return poly;
 }
-function addCircle(d,cx,cy){
-  ensureDoc();
-  const r=d/2, el=svgNode("circle",{cx:cx,cy:cy,r:r});
-  addShape(el,circlePoly(cx,cy,r), "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
-}
-$("addRect").onclick=()=>{const w=+$("rectW").value,h=+$("rectH").value;
-  if(!(w>0&&h>0)){say("Enter a width and height in mm.");return;} addRect(w,h);};
-$("addCirc").onclick=()=>{const d=+$("circD").value,cx=+$("circX").value,cy=+$("circY").value;
-  if(!(d>0)){say("Enter a diameter in mm.");return;} if(!isFinite(cx)||!isFinite(cy)){say("Enter a center X and Y in mm.");return;} addCircle(d,cx,cy);};
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
   if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
@@ -694,6 +669,7 @@ cv.addEventListener("click",(e)=>{
 // circle: cardinal handle changes radius (center fixed), body moves the center.
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
+  if(activeTool!=="select"){ startDraw(e); return; }   // Rect/Circle tool: drag to draw
   if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase(); if(t!=="rect"&&t!=="circle") return;
@@ -732,6 +708,14 @@ window.addEventListener("mousemove",(e)=>{
 });
 window.addEventListener("mouseup",()=>{
   if(!drag) return;
+  if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it selected
+    const o=drag.obj, el=o.el, t=el.tagName.toLowerCase();
+    const tiny = t==="rect" ? (+el.getAttribute("width")<1||+el.getAttribute("height")<1) : (+el.getAttribute("r")<0.5);
+    if(tiny){ if(el.remove)el.remove(); objects=objects.filter(x=>x.id!==o.id); selId=null; say(""); }
+    else say(t==="rect" ? "Drew a "+fmtn(+el.getAttribute("width"))+" x "+fmtn(+el.getAttribute("height"))+" mm rectangle. Refine it in the readout."
+                        : "Drew a "+fmtn(2*(+el.getAttribute("r")))+" mm circle. Refine it in the readout.");
+    drag=null; suppressClick=true; cv.style.cursor="crosshair"; draw(); refreshEditPanel(); return;
+  }
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
     if(drag.mode==="move") msg = drag.shape==="rect"
         ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
