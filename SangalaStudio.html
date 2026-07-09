@@ -124,6 +124,18 @@
     <div class="hint">Drops a cut rectangle at the top-left. Use Position to place it, Edit to change or delete it. Default 24 x 16 mm = a 2 x 3 brick footprint.</div>
   </div>
 
+<div id="circpanel" class="panel" style="position:fixed;z-index:31;display:none;width:230px">
+    <h2 class="marker">Add shape</h2>
+    <h2 class="marker" style="font-size:.9rem;margin-top:.5rem">Circle</h2>
+    <div><label class="fld">Diameter mm</label><input type="number" id="circD" min="0.5" step="0.1" value="4.8"></div>
+    <div class="two" style="margin-top:.1rem">
+      <div><label class="fld">Center X mm</label><input type="number" id="circX" step="0.1" value="4"></div>
+      <div><label class="fld">Center Y mm</label><input type="number" id="circY" step="0.1" value="4"></div>
+    </div>
+    <button class="go" id="addCirc" style="margin-top:.6rem;font-size:1rem;padding:.5rem">Add circle</button>
+    <div class="hint">Center X / Y are measured from the design's top-left (the brick's corner). Default 4.8 mm at (4, 4) = the first stud of a 2 x 3 brick; studs step 8 mm.</div>
+  </div>
+
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test square</button>
   <button id="mScan">🎯 Scan test</button>
@@ -151,6 +163,7 @@
   <div class="ltools">
     <div class="ltitle marker">Tools</div>
     <button class="ltbtn" id="tRect" title="Rectangle">▭<small>Rect</small></button>
+    <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
   </div>
   <div class="board cork">
     <canvas id="cv" width="560" height="760"></canvas>
@@ -502,17 +515,31 @@ $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect(
 /* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
 // Mirrors the Test-square pattern (el:null, hand-built poly in mm): the shape previews
 // and cuts from its poly without needing a live SVG node. kind defaults to cut.
-$("tRect").onclick=()=>{const p=$("addpanel"),r=$("tRect").getBoundingClientRect();const open=p.style.display!=="block";
-  if(open){p.style.left=(r.right+8)+"px";p.style.top=r.top+"px";}p.style.display=open?"block":"none";
-  $("tRect").classList.toggle("on",open);};
-function addRect(w,h){
-  const poly=[[0,0],[w,0],[w,h],[0,h],[0,0]];   // top-left at origin; Position places it
+// one shape-tool panel open at a time; anchor it to the right of its tool button
+function toolPanel(panel,btn,other,otherBtn){const p=$(panel),b=$(btn),o=$(other),ob=$(otherBtn);
+  const open=p.style.display!=="block",r=b.getBoundingClientRect();
+  o.style.display="none"; ob.classList.remove("on");
+  if(open){p.style.left=(r.right+8)+"px";p.style.top=r.top+"px";}
+  p.style.display=open?"block":"none"; b.classList.toggle("on",open);}
+$("tRect").onclick=()=>toolPanel("addpanel","tRect","circpanel","tCirc");
+$("tCirc").onclick=()=>toolPanel("circpanel","tCirc","addpanel","tRect");
+function addShape(poly,desc){
   objects.push({id:++objSeq,el:null,kind:"cut",orig:"cut",poly:poly});
   selId=objSeq; bgImg=null; draw(); refreshEditPanel();
-  say("Added a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle. Use Position to place it; Edit to change or delete.");
+  say("Added "+desc+". Use Position to place it; Edit to change or delete.");
+}
+function addRect(w,h){
+  addShape([[0,0],[w,0],[w,h],[0,h],[0,0]], "a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle");   // top-left at origin
+}
+function addCircle(d,cx,cy){
+  const r=d/2, n=Math.max(32,Math.ceil(Math.PI*d*2)), poly=[];   // ~2 pts/mm of circumference, min 32
+  for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
+  addShape(poly, "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
 }
 $("addRect").onclick=()=>{const w=+$("rectW").value,h=+$("rectH").value;
   if(!(w>0&&h>0)){say("Enter a width and height in mm.");return;} addRect(w,h);};
+$("addCirc").onclick=()=>{const d=+$("circD").value,cx=+$("circX").value,cy=+$("circY").value;
+  if(!(d>0)){say("Enter a diameter in mm.");return;} if(!isFinite(cx)||!isFinite(cy)){say("Enter a center X and Y in mm.");return;} addCircle(d,cx,cy);};
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
   if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
