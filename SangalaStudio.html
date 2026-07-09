@@ -513,8 +513,26 @@ $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kin
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 /* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
-// Mirrors the Test-square pattern (el:null, hand-built poly in mm): the shape previews
-// and cuts from its poly without needing a live SVG node. kind defaults to cut.
+// Each shape gets a REAL <rect>/<circle> node in the retained doc (design coords, 1
+// user unit = 1 mm) plus a poly cache for preview/cut - the same el+poly pairing that
+// loaded files use, so shapes can later be serialized (Save SVG for Tinkercad). kind
+// defaults to cut; node carries cut styling (red solid unfilled) so it round-trips.
+const SVGNS="http://www.w3.org/2000/svg";
+function ensureDoc(){
+  if(svgEl) return;
+  const W=MAT_W,H=MAT_H;
+  const doc=new DOMParser().parseFromString('<svg xmlns="'+SVGNS+'" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'"></svg>',"image/svg+xml");
+  const svg=doc.documentElement;
+  const holder=document.createElement("div");holder.style.cssText="position:absolute;left:-9999px;top:0";
+  holder.appendChild(svg);document.body.appendChild(holder);   // adopts svg into the main document
+  svgDoc=doc; svgHolder=holder; svgEl=svg; printFile=false;
+}
+function svgNode(name,attrs){
+  const el=document.createElementNS(SVGNS,name);
+  for(const k in attrs) el.setAttribute(k,attrs[k]);
+  el.setAttribute("fill","none"); el.setAttribute("stroke","#ff0000"); el.setAttribute("stroke-width","0.2");
+  svgEl.appendChild(el); return el;
+}
 // one shape-tool panel open at a time; anchor it to the right of its tool button
 function toolPanel(panel,btn,other,otherBtn){const p=$(panel),b=$(btn),o=$(other),ob=$(otherBtn);
   const open=p.style.display!=="block",r=b.getBoundingClientRect();
@@ -523,18 +541,22 @@ function toolPanel(panel,btn,other,otherBtn){const p=$(panel),b=$(btn),o=$(other
   p.style.display=open?"block":"none"; b.classList.toggle("on",open);}
 $("tRect").onclick=()=>toolPanel("addpanel","tRect","circpanel","tCirc");
 $("tCirc").onclick=()=>toolPanel("circpanel","tCirc","addpanel","tRect");
-function addShape(poly,desc){
-  objects.push({id:++objSeq,el:null,kind:"cut",orig:"cut",poly:poly});
+function addShape(el,poly,desc){
+  objects.push({id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly});
   selId=objSeq; bgImg=null; draw(); refreshEditPanel();
   say("Added "+desc+". Use Position to place it; Edit to change or delete.");
 }
 function addRect(w,h){
-  addShape([[0,0],[w,0],[w,h],[0,h],[0,0]], "a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle");   // top-left at origin
+  ensureDoc();
+  const el=svgNode("rect",{x:0,y:0,width:w,height:h});   // top-left at origin
+  addShape(el,[[0,0],[w,0],[w,h],[0,h],[0,0]], "a "+fmtn(w)+" x "+fmtn(h)+" mm cut rectangle");
 }
 function addCircle(d,cx,cy){
-  const r=d/2, n=Math.max(32,Math.ceil(Math.PI*d*2)), poly=[];   // ~2 pts/mm of circumference, min 32
+  ensureDoc();
+  const r=d/2, el=svgNode("circle",{cx:cx,cy:cy,r:r});
+  const n=Math.max(32,Math.ceil(Math.PI*d*2)), poly=[];   // ~2 pts/mm of circumference, min 32
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
-  addShape(poly, "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
+  addShape(el,poly, "a "+fmtn(d)+" mm circle at ("+fmtn(cx)+", "+fmtn(cy)+")");
 }
 $("addRect").onclick=()=>{const w=+$("rectW").value,h=+$("rectH").value;
   if(!(w>0&&h>0)){say("Enter a width and height in mm.");return;} addRect(w,h);};
