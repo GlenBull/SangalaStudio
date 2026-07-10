@@ -147,6 +147,7 @@
     <div class="ltitle marker">Tools</div>
     <button class="ltbtn" id="tRect" title="Rectangle">▭<small>Rect</small></button>
     <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
+    <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
   </div>
   <div class="board cork">
@@ -182,6 +183,7 @@ const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
+let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
@@ -450,8 +452,9 @@ function draw(){
   // the selected object keeps its normal line; selection is shown by node handles only
   if(selId!=null){const o=objects.find(o=>o.id===selId);
     if(o){const nodes=placePoly(shapeNodes(o)),hs=4;   // selection = square node handles at the shape's defining points
-      ctx.save();ctx.fillStyle="#fff";ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
-      nodes.forEach(q=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);ctx.fill();ctx.stroke();});
+      ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
+      nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
+        ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
       ctx.restore();}}
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
@@ -642,15 +645,16 @@ function svgNode(name,attrs){
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
 let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag to draw; "brick" = click to place
 function setTool(t){ activeTool=t;
-  ["tRect","tCirc","tBrick"].forEach(id=>$(id).classList.remove("on"));
-  const btn={rect:"tRect",circle:"tCirc",brick:"tBrick"}[t]; if(btn) $(btn).classList.add("on");
-  cv.style.cursor = t==="select" ? "default" : "crosshair";
-  if(t!=="select"){ selId=null; refreshEditPanel(); draw(); }   // a draw/place tool clears any selection
+  ["tRect","tCirc","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
+  const btn={rect:"tRect",circle:"tCirc",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
+  cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
+  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tRect").onclick=()=>setTool(activeTool==="rect"?"select":"rect");
 $("tCirc").onclick=()=>setTool(activeTool==="circle"?"select":"circle");
 $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
+$("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
 function startDraw(e){
   ensureDoc();
@@ -683,6 +687,29 @@ function placeBrick(e){
   const {mx,my}=evtMM(e), pp=placeParams();
   makeBrick((mx-pp.ox)/pp.s, (my-pp.oy)/pp.s);
   suppressClick=true; setTool("select");
+}
+// Node tool: convert a parametric rect to an editable <polygon> the first time a node is moved
+function ensurePolygon(o){
+  if(o.el.tagName.toLowerCase()==="polygon") return;   // already editable
+  const nodes=shapeNodes(o);                            // rect -> 4 corners, in order
+  const poly=svgNode("polygon",{points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")});
+  if(o.el&&o.el.remove) o.el.remove();
+  o.el=poly; o.poly=nodes.concat([nodes[0]]);           // closed ring for preview/cut
+}
+// begin dragging an individual node of the selected rect/polygon
+function startNodeDrag(e){
+  if(selId==null) return;
+  const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
+  const t=o.el.tagName.toLowerCase();
+  if((t!=="rect"&&t!=="polygon") || o.el.hasAttribute("data-brick")) return;   // rect/polygon only; bricks stay parametric
+  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o));
+  let hit=-1,bd=8;
+  disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8px of a node
+  if(hit<0){ selNode=null; return; }                   // not on a node -> let the click select instead
+  ensurePolygon(o);
+  selNode=hit;                                         // mark the node selected (drawn filled)
+  drag={mode:"node", obj:o, idx:hit, moved:false};
+  cv.style.cursor="grabbing"; e.preventDefault(); draw(); refreshEditPanel();
 }
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
@@ -781,6 +808,7 @@ cv.addEventListener("click",(e)=>{
     for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
   if(best && bd*k<=8){ selId=best.id; say("Selected a "+KIND_LABEL[best.kind]+" object."); }   // within 8 px of a line
   else { selId=null; say("Nothing there - click closer to a line."); }
+  selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
@@ -789,6 +817,7 @@ cv.addEventListener("click",(e)=>{
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
   if(activeTool==="brick"){ placeBrick(e); return; }   // Brick tool: click to place
+  if(activeTool==="node"){ startNodeDrag(e); return; }   // Node tool: drag a node to move it
   if(activeTool!=="select"){ startDraw(e); return; }   // Rect/Circle tool: drag to draw
   if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
@@ -812,6 +841,10 @@ window.addEventListener("mousemove",(e)=>{
   if(!drag) return;
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
+  if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one polygon node
+    o.poly[i]=[dx,dy]; if(i===0) o.poly[o.poly.length-1]=[dx,dy];   // keep the ring closed
+    o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+    drag.moved=true; draw(); return; }
   if(drag.shape==="rect"){ let x,y,w,h;
     if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
@@ -838,6 +871,7 @@ window.addEventListener("mouseup",()=>{
       setTool("select"); }   // part made: auto-release to select, with it selected for editing
     draw(); refreshEditPanel(); return;
   }
+  if(drag.mode==="node"){ suppressClick=true; if(drag.moved) say("Moved a node."); drag=null; cv.style.cursor="default"; draw(); return; }   // keep the node selected (filled)
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
     if(drag.mode==="move") msg = drag.shape==="rect"
         ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
