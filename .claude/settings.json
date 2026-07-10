@@ -24,6 +24,11 @@
       "Bash(git config:*)",
       "Bash(node:*)",
       "Bash(ls:*)",
+      "PowerShell(python *)",
+      "PowerShell(python3 *)",
+      "PowerShell(pandoc *)",
+      "PowerShell(npm *)",
+      "PowerShell(node *)",
       "Skill(update-config)",
       "Skill(update-config:*)",
       "mcp__claude-in-chrome__list_connected_browsers"
