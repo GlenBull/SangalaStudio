@@ -758,6 +758,14 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
+// Delete / Backspace removes the selected object, unless you're typing in a field
+document.addEventListener("keydown",(e)=>{
+  if(e.key!=="Delete"&&e.key!=="Backspace") return;
+  const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
+  if(selId==null) return;
+  e.preventDefault(); deleteSel();
+});
 // pointer -> display mm (same math the selection uses), plus k = px per mm
 function evtMM(e){ const dh=printFile?PAGE_LH:MAT_H, k=cv.height/dh, r=cv.getBoundingClientRect();
   return { mx:(e.clientX-r.left)*(cv.width/r.width)/k, my:(e.clientY-r.top)*(cv.height/r.height)/k, k }; }
