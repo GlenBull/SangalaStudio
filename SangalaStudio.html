@@ -178,6 +178,14 @@
 <div id="printarea"></div>
 <script>
 "use strict";
+// If opened straight from disk (file://) while the local helper is already running,
+// hop to the helper's page so Connect / Make it work. If the helper is not up, stay
+// put - design still works offline.
+if(location.protocol==="file:"){
+  fetch("http://127.0.0.1:8787/",{mode:"no-cors"})
+    .then(()=>{ location.replace("http://127.0.0.1:8787/"); })
+    .catch(()=>{});   // helper not running -> remain on the file page
+}
 (function(){
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
