@@ -79,6 +79,7 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bImg"><span class="glyph">🖼️</span><small>Open Image</small></button>
+    <button class="tbtn" id="bRemoveBg" style="display:none"><span class="glyph">🪄</span><small>Remove BG</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
@@ -202,6 +203,10 @@
 </div>
 
 <div id="printarea"></div>
+<!-- ONNX Runtime Web + the u2netp background-removal/trace engine (served from /assets, offline).
+     ort.wasm.min.js is small; the 11 MB wasm + 4.5 MB model load lazily on first use. -->
+<script src="/assets/ort.wasm.min.js"></script>
+<script src="/assets/trace-engine.js"></script>
 <script>
 "use strict";
 // If opened straight from disk (file://) while the local helper is already running,
@@ -472,9 +477,18 @@ function draw(){
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,cv.width,cv.height);
   ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);
-  // reference image (beneath the vectors so you can trace over it)
+  // reference image (beneath the vectors so you can trace over it). After Remove BG,
+  // show the cutout over a checkerboard so the transparent background reads as transparent.
   if(refImg && refImg.img && refImg.img.complete && refImg.img.naturalWidth){
-    try{ ctx.drawImage(refImg.img, refImg.x*k, refImg.y*k, refImg.w*k, refImg.h*k); }catch(e){}
+    const rx=refImg.x*k, ry=refImg.y*k, rw=refImg.w*k, rh=refImg.h*k;
+    if(refImg.cutout){
+      ctx.save(); ctx.beginPath(); ctx.rect(rx,ry,rw,rh); ctx.clip();
+      const s=9; for(let yy=0;yy<rh;yy+=s)for(let xx=0;xx<rw;xx+=s){ ctx.fillStyle=((((xx/s)|0)+((yy/s)|0))&1)?"#cfd3d6":"#ffffff"; ctx.fillRect(rx+xx,ry+yy,s,s); }
+      ctx.restore();
+      try{ ctx.drawImage(refImg.cutout, rx,ry,rw,rh); }catch(e){}
+    } else {
+      try{ ctx.drawImage(refImg.img, rx,ry,rw,rh); }catch(e){}
+    }
     if(refImg.sel){
       ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5;
       ctx.setLineDash([5,3]); ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.setLineDash([]);
@@ -581,15 +595,37 @@ function loadImageFile(file){
     img.onload=()=>{ ensureDoc();
       let w=img.naturalWidth||100, h=img.naturalHeight||100;       // px as arbitrary units -> fit within ~70% of the mat
       const s=Math.min(MAT_W*0.7/w, MAT_H*0.7/h); w*=s; h*=s;
-      refImg={img:img, x:(MAT_W-w)/2, y:(MAT_H-h)/2, w:w, h:h, sel:true};
+      refImg={img:img, x:(MAT_W-w)/2, y:(MAT_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
+      $("bRemoveBg").style.display=""; $("bRemoveBg").disabled=false;
       selId=null; selId2=null; draw(); refreshEditPanel();
-      say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, Delete to remove.");
+      say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, or Remove BG to make a silhouette.");
     };
     img.onerror=()=>say("Could not read that image file.");
     img.src=ev.target.result; };
   rd.onerror=()=>say("Could not open that file.");
   rd.readAsDataURL(file);
 }
+// Remove Background: run u2netp on the imported image and show the subject as a soft
+// cutout over a checkerboard. Keeps the grayscale mask on refImg for tracing (next step).
+$("bRemoveBg").onclick=async()=>{
+  if(!refImg||!refImg.img){ say("Open an image first."); return; }
+  if(!window.SangalaBg||!window.ort){ say("Background remover isn't loaded - reload the page."); return; }
+  const btn=$("bRemoveBg"); btn.disabled=true;
+  say("Removing background... first run loads the model (~15 MB), then it's quick.");
+  try{
+    const maskCanvas=await SangalaBg.mask(refImg.img);
+    const W=maskCanvas.width, H=maskCanvas.height;
+    const cut=document.createElement("canvas"); cut.width=W; cut.height=H;
+    const cx=cut.getContext("2d"); cx.drawImage(refImg.img,0,0,W,H);
+    const ci=cx.getImageData(0,0,W,H), mi=maskCanvas.getContext("2d").getImageData(0,0,W,H);
+    for(let i=0;i<ci.data.length;i+=4) ci.data[i+3]=mi.data[i];   // subject alpha = mask gray value
+    cx.putImageData(ci,0,0);
+    refImg.mask=maskCanvas; refImg.cutout=cut; refImg.sel=true;
+    draw();
+    say("Background removed - subject shown over a checkerboard. (Tracing to a cut outline comes next.)");
+  }catch(e){ say("Background removal failed: "+((e&&e.message)||e)); }
+  btn.disabled=false;
+};
 // Save SVG: serialize the retained doc with the viewBox cropped to the design's
 // bounding box (mm), so Tinkercad imports at true size. Nodes save as-is (cut
 // styling); Edit's kind reassignment isn't yet reflected in the saved styles.
@@ -1000,7 +1036,7 @@ document.addEventListener("keydown",(e)=>{
   const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
-  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
+  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
 });
