@@ -11,9 +11,15 @@
 .PARAMETER VerifyOnly
   Skip installation and just run the verification round-trip.
 
+.PARAMETER DevExtras
+  Also install the dev-only background-removal parity deps (rembg, onnxruntime,
+  pillow, numpy). Never shipped - only used by dev/parity/parity_check.py to
+  validate the in-browser u2netp port against rembg. Safe to combine with a full run.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\setup-windows.ps1
   powershell -ExecutionPolicy Bypass -File .\setup-windows.ps1 -VerifyOnly
+  powershell -ExecutionPolicy Bypass -File .\setup-windows.ps1 -DevExtras
 
 .NOTES
   What it installs:
@@ -29,7 +35,7 @@
 
   Rendering uses MS Word if present (ExportAsFixedFormat -> PDF), else LibreOffice.
 #>
-param([switch]$VerifyOnly)
+param([switch]$VerifyOnly, [switch]$DevExtras)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
@@ -84,6 +90,17 @@ function Install-PyDeps {
   Ok 'python packages installed'
   [Environment]::SetEnvironmentVariable('PYTHONUTF8','1','User'); $env:PYTHONUTF8 = '1'
   Ok 'PYTHONUTF8=1 set (user env) - avoids Windows cp1252 codec crashes in the skill'
+}
+
+# OPTIONAL (-DevExtras): the background-removal parity check (dev/parity). rembg is the
+# reference implementation the in-browser u2netp port is validated against by IoU. These
+# are DEV-TIME ONLY and are never shipped - only the committed assets/u2netp.onnx ships.
+function Install-DevExtras {
+  Info 'installing OPTIONAL dev extras for the background-removal parity check: rembg, onnxruntime, pillow, numpy'
+  & python -m pip install --quiet --upgrade pip
+  & python -m pip install --quiet rembg onnxruntime pillow numpy
+  if ($LASTEXITCODE -ne 0) { throw 'pip install of dev extras failed.' }
+  Ok 'dev extras installed - run: python dev\parity\parity_check.py'
 }
 
 function Install-Node {
@@ -206,6 +223,7 @@ Install-PyDeps
 Install-Node
 Install-Poppler
 Install-LibreOffice
+if ($DevExtras) { Install-DevExtras }
 Verify
 Write-Host ''
 Write-Host 'Setup complete. Open a NEW terminal so PATH changes take effect.' -ForegroundColor Green

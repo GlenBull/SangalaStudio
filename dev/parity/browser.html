@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"></head>
+<body>
+<pre id="out">running...</pre>
+<!-- Loaded via relative file:// paths; run headless Edge with --allow-file-access-from-files -->
+<script src="../../assets/ort.wasm.min.js"></script>
+<script src="../../trace-engine.js"></script>
+<script>
+(async function () {
+  const out = document.getElementById("out");
+  function done(msg) { out.textContent = msg; document.title = msg.slice(0, 60); console.log("SANGALA_STATUS " + msg); }
+  try {
+    if (!window.ort) return done("ERR: ort not loaded");
+    if (!window.SangalaBg) return done("ERR: trace-engine not loaded");
+    SangalaBg.assetsBase = "../../assets/";
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("input image load failed")); img.src = "_input.png"; });
+    const t0 = performance.now();
+    const maskCanvas = await SangalaBg.mask(img);
+    const ms = Math.round(performance.now() - t0);
+    const b64 = maskCanvas.toDataURL("image/png").split(",")[1];
+    // Emit the mask over console.log in chunks; the Python driver captures Edge's
+    // stderr and polls for END (deterministic, unlike --dump-dom vs a 10s inference).
+    const CHUNK = 1000;
+    console.log("SANGALA_MASK_BEGIN " + maskCanvas.width + "x" + maskCanvas.height + " len=" + b64.length);
+    for (let i = 0; i < b64.length; i += CHUNK) console.log("SANGALA_MASK " + b64.substr(i, CHUNK));
+    console.log("SANGALA_MASK_END");
+    done("OK " + maskCanvas.width + "x" + maskCanvas.height + " in " + ms + "ms  b64len=" + b64.length);
+  } catch (e) {
+    done("ERR: " + (e && e.message || e) + (e && e.stack ? " | " + e.stack.split("\n")[0] : ""));
+  }
+})();
+</script>
+</body></html>

@@ -5,6 +5,9 @@
 _*.png
 _*.svg
 
+# Parity-test run artifacts (dev/parity)
+dev/parity/_*
+
 # Local snapshot scheme (superseded by git history)
 versions/
 
