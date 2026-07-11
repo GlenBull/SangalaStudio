@@ -29,6 +29,7 @@ namespace DieCutterApp
         static int _port = 0;
         static string _htmlPath;
         static double _jogX = 15.9, _jogY = 15.9;   // current manual-jog head position (mm)
+        static bool _framed = false;                 // has the machine been Setup() since connect (for /raw debug)
         static readonly System.Globalization.CultureInfo INV = System.Globalization.CultureInfo.InvariantCulture;
 
         [STAThread]
@@ -114,6 +115,8 @@ namespace DieCutterApp
                 else if (path == "/jog") Respond(ns, "application/json", DoJog(body));
                 else if (path == "/manualread") Respond(ns, "application/json", DoManualRead(body));
                 else if (path == "/manualcut") Respond(ns, "application/json", DoManualCut(body));
+                else if (path == "/unload") Respond(ns, "application/json", DoUnload());
+                else if (path == "/raw") Respond(ns, "application/json", DoRaw(body));
                 else Respond(ns, "text/plain", "not found", "404 Not Found");
             }
         }
@@ -177,6 +180,7 @@ namespace DieCutterApp
             {
                 if (_cutter != null) { _cutter.Dispose(); _cutter = null; }
                 _cutter = new Cutter(); _cutter.Open();
+                _framed = false;
                 string fw = _cutter.Firmware();
                 _lastStatus = "connected to " + _cutter.ModelName;
                 return "{\"ok\":true,\"model\":\"" + Esc(_cutter.ModelName) + "\",\"fw\":\"" + Esc(fw) +
@@ -211,6 +215,46 @@ namespace DieCutterApp
                 if (scores.Count > 0) { _cutter.SetForce(ScoreForce(force)); _cutter.Cut(scores, false, pct => { _lastStatus = "scoring " + pct + "%"; }, note, true); }
                 try { _cutter.Unload(MAT_H); } catch { }
                 _lastStatus = "done";
+                return "{\"ok\":true}";
+            }
+            catch (Exception ex) { _lastStatus = "error"; return "{\"ok\":false,\"error\":\"" + Esc(ex.Message) + "\"}"; }
+        }
+
+        // Eject the mat (same routine run at the end of a cut). Exposed so it can be
+        // triggered on its own for testing/manual unload.
+        static string DoUnload()
+        {
+            if (_cutter == null) return "{\"ok\":false,\"error\":\"Not connected to the Die Cutter.\"}";
+            try
+            {
+                _cutter.Setup(8, 14, false, 3, 0.9, MAT_H, m => { _lastStatus = m; });   // init so the machine accepts the feed
+                _cutter.Unload(MAT_H);
+                _lastStatus = "unloaded";
+                return "{\"ok\":true}";
+            }
+            catch (Exception ex) { _lastStatus = "error"; return "{\"ok\":false,\"error\":\"" + Esc(ex.Message) + "\"}"; }
+        }
+
+        // Debug: init the coordinate frame once (so moves take), then send a raw GPGL
+        // command. Used to find the eject command interactively without rebuilding.
+        static string DoRaw(string body)
+        {
+            if (_cutter == null) return "{\"ok\":false,\"error\":\"Not connected to the Die Cutter.\"}";
+            try
+            {
+                string cmd = (body ?? "").Trim();
+                if (cmd.Length == 0) return "{\"ok\":false,\"error\":\"Empty command.\"}";
+                if (!_framed) { _cutter.Setup(8, 14, false, 3, 0.9, MAT_H, m => { _lastStatus = m; }); _framed = true; }
+                if (cmd.StartsWith("hex ", StringComparison.OrdinalIgnoreCase))
+                {
+                    string hex = cmd.Substring(4).Replace(" ", "");
+                    if (hex.Length == 0 || hex.Length % 2 != 0) return "{\"ok\":false,\"error\":\"hex needs full byte pairs, e.g. hex 1B 0C\"}";
+                    byte[] b = new byte[hex.Length / 2];
+                    for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+                    _cutter.SendRawBytes(b);
+                    _lastStatus = "sent bytes: " + cmd;
+                }
+                else { _cutter.SendRaw(cmd); _lastStatus = "sent: " + cmd; }
                 return "{\"ok\":true}";
             }
             catch (Exception ex) { _lastStatus = "error"; return "{\"ok\":false,\"error\":\"" + Esc(ex.Message) + "\"}"; }

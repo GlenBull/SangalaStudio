@@ -228,7 +228,7 @@ namespace DieCutterApp
             if (emitEnd)
             {
                 if (returnToStart) WriteCmds(new[] { "L0", "\\0,0", "M0,0", "J0", "FN0", "TB50,0" });
-                else WriteCmds(new[] { "M" + SU(maxY + 10) + ",0", "SO0" });
+                else WriteCmd("M" + SU(maxY + 10) + ",0");   // move clear of the cut; do NOT SO0 (it re-homes the origin and breaks the M0,0 eject in Unload)
                 WaitReady(note);
             }
         }
@@ -258,13 +258,34 @@ namespace DieCutterApp
         // Change the tool force between passes (e.g. a lighter pass to score/crease).
         public void SetForce(int f) { WriteCmd("FX" + Math.Max(1, Math.Min(33, f)) + ",1"); }
 
-        // Return the media to the front (load) position at the end of a job. FO fed
-        // the wrong way, so use the origin return, which brings the mat forward.
+        // Eject the mat: roll it all the way out to the front. A bare M0,0 = "go to the
+        // load origin" (Setup's \0,0), which rolls the media fully out. This works now
+        // that the cut end no longer sends SO0 (SO0 re-homed the origin to the cut-end
+        // position, which cancelled this move). Positive Y = into the machine; negative
+        // Y is rejected; M0,0 = fully out.
         public void Unload(double mediaLenMm)
         {
             WaitReady(null);
-            WriteCmds(new[] { "\\0,0", "M0,0", "FN0" });
+            WriteCmd("M0,0");
             WaitReady(null);
+        }
+
+        // Debug: send one raw GPGL command to the machine (no ETX added here - WriteCmd
+        // appends it). Used by the /raw route to find the eject command interactively.
+        public void SendRaw(string cmd)
+        {
+            WaitReady(null);
+            WriteCmd(cmd);
+            WaitReady(null);
+        }
+
+        // Send an exact byte sequence (no ETX, no framing). For control packets like the
+        // page-eject ESC FF (0x1B 0x0C). No WaitReady after - an eject may roll the mat
+        // out without reporting ready.
+        public void SendRawBytes(byte[] b)
+        {
+            WaitReady(null);
+            WriteRaw(b);
         }
 
         // Set just the AutoBlade depth mid-job (reset then tap to depth) -- used to

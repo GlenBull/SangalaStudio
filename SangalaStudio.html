@@ -123,6 +123,8 @@
   <button id="mTest">⬜ Test square</button>
   <button id="mScan">🎯 Scan test</button>
   <button id="mManual">🕹️ Manual align</button>
+  <button id="mUnload">⏏️ Unload mat</button>
+  <button id="mRaw">⌨️ Send GPGL…</button>
 </div>
 <div id="jogpanel" class="panel" style="position:fixed;z-index:30;display:none;width:250px">
     <h2 class="marker">Manual registration</h2>
@@ -141,6 +143,21 @@
     <button class="go" id="jRead" style="font-size:1rem;padding:.5rem;background:linear-gradient(#2d7bb8,#1f5c8f);border-color:#17466b">Read marks</button>
     <button class="go" id="jCut" style="font-size:1rem;padding:.5rem;margin-top:.4rem" disabled>Cut aligned</button>
     <div id="jstatus" class="hint" style="margin-top:.5rem">Not started.</div>
+</div>
+<div id="rawpanel" class="panel" style="position:fixed;z-index:30;display:none;width:280px">
+    <h2 class="marker">GPGL console</h2>
+    <div class="hint" style="margin-top:0">Send a raw command (advanced / debug). Text = GPGL, e.g. <b>M6100,0</b> (M y,x, 20 = 1&nbsp;mm). Prefix with <b>hex</b> to send exact bytes, e.g. <b>hex 1B 0C</b> (ESC FF).</div>
+    <input type="text" id="rawcmd" placeholder="e.g. M6100,0  or  hex 1B 0C" style="width:100%;font-size:1rem;padding:.25rem .3rem;border:1px solid #cbb78f;border-radius:6px;background:#fffaf0;margin-top:.5rem;box-sizing:border-box">
+    <button class="go" id="rawSend" style="font-size:1rem;padding:.5rem;margin-top:.4rem">Send</button>
+    <div class="two" style="margin-top:.4rem">
+      <button class="go" id="rawRollIn" style="font-size:1rem;padding:.5rem;background:linear-gradient(#8a6a44,#6b4f30);border-color:#5a4326" title="M6100,0 - fully into the machine">Roll in</button>
+      <button class="go" id="rawRollOut" style="font-size:1rem;padding:.5rem;background:linear-gradient(#2d7bb8,#1f5c8f);border-color:#17466b" title="M0,0 - fully out to the front">Roll out</button>
+    </div>
+    <div class="two" style="margin-top:.4rem">
+      <button class="go" id="rawEscFF" style="font-size:1rem;padding:.5rem;background:linear-gradient(#1fa85a,#178047)" title="ESC FF = 1B 0C (page eject)">ESC FF</button>
+      <button class="go" id="rawEscEOT" style="font-size:1rem;padding:.5rem;background:linear-gradient(#1fa85a,#178047)" title="ESC EOT = 1B 04 (job end / release)">ESC EOT</button>
+    </div>
+    <div id="rawstatus" class="hint" style="margin-top:.5rem">Ready.</div>
 </div>
 <div class="stage">
   <div class="ltools">
@@ -927,6 +944,26 @@ $("mScan").onclick=async()=>{closeTest();if(!connected){say("Connect first.");re
     if(r.ok)say("Scan result: "+(r.result==="0"?"marks FOUND":("machine replied '"+r.result+"'")));
     else say("Scan error: "+r.error);
   }catch(e){say("Scan failed: "+e.message);}};
+$("mUnload").onclick=async()=>{closeTest();if(!connected){say("Connect to the Die Cutter first.");return;}
+  say("Unloading the mat...");
+  try{const r=await(await fetch("/unload",{method:"POST",body:""})).json();
+    say(r.ok?"Unload sent - watch which way the mat feeds.":"Unload error: "+r.error);
+  }catch(e){say("Unload failed: "+e.message);}};
+$("mRaw").onclick=()=>{closeTest();const p=$("rawpanel"),rb=$("bTestMenu").getBoundingClientRect();
+  p.style.left=Math.max(8,rb.left-40)+"px";p.style.top=(rb.bottom+8)+"px";p.style.display="block";$("rawcmd").focus();};
+async function sendRaw(cmd){
+  cmd=(cmd||$("rawcmd").value).trim(); if(!cmd)return;
+  if(!connected){$("rawstatus").textContent="Connect to the Die Cutter first.";return;}
+  $("rawstatus").textContent="Sending: "+cmd;
+  try{const r=await(await fetch("/raw",{method:"POST",body:cmd})).json();
+    $("rawstatus").textContent=r.ok?("Sent OK: "+cmd):("Error: "+r.error);
+  }catch(e){$("rawstatus").textContent="Send failed: "+e.message;}}
+$("rawSend").onclick=()=>sendRaw();
+$("rawRollOut").onclick=()=>sendRaw("M0,0");
+$("rawRollIn").onclick=()=>sendRaw("M6100,0");
+$("rawEscFF").onclick=()=>sendRaw("hex 1B 0C");
+$("rawEscEOT").onclick=()=>sendRaw("hex 1B 04");
+$("rawcmd").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sendRaw();}});
 /* ---------- manual registration ---------- */
 let mReady=false;
 function jbody(){const m=MATS[$("material").value];return hdrStr(m[3]);}
