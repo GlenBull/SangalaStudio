@@ -1,0 +1,7 @@
+# Shipped binaries — never apply line-ending or encoding conversion (would corrupt them).
+*.wasm  binary
+*.onnx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.exe   binary
