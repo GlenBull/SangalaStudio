@@ -198,6 +198,10 @@
         <button class="ebtn" id="ePrint" disabled>🖨️ Print only</button>
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
       </div>
+      <div id="esimprow" style="margin-top:.4rem;display:none;align-items:center;gap:.5rem">
+        <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify nodes</button>
+        <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
+      </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
     </div>
   </div>
@@ -656,7 +660,8 @@ function integrateTrace(){
       if(len>2){
         const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
         for(let i=0;i<=n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([ox+p.x*sx, oy+p.y*sy]); }
-        makePolyObj(pts,"cut"); added++;               // makePolyObj simplifies (0.08 mm) + closes the ring
+        const simp=simplify(pts,0.3);                  // photo traces start lighter (0.3 mm); Simplify shrinks further
+        makePolyObj(simp.length>=3?simp:pts,"cut"); added++;
       }
       svg.remove();
     });
@@ -1060,6 +1065,9 @@ function refreshEditPanel(){
   $("eCut").classList.toggle("on",   o.kind==="cut");
   $("eScore").classList.toggle("on", o.kind==="score");
   $("ePrint").classList.toggle("on", o.kind==="print");
+  const isPoly = o.el && o.el.tagName && o.el.tagName.toLowerCase()==="polygon";   // Simplify only applies to node-built paths
+  $("esimprow").style.display = isPoly ? "flex" : "none";
+  if(isPoly) $("eNodeCount").textContent = (o.poly.length-1)+" nodes";
 }
 function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
   renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
@@ -1071,6 +1079,20 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
+// Simplify: reduce a polygon's node count (Douglas-Peucker), escalating each press.
+// Works on any node-built path - traced photo outlines especially.
+function simplifySel(){
+  const o=selObj(); if(!o||!o.el||o.el.tagName.toLowerCase()!=="polygon") return;
+  const ring=o.poly.slice(0,-1), before=ring.length;
+  if(before<=4){ say("This path is already about as simple as it gets."); return; }
+  o.simpTol = o.simpTol ? o.simpTol*1.7 : 0.25;   // mm; each press simplifies a bit more
+  const simp=simplify(ring, o.simpTol), keep=(simp.length>=4)?simp:ring;
+  o.poly=keep.concat([[keep[0][0],keep[0][1]]]);
+  o.el.setAttribute("points", keep.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+  selNode=null; draw(); refreshEditPanel();
+  say("Simplified "+before+" -> "+keep.length+" nodes"+(keep.length===before?" - press again for more":"")+".");
+}
+$("eSimplify").onclick=simplifySel;
 // Delete / Backspace removes the selected object, unless you're typing in a field
 document.addEventListener("keydown",(e)=>{
   if(e.key!=="Delete"&&e.key!=="Backspace") return;
