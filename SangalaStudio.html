@@ -187,6 +187,11 @@
     <button class="go" id="make" disabled>Make it!</button>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
+    <div id="tracetune" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
+      <h2 class="marker" style="margin-top:0">Silhouette threshold</h2>
+      <input type="range" id="thrRange" min="20" max="235" step="5" value="128" style="width:100%">
+      <div class="hint" style="display:flex;justify-content:space-between;margin-top:.1rem"><span>looser (more)</span><span id="thrVal"></span><span>tighter (less)</span></div>
+    </div>
     <div id="editpanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Selected object</h2>
       <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
@@ -230,6 +235,7 @@ let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG 
 let selId=null;              // currently selected object id (null = nothing selected)
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
+let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -634,8 +640,8 @@ $("bRemoveBg").onclick=async()=>{
     for(let i=0;i<ci.data.length;i+=4) ci.data[i+3]=mi.data[i];   // subject alpha = mask gray value
     cx.putImageData(ci,0,0);
     refImg.mask=maskCanvas; refImg.cutout=cut; refImg.sel=true;
-    try{ refImg.trace=SangalaBg.trace(maskCanvas); }catch(te){ refImg.trace=null; }   // step 4: vector outline of the subject
-    if(refImg.trace && refImg.trace.paths.length) $("bUseCut").style.display="";
+    try{ refImg.trace=SangalaBg.trace(maskCanvas,{threshold:traceThreshold}); }catch(te){ refImg.trace=null; }   // step 4: vector outline of the subject
+    if(refImg.trace && refImg.trace.paths.length){ $("bUseCut").style.display=""; $("tracetune").style.display="block"; $("thrRange").value=traceThreshold; $("thrVal").textContent=traceThreshold; }
     draw();
     const np=refImg.trace?refImg.trace.paths.length:0;
     say("Background removed and traced - the red outline follows the subject ("+np+" path"+(np!==1?"s":"")+"). (Making it a cut path comes next.)");
@@ -667,11 +673,23 @@ function integrateTrace(){
     });
   });
   if(!added){ say("Couldn't turn the outline into a cut path."); return; }
-  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none";
+  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   selId=null; selId2=null; renderBg(); draw(); refreshEditPanel();
   say("Made "+added+" cut path"+(added!==1?"s":"")+" from the photo. Edit them, or press Make it! to cut.");
 }
 $("bUseCut").onclick=integrateTrace;
+// Silhouette threshold: re-trace the cached mask live (no model re-run), tighter/looser.
+let thrTimer=null;
+$("thrRange").oninput=(e)=>{
+  traceThreshold=+e.target.value; $("thrVal").textContent=traceThreshold;
+  if(thrTimer) clearTimeout(thrTimer);
+  thrTimer=setTimeout(()=>{ if(refImg&&refImg.mask){
+    try{ refImg.trace=SangalaBg.trace(refImg.mask,{threshold:traceThreshold}); }catch(err){}
+    draw();
+    const np=refImg.trace?refImg.trace.paths.length:0;
+    say("Threshold "+traceThreshold+" - outline: "+np+" path"+(np!==1?"s":"")+". Adjust, then Use Outline.");
+  } }, 40);
+};
 // Save SVG: serialize the retained doc with the viewBox cropped to the design's
 // bounding box (mm), so Tinkercad imports at true size. Nodes save as-is (cut
 // styling); Edit's kind reassignment isn't yet reflected in the saved styles.
@@ -1099,7 +1117,7 @@ document.addEventListener("keydown",(e)=>{
   const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
-  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
+  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
 });
