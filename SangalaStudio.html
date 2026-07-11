@@ -78,6 +78,7 @@
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
+    <button class="tbtn" id="bImg"><span class="glyph">🖼️</span><small>Open Image</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
@@ -88,6 +89,7 @@
   <div class="spacer"></div>
   <div class="conn" id="conn">Not connected</div>
   <input type="file" id="file" accept=".svg" style="display:none">
+  <input type="file" id="imgfile" accept="image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none">
 </header>
 
 <div id="setup" class="panel">
@@ -216,6 +218,7 @@ let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, s
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
+let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -469,6 +472,17 @@ function draw(){
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,cv.width,cv.height);
   ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);
+  // reference image (beneath the vectors so you can trace over it)
+  if(refImg && refImg.img && refImg.img.complete && refImg.img.naturalWidth){
+    try{ ctx.drawImage(refImg.img, refImg.x*k, refImg.y*k, refImg.w*k, refImg.h*k); }catch(e){}
+    if(refImg.sel){
+      ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5;
+      ctx.setLineDash([5,3]); ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.setLineDash([]);
+      [[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],[refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]]
+        .forEach(c=>{ctx.beginPath();ctx.rect(c[0]*k-4,c[1]*k-4,8,8);ctx.fillStyle="#fff";ctx.fill();ctx.stroke();});
+      ctx.restore();
+    }
+  }
   const sl=placedScore();
   ctx.strokeStyle="#2a6bd0";ctx.lineWidth=1;ctx.setLineDash([4,3]);
   sl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
@@ -557,6 +571,25 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
+// Import a .jpg/.png as a REFERENCE layer for tracing. It is not part of the design:
+// it never cuts, prints, or saves - the vector you trace from it is the design.
+$("bImg").onclick=()=>$("imgfile").click();
+$("imgfile").onchange=e=>{const f=e.target.files[0]; if(f) loadImageFile(f); e.target.value="";};
+function loadImageFile(file){
+  const rd=new FileReader();
+  rd.onload=ev=>{ const img=new Image();
+    img.onload=()=>{ ensureDoc();
+      let w=img.naturalWidth||100, h=img.naturalHeight||100;       // px as arbitrary units -> fit within ~70% of the mat
+      const s=Math.min(MAT_W*0.7/w, MAT_H*0.7/h); w*=s; h*=s;
+      refImg={img:img, x:(MAT_W-w)/2, y:(MAT_H-h)/2, w:w, h:h, sel:true};
+      selId=null; selId2=null; draw(); refreshEditPanel();
+      say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, Delete to remove.");
+    };
+    img.onerror=()=>say("Could not read that image file.");
+    img.src=ev.target.result; };
+  rd.onerror=()=>say("Could not open that file.");
+  rd.readAsDataURL(file);
+}
 // Save SVG: serialize the retained doc with the viewBox cropped to the design's
 // bounding box (mm), so Tinkercad imports at true size. Nodes save as-is (cut
 // styling); Edit's kind reassignment isn't yet reflected in the saved styles.
@@ -697,7 +730,7 @@ function setTool(t){ activeTool=t;
   ["tSelect","tRect","tCirc","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tRect",circle:"tCirc",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -967,6 +1000,7 @@ document.addEventListener("keydown",(e)=>{
   const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
+  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
 });
@@ -981,10 +1015,12 @@ cv.addEventListener("click",(e)=>{
     if(p.length===1){ const d=Math.hypot(mx-p[0][0],my-p[0][1]); if(d<bd){bd=d;best=o;} return; }
     for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
   const hit = (best && bd*k<=8) ? best : null;   // within 8 px of a line
+  const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
     if(hit && hit.id!==selId){ selId2=hit.id; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
-  } else if(hit){ selId=hit.id; selId2=null; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
-  else { selId=null; selId2=null; say("Nothing there - click closer to a line."); }
+  } else if(hit){ selId=hit.id; selId2=null; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
+  else if(onImg){ selId=null; selId2=null; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
+  else { selId=null; selId2=null; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
@@ -997,6 +1033,15 @@ cv.addEventListener("mousedown",(e)=>{
   if(activeTool==="brick"){ placeBrick(e); return; }   // Brick tool: click to place
   if(activeTool==="node"){ startNodeDrag(e); return; }   // Node tool: drag a node to move it
   if(activeTool!=="select"){ startDraw(e); return; }   // Rect/Circle tool: drag to draw
+  if(refImg && refImg.sel){   // selected reference image: corner = resize (proportional), body = move
+    const {mx,my,k}=evtMM(e);
+    const cs=[[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],[refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]];
+    let hc=-1,bd=8; cs.forEach((c,i)=>{const d=Math.hypot(c[0]-mx,c[1]-my)*k; if(d<bd){bd=d;hc=i;}});
+    if(hc>=0){ drag={mode:"imgresize",corner:hc,ax:cs[(hc+2)%4][0],ay:cs[(hc+2)%4][1],ar:refImg.w/refImg.h,moved:false};
+      cv.style.cursor="nwse-resize"; e.preventDefault(); return; }
+    if(mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h){
+      drag={mode:"imgmove",gx:mx-refImg.x,gy:my-refImg.y,moved:false}; cv.style.cursor="move"; e.preventDefault(); return; }
+  }
   if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
@@ -1024,6 +1069,14 @@ cv.addEventListener("mousedown",(e)=>{
 });
 window.addEventListener("mousemove",(e)=>{
   if(!drag) return;
+  if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(!refImg) return; const {mx,my}=evtMM(e);
+    if(drag.mode==="imgmove"){ refImg.x=mx-drag.gx; refImg.y=my-drag.gy; }
+    else { let w=Math.abs(mx-drag.ax), h=Math.abs(my-drag.ay);      // resize about the opposite corner, keep aspect
+      if(h<1e-6||w/h>drag.ar) w=h*drag.ar; else h=w/drag.ar;
+      w=Math.max(5,w); h=Math.max(5,h);
+      const dirX=(drag.corner===1||drag.corner===2)?1:-1, dirY=(drag.corner===2||drag.corner===3)?1:-1;
+      refImg.w=w; refImg.h=h; refImg.x=dirX>0?drag.ax:drag.ax-w; refImg.y=dirY>0?drag.ay:drag.ay-h; }
+    drag.moved=true; draw(); return; }
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one polygon node
@@ -1050,6 +1103,7 @@ window.addEventListener("mousemove",(e)=>{
 });
 window.addEventListener("mouseup",()=>{
   if(!drag) return;
+  if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
     const o=drag.obj, el=o.el, t=el.tagName.toLowerCase();
     const tiny = t==="rect" ? (+el.getAttribute("width")<1||+el.getAttribute("height")<1) : (+el.getAttribute("r")<0.5);
