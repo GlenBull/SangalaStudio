@@ -106,6 +106,7 @@ namespace DieCutterApp
                 }
 
                 if (method == "GET" && (path == "/" || path == "/index.html")) ServeHtml(ns);
+                else if (method == "GET" && path.StartsWith("/assets/", StringComparison.Ordinal)) ServeAsset(ns, path);
                 else if (path == "/connect") Respond(ns, "application/json", DoConnect());
                 else if (path == "/status") Respond(ns, "application/json", "{\"status\":\"" + Esc(_lastStatus) + "\"}");
                 else if (path == "/cut") Respond(ns, "application/json", DoCut(body));
@@ -129,6 +130,39 @@ namespace DieCutterApp
                 "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + html.Length +
                 "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
             ns.Write(head, 0, head.Length); ns.Write(html, 0, html.Length);
+        }
+
+        // Serve a static file from the assets/ folder (next to the exe) with the correct
+        // MIME type. Binary types (.wasm, .onnx) must NOT carry a charset, or WebAssembly
+        // refuses to instantiate. Single-threaded WASM build -> no COOP/COEP headers needed.
+        static void ServeAsset(NetworkStream ns, string path)
+        {
+            string assetsDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets"));
+            string rel = Uri.UnescapeDataString(path.Substring("/assets/".Length));
+            if (rel.Contains("..") || rel.Contains(":") || rel.StartsWith("/") || rel.StartsWith("\\"))
+            { Respond(ns, "text/plain", "bad asset path", "400 Bad Request"); return; }
+            string full = Path.GetFullPath(Path.Combine(assetsDir, rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!full.StartsWith(assetsDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+            { Respond(ns, "text/plain", "asset not found", "404 Not Found"); return; }
+            string ext = Path.GetExtension(full).ToLowerInvariant();
+            string ctype; bool isText = false;
+            switch (ext)
+            {
+                case ".wasm": ctype = "application/wasm"; break;
+                case ".onnx": ctype = "application/octet-stream"; break;
+                case ".js": case ".mjs": ctype = "text/javascript"; isText = true; break;
+                case ".json": ctype = "application/json"; isText = true; break;
+                case ".png": ctype = "image/png"; break;
+                case ".jpg": case ".jpeg": ctype = "image/jpeg"; break;
+                case ".txt": case ".md": ctype = "text/plain"; isText = true; break;
+                default: ctype = "application/octet-stream"; break;
+            }
+            byte[] data = File.ReadAllBytes(full);
+            string ct = ctype + (isText ? "; charset=utf-8" : "");
+            var head = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Type: " + ct + "\r\nContent-Length: " + data.Length +
+                "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
+            ns.Write(head, 0, head.Length); ns.Write(data, 0, data.Length);
         }
 
         static void Respond(NetworkStream ns, string ctype, string bodyText, string statusLine = "200 OK")
