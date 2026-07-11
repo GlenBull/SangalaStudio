@@ -41,6 +41,8 @@
   .ltbtn small{font-size:.52rem;color:#7a3b12}
   .ltbtn:hover{background:linear-gradient(#ffffff,#f0e7d3)}
   .ltbtn.on{background:linear-gradient(#bfe3ff,#8fcaf5);border-color:#3f8fd0;box-shadow:inset 0 1px 0 #fff,0 0 0 2px rgba(63,143,208,.45),0 2px 3px rgba(0,0,0,.28)}
+  .ltbtn:disabled{opacity:.38;cursor:default;box-shadow:none}
+  .ltbtn:disabled:hover{background:linear-gradient(#fffdf7,#e8dcc2)}
   #setup{position:fixed;z-index:30;display:none;width:272px}
   .panel{border-radius:12px;padding:.7rem;border:2px solid #d8c4a0;background:#efe0c4;box-shadow:0 3px 8px rgba(0,0,0,.25)}
   .panel h2{margin:.1rem 0 .5rem;font-size:1.05rem;color:#7a3b12}
@@ -162,10 +164,15 @@
 <div class="stage">
   <div class="ltools">
     <div class="ltitle marker">Tools</div>
+    <button class="ltbtn on" id="tSelect" title="Select / move (normal mode)"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M5.5 3.2 L5.5 20.5 L9.8 16.5 L12.5 22.5 L15 21.3 L12.3 15.5 L18.2 15.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.7" stroke-linejoin="round"/></svg><small>Select</small></button>
     <button class="ltbtn" id="tRect" title="Rectangle">▭<small>Rect</small></button>
     <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
+    <div class="ltitle marker" style="margin-top:.5rem">Combine</div>
+    <button class="ltbtn" id="pUnion" title="Union: merge both shapes into one outline" disabled>◑<small>Union</small></button>
+    <button class="ltbtn" id="pDiff" title="Difference: cut the 2nd (orange) shape out of the 1st (blue)" disabled>◐<small>Diff</small></button>
+    <button class="ltbtn" id="pInt" title="Intersect: keep only where the two shapes overlap" disabled>◒<small>Intersect</small></button>
   </div>
   <div class="board cork">
     <canvas id="cv" width="560" height="760"></canvas>
@@ -208,6 +215,7 @@ const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
+let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -318,7 +326,7 @@ function loadSVG(text){
   // it as a plain design and cut every shape (old behaviour).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
-  objects=[]; selId=null;
+  objects=[]; selId=null; selId2=null;
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
   function sample(el){
@@ -474,13 +482,29 @@ function draw(){
     ctx.fillRect((W-I-L)*k,I*k,L*k,tt); ctx.fillRect((W-I-T)*k,I*k,tt,L*k);
     ctx.fillRect(I*k,(H-I-T)*k,L*k,tt); ctx.fillRect(I*k,(H-I-L)*k,tt,L*k);
   }
-  // the selected object keeps its normal line; selection is shown by node handles only
+  // Combine: when a 2nd operand is picked, outline the 1st blue and the 2nd orange
+  const strokeRing=(o,col)=>{ if(!o)return; const ring=placePoly(o.poly);
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.beginPath();
+    ring.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.restore(); };
+  if(selId2!=null){ strokeRing(objects.find(o=>o.id===selId),"#1a5fb4"); strokeRing(objects.find(o=>o.id===selId2),"#e8820c"); }
+  // Selection cue: rect/circle (and any shape in Node mode) show square handles at
+  // their defining points. A node-built <polygon> in Select mode shows a dashed
+  // outline instead - a combined shape can carry hundreds of vertices along its
+  // curves, and a handle at each reads as a blue "blob", not a selection.
   if(selId!=null){const o=objects.find(o=>o.id===selId);
-    if(o){const nodes=placePoly(shapeNodes(o)),hs=4;   // selection = square node handles at the shape's defining points
-      ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;
-      nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
-        ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
-      ctx.restore();}}
+    if(o){const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
+      if(t==="polygon"&&activeTool!=="node"){
+        const ring=placePoly(o.poly);
+        ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+        ctx.beginPath();ring.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();
+        ctx.restore();
+      } else {
+        const nodes=placePoly(shapeNodes(o));
+        const many=nodes.length>16, hs=many?2:4;   // dense curve -> small dots so it reads as a tidy path, not a blob
+        ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=many?1:1.5;
+        nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
+          ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
+        ctx.restore();}}}
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
 }
@@ -670,16 +694,57 @@ function svgNode(name,attrs){
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
 let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag to draw; "brick" = click to place
 function setTool(t){ activeTool=t;
-  ["tRect","tCirc","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
-  const btn={rect:"tRect",circle:"tCirc",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
+  ["tSelect","tRect","tCirc","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
+  const btn={select:"tSelect",rect:"tRect",circle:"tCirc",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
+$("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
 $("tRect").onclick=()=>setTool(activeTool==="rect"?"select":"rect");
 $("tCirc").onclick=()=>setTool(activeTool==="circle"?"select":"circle");
 $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
+/* ---------- Combine (Union / Difference / Intersect) ---------- */
+// enable the Combine buttons only when two distinct non-brick shapes are selected
+function updateCombine(){
+  if(selId2!=null && !objects.find(o=>o.id===selId2)) selId2=null;
+  const o1=selId!=null?objects.find(o=>o.id===selId):null;
+  const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
+  const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
+  const ok = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
+  ["pUnion","pDiff","pInt"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
+}
+// create a node-editable <polygon> object from a result ring (design mm, open ring).
+// Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
+// e.g. an arc inherited from a tessellated circle - collapse to a handful of editable
+// nodes instead of hundreds. Keeps the cut identical; makes Node mode usable.
+function makePolyObj(ring, kind){
+  let r=simplify(ring, 0.08);
+  if(r.length<3) r=ring;   // never simplify a shape out of existence
+  const el=svgNode("polygon",{points:r.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")});
+  const o={id:++objSeq, el:el, kind:kind||"cut", orig:kind||"cut", poly:r.concat([[r[0][0],r[0][1]]])};
+  objects.push(o); return o;
+}
+function applyBool(op){
+  const o1=selId!=null?objects.find(o=>o.id===selId):null;
+  const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
+  if(!o1||!o2||o1===o2){ say("Pick two shapes: click one, then Shift+click another."); return; }
+  ensureDoc();
+  const rings=polyBool(op, o1.poly, o2.poly);
+  if(!rings.length){ say(op==="intersect"?"The two shapes don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
+  const kind=o1.kind;
+  [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });   // drop operands from the doc + object list
+  objects=objects.filter(o=>o!==o1&&o!==o2);
+  rings.forEach(r=>makePolyObj(r,kind));
+  selId=null; selId2=null; selNode=null;   // leave the fresh result unselected -> clean outline, no handle clutter
+  renderBg(); draw(); refreshEditPanel();
+  const nm={union:"Union",diff:"Difference",intersect:"Intersect"}[op];
+  say(nm+": made "+rings.length+" shape"+(rings.length!==1?"s":"")+". Click it to select.");
+}
+$("pUnion").onclick=()=>applyBool("union");
+$("pDiff").onclick=()=>applyBool("diff");
+$("pInt").onclick=()=>applyBool("intersect");
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
 function startDraw(e){
   ensureDoc();
@@ -689,7 +754,7 @@ function startDraw(e){
   if(activeTool==="rect"){ el=svgNode("rect",{x:sx,y:sy,width:0,height:0});
     poly=[[sx,sy],[sx,sy],[sx,sy],[sx,sy],[sx,sy]]; d={mode:"resize",shape:"rect",anchor:[sx,sy]}; }
   else { el=svgNode("circle",{cx:sx,cy:sy,r:0}); poly=circlePoly(sx,sy,0); d={mode:"resize",shape:"circle",center:[sx,sy]}; }
-  const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id;
+  const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id; selId2=null;
   d.obj=o; d.moved=false; d.draw=true; drag=d;
   e.preventDefault(); draw(); refreshEditPanel();
 }
@@ -704,7 +769,7 @@ function makeBrick(x0,y0){
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r)}); }
-  selId=bodyId; bgImg=null; draw(); refreshEditPanel();
+  selId=bodyId; selId2=null; bgImg=null; draw(); refreshEditPanel();
   say("Added a 2 x 3 LEGO brick: 24 x 16 x 9.6 mm body + six 4.8 mm studs.");
 }
 // Brick tool: click the canvas to place the brick's top-left there, then auto-release to select
@@ -759,6 +824,70 @@ function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
   return poly;
 }
+/* ---------- polygon boolean (Union / Difference / Intersect) ----------
+   Arc-selection + stitch: split both boundaries at their crossings, keep each arc
+   by an inside/outside test, then re-stitch into rings. Operands are simple polygon
+   rings (design mm); returns an array of rings (each an OPEN ring). For a die cutter
+   every returned ring is just a closed cut loop, so holes/outer aren't distinguished.
+   Verified against square/circle/off-center cases (see scratchpad clip-test.html). */
+const PB_EPS=1e-9;
+function pbArea(r){ let a=0; for(let i=0,n=r.length;i<n;i++){ const p=r[i],q=r[(i+1)%n]; a+=p[0]*q[1]-q[0]*p[1]; } return a/2; }
+function pbOpen(r){ if(r.length>1 && r[0][0]===r[r.length-1][0] && r[0][1]===r[r.length-1][1]) return r.slice(0,-1); return r.slice(); }
+function pbIn(pt,ring){ let x=pt[0],y=pt[1],inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+function pbSeg(p1,p2,q1,q2){ const dx1=p2[0]-p1[0],dy1=p2[1]-p1[1],dx2=q2[0]-q1[0],dy2=q2[1]-q1[1]; const den=dx1*dy2-dy1*dx2;
+  if(Math.abs(den)<1e-12) return null;
+  const a=((q1[0]-p1[0])*dy2-(q1[1]-p1[1])*dx2)/den, b=((q1[0]-p1[0])*dy1-(q1[1]-p1[1])*dx1)/den;
+  if(a<-PB_EPS||a>1+PB_EPS||b<-PB_EPS||b>1+PB_EPS) return null;
+  return {a:Math.min(1,Math.max(0,a)), b:Math.min(1,Math.max(0,b))}; }
+function pbAugment(ring,buckets){ const aug=[];
+  for(let i=0;i<ring.length;i++){ aug.push({x:ring[i][0],y:ring[i][1],isInt:false,id:-1});
+    const bk=buckets[i]; if(bk){ bk.sort((u,v)=>u.alpha-v.alpha); bk.forEach(n=>aug.push({x:n.ix,y:n.iy,isInt:true,id:n.id})); } }
+  return aug; }
+function pbArcs(aug,side){ const idx=[]; for(let i=0;i<aug.length;i++) if(aug[i].isInt) idx.push(i);
+  if(idx.length===0) return []; const out=[];
+  for(let k=0;k<idx.length;k++){ const s=idx[k], e=idx[(k+1)%idx.length]; const pts=[]; let i=s;
+    while(true){ pts.push([aug[i].x,aug[i].y]); if(i===e && pts.length>1) break; i=(i+1)%aug.length; if(pts.length>aug.length+2) break; }
+    out.push({startId:aug[s].id, endId:aug[e].id, pts:pts, side:side}); }
+  return out; }
+function pbRep(a){ const p=a.pts; if(p.length>=3) return [(p[0][0]+p[1][0]+p[2][0])/3,(p[0][1]+p[1][1]+p[2][1])/3];
+  return [(p[0][0]+p[p.length-1][0])/2,(p[0][1]+p[p.length-1][1])/2]; }
+function pbRev(a){ return {startId:a.endId, endId:a.startId, pts:a.pts.slice().reverse(), side:a.side}; }
+function pbDedupe(ring){ const out=[];
+  for(const p of ring){ const last=out[out.length-1]; if(!last||Math.hypot(last[0]-p[0],last[1]-p[1])>1e-7) out.push(p); }
+  while(out.length>1 && Math.hypot(out[0][0]-out[out.length-1][0],out[0][1]-out[out.length-1][1])<1e-7) out.pop();
+  return out; }
+function polyBool(op, Aring, Bring){
+  let A=pbOpen(Aring), B=pbOpen(Bring);
+  if(A.length<3||B.length<3) return [];
+  if(pbArea(A)<0) A=A.slice().reverse();
+  if(pbArea(B)<0) B=B.slice().reverse();
+  const aB={}, bB={}; let idc=0;
+  for(let i=0;i<A.length;i++){ const a1=A[i],a2=A[(i+1)%A.length];
+    for(let j=0;j<B.length;j++){ const b1=B[j],b2=B[(j+1)%B.length]; const r=pbSeg(a1,a2,b1,b2); if(!r) continue;
+      const ix=a1[0]+(a2[0]-a1[0])*r.a, iy=a1[1]+(a2[1]-a1[1])*r.a, id=idc++;
+      (aB[i]=aB[i]||[]).push({alpha:r.a,ix,iy,id}); (bB[j]=bB[j]||[]).push({alpha:r.b,ix,iy,id}); } }
+  if(idc===0){ const aInB=pbIn(A[0],B), bInA=pbIn(B[0],A);
+    if(op==='union'){ if(bInA) return [A]; if(aInB) return [B]; return [A,B]; }
+    if(op==='intersect'){ if(bInA) return [B]; if(aInB) return [A]; return []; }
+    if(bInA) return [A,B]; if(aInB) return []; return [A]; }   // diff
+  const augA=pbAugment(A,aB), augB=pbAugment(B,bB);
+  const arA=pbArcs(augA,'A'), arB=pbArcs(augB,'B'); const keep=[];
+  arA.forEach(a=>{ const inB=pbIn(pbRep(a),B); if(op==='intersect'?inB:!inB) keep.push(a); });     // union/diff keep A outside B
+  arB.forEach(a=>{ const inA=pbIn(pbRep(a),A); const k=op==='intersect'?inA:op==='union'?!inA:inA; // diff keeps B inside A
+    if(k) keep.push(op==='diff'?pbRev(a):a); });
+  const byStart=new Map(); keep.forEach(a=>{ if(!byStart.has(a.startId)) byStart.set(a.startId,[]); byStart.get(a.startId).push(a); });
+  const used=new Set(); const result=[];
+  keep.forEach((seed,si)=>{ if(used.has(si)) return; const ring=[]; let cur=seed, curIdx=si, guard=0;
+    while(cur && !used.has(curIdx) && ++guard<100000){ used.add(curIdx);
+      for(let t=0;t<cur.pts.length-1;t++) ring.push(cur.pts[t]);
+      const nexts=byStart.get(cur.endId)||[]; let ni=-1;
+      for(const cand of nexts){ const gi=keep.indexOf(cand); if(!used.has(gi)){ ni=gi; break; } }
+      if(ni<0) break; cur=keep[ni]; curIdx=ni; if(curIdx===si) break; }
+    const d=pbDedupe(ring); if(d.length>=3) result.push(d); });
+  return result;
+}
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
   if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
@@ -811,6 +940,7 @@ function applyDim(dim,v){
 $("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: survives readout rebuilds
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
 function refreshEditPanel(){
+  updateCombine();   // keep the Combine buttons in sync with the current selection
   const panel=$("editpanel"), o=selObj();
   if(!o){ panel.style.display="none"; return; }   // panel appears only while a shape is selected
   panel.style.display="block";
@@ -825,7 +955,7 @@ function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
   renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
 function deleteSel(){ const o=selObj(); if(!o) return;
   if(o.el&&o.el.remove) o.el.remove();          // drop it from the retained doc too, so it neither cuts nor prints
-  objects=objects.filter(x=>x.id!==o.id); selId=null;
+  objects=objects.filter(x=>x.id!==o.id); selId=null; selId2=null;
   renderBg(); draw(); refreshEditPanel(); say("Deleted the selected object."); }
 $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
@@ -850,8 +980,11 @@ cv.addEventListener("click",(e)=>{
   objects.forEach(o=>{ const p=placePoly(o.poly);
     if(p.length===1){ const d=Math.hypot(mx-p[0][0],my-p[0][1]); if(d<bd){bd=d;best=o;} return; }
     for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
-  if(best && bd*k<=8){ selId=best.id; say("Selected a "+KIND_LABEL[best.kind]+" object."); }   // within 8 px of a line
-  else { selId=null; say("Nothing there - click closer to a line."); }
+  const hit = (best && bd*k<=8) ? best : null;   // within 8 px of a line
+  if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
+    if(hit && hit.id!==selId){ selId2=hit.id; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
+  } else if(hit){ selId=hit.id; selId2=null; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
+  else { selId=null; selId2=null; say("Nothing there - click closer to a line."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
@@ -860,6 +993,7 @@ cv.addEventListener("click",(e)=>{
 // circle: cardinal handle changes radius (center fixed), body moves the center.
 let drag=null, suppressClick=false;
 cv.addEventListener("mousedown",(e)=>{
+  suppressClick=false;   // a new gesture starts; don't let a stale drag-guard eat this click (e.g. the first click right after drawing a shape)
   if(activeTool==="brick"){ placeBrick(e); return; }   // Brick tool: click to place
   if(activeTool==="node"){ startNodeDrag(e); return; }   // Node tool: drag a node to move it
   if(activeTool!=="select"){ startDraw(e); return; }   // Rect/Circle tool: drag to draw
