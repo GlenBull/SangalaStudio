@@ -87,6 +87,35 @@
       fctx.imageSmoothingEnabled = true; fctx.imageSmoothingQuality = "high";
       fctx.drawImage(mc, 0, 0, W, H);
       return fc;
+    },
+
+    // Trace a grayscale mask <canvas> to vector outline(s) of the subject via ImageTracer
+    // (public domain). Thresholds to binary, traces, and returns the subject-region path
+    // 'd' strings in mask-pixel coordinates: { paths:[dString], width, height }.
+    trace(maskCanvas, opt) {
+      opt = opt || {};
+      if (!global.ImageTracer) throw new Error("ImageTracer not loaded");
+      const W = maskCanvas.width, H = maskCanvas.height;
+      const md = maskCanvas.getContext("2d").getImageData(0, 0, W, H).data;
+      const thr = opt.threshold != null ? opt.threshold : 128;
+      const bin = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) {
+        const v = (md[i * 4] >= thr) ? 0 : 255;   // subject (mask bright) -> black, background -> white
+        bin[i*4] = bin[i*4+1] = bin[i*4+2] = v; bin[i*4+3] = 255;
+      }
+      const options = Object.assign(
+        { numberofcolors: 2, colorsampling: 0, pathomit: (opt.pathomit != null ? opt.pathomit : 8),
+          ltres: 1, qtres: 1, rightangleenhance: false, roundcoords: 1, blurradius: 0, strokewidth: 0 },
+        opt.tracer || {});
+      const svg = ImageTracer.imagedataToSVG({ width: W, height: H, data: bin }, options);
+      const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+      const paths = [];
+      doc.querySelectorAll("path").forEach(function (p) {
+        const m = /rgb\((\d+),(\d+),(\d+)/.exec((p.getAttribute("fill") || "").replace(/\s+/g, ""));
+        const lum = m ? (+m[1] + +m[2] + +m[3]) / 3 : 255;
+        if (lum < 128) { const d = p.getAttribute("d"); if (d) paths.push(d); }   // keep the dark (subject) region
+      });
+      return { paths: paths, width: W, height: H };
     }
   };
 

@@ -206,6 +206,7 @@
 <!-- ONNX Runtime Web + the u2netp background-removal/trace engine (served from /assets, offline).
      ort.wasm.min.js is small; the 11 MB wasm + 4.5 MB model load lazily on first use. -->
 <script src="/assets/ort.wasm.min.js"></script>
+<script src="/assets/imagetracer_v1.2.6.js"></script>
 <script src="/assets/trace-engine.js"></script>
 <script>
 "use strict";
@@ -486,6 +487,13 @@ function draw(){
       const s=9; for(let yy=0;yy<rh;yy+=s)for(let xx=0;xx<rw;xx+=s){ ctx.fillStyle=((((xx/s)|0)+((yy/s)|0))&1)?"#cfd3d6":"#ffffff"; ctx.fillRect(rx+xx,ry+yy,s,s); }
       ctx.restore();
       try{ ctx.drawImage(refImg.cutout, rx,ry,rw,rh); }catch(e){}
+      if(refImg.trace && refImg.trace.paths && refImg.trace.paths.length){   // traced subject outline (mask-pixel coords -> image region)
+        const sx=rw/refImg.trace.width, sy=rh/refImg.trace.height;
+        ctx.save(); ctx.translate(rx,ry); ctx.scale(sx,sy);
+        ctx.strokeStyle="#dc2626"; ctx.lineWidth=1.6/Math.max(sx,1e-6); ctx.lineJoin="round";
+        refImg.trace.paths.forEach(d=>{ try{ ctx.stroke(new Path2D(d)); }catch(e){} });
+        ctx.restore();
+      }
     } else {
       try{ ctx.drawImage(refImg.img, rx,ry,rw,rh); }catch(e){}
     }
@@ -621,8 +629,10 @@ $("bRemoveBg").onclick=async()=>{
     for(let i=0;i<ci.data.length;i+=4) ci.data[i+3]=mi.data[i];   // subject alpha = mask gray value
     cx.putImageData(ci,0,0);
     refImg.mask=maskCanvas; refImg.cutout=cut; refImg.sel=true;
+    try{ refImg.trace=SangalaBg.trace(maskCanvas); }catch(te){ refImg.trace=null; }   // step 4: vector outline of the subject
     draw();
-    say("Background removed - subject shown over a checkerboard. (Tracing to a cut outline comes next.)");
+    const np=refImg.trace?refImg.trace.paths.length:0;
+    say("Background removed and traced - the red outline follows the subject ("+np+" path"+(np!==1?"s":"")+"). (Making it a cut path comes next.)");
   }catch(e){ say("Background removal failed: "+((e&&e.message)||e)); }
   btn.disabled=false;
 };

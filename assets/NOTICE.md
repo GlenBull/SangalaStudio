@@ -11,7 +11,8 @@ SHA-256 (as shipped) is recorded below. Full license texts are in `assets/licens
 | `ort-wasm-simd-threaded.mjs` | ONNX Runtime Web WASM glue module (imported by the loader) | 1.19.2 | MIT | `d870a377322c3053fb97432d548423f165dd15e2af232947592fc07b0d2f3639` |
 | `ort-wasm-simd-threaded.wasm` | ONNX Runtime Web WebAssembly (SIMD, run single-threaded via `numThreads=1`) | 1.19.2 | MIT | `1bf0b9ed7ad025cf9ca88ce6da29e54df3f128a169f8241d71823e81f078d578` |
 | `u2netp.onnx` | U²-Net (lightweight) salient-object model — background-removal mask | u2netp | Apache-2.0 | `309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8` |
-| `imagetracer_v1.2.6.js` | Raster mask → vector paths (replaces GPL Potrace; this repo is CC0) | 1.2.6 | Unlicense (public domain) | _added in step 4_ |
+| `imagetracer_v1.2.6.js` | Raster mask → vector paths (replaces GPL Potrace; this repo is CC0) | 1.2.6 | Unlicense (public domain) | `7d777599650c15aa8c1f0ab98d1158749ed8d8b97b417b83e5c69ea246382f40` |
+| `trace-engine.js` | Sangala's own bg-removal + trace glue (NOT third-party) | — | CC0 (this repo) | — |
 
 ## Sources
 
@@ -22,8 +23,9 @@ SHA-256 (as shipped) is recorded below. Full license texts are in `assets/licens
   `https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx`
   Model: U²-Net (u2netp) by Xuebin Qin et al. ("U²-Net: Going Deeper with Nested
   U-Structure for Salient Object Detection"). License: Apache-2.0.
-- **ImageTracer.js** — official repo by András Jankovics (added in step 4).
-  `https://github.com/jankovicsandras/imagetracerjs`  License: The Unlicense (public domain).
+- **ImageTracer.js** — official repo by András Jankovics.
+  `https://raw.githubusercontent.com/jankovicsandras/imagetracerjs/master/imagetracer_v1.2.6.js`
+  License: The Unlicense (public domain).
 
 ## Why not Potrace
 
