@@ -80,6 +80,7 @@
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bImg"><span class="glyph">🖼️</span><small>Open Image</small></button>
     <button class="tbtn" id="bRemoveBg" style="display:none"><span class="glyph">🪄</span><small>Remove BG</small></button>
+    <button class="tbtn" id="bUseCut" style="display:none"><span class="glyph">✅</span><small>Use Outline</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
@@ -630,12 +631,42 @@ $("bRemoveBg").onclick=async()=>{
     cx.putImageData(ci,0,0);
     refImg.mask=maskCanvas; refImg.cutout=cut; refImg.sel=true;
     try{ refImg.trace=SangalaBg.trace(maskCanvas); }catch(te){ refImg.trace=null; }   // step 4: vector outline of the subject
+    if(refImg.trace && refImg.trace.paths.length) $("bUseCut").style.display="";
     draw();
     const np=refImg.trace?refImg.trace.paths.length:0;
     say("Background removed and traced - the red outline follows the subject ("+np+" path"+(np!==1?"s":"")+"). (Making it a cut path comes next.)");
   }catch(e){ say("Background removal failed: "+((e&&e.message)||e)); }
   btn.disabled=false;
 };
+// Step 5: turn the traced subject outline into cut objects, then drop the reference image.
+// Flatten each subpath (ImageTracer's L/Q Beziers) via an off-DOM <path>, map mask-pixels
+// to design mm at the image's placement, and hand to makePolyObj (simplifies at 0.08 mm).
+function integrateTrace(){
+  if(!refImg||!refImg.trace||!refImg.trace.paths.length){ say("Remove the background first to get an outline."); return; }
+  ensureDoc();
+  const W=refImg.trace.width, H=refImg.trace.height, sx=refImg.w/W, sy=refImg.h/H;
+  const ox=refImg.x, oy=refImg.y; let added=0;
+  refImg.trace.paths.forEach(d=>{
+    d.split(/(?=[Mm])/).forEach(sub=>{                 // one closed polygon per subpath
+      if(!/\d/.test(sub)) return;
+      const svg=document.createElementNS(SVGNS,"svg"), path=document.createElementNS(SVGNS,"path");
+      path.setAttribute("d",sub); svg.appendChild(path);
+      svg.style.cssText="position:absolute;left:-9999px;top:0"; document.body.appendChild(svg);
+      let len=0; try{ len=path.getTotalLength(); }catch(e){}
+      if(len>2){
+        const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
+        for(let i=0;i<=n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([ox+p.x*sx, oy+p.y*sy]); }
+        makePolyObj(pts,"cut"); added++;               // makePolyObj simplifies (0.08 mm) + closes the ring
+      }
+      svg.remove();
+    });
+  });
+  if(!added){ say("Couldn't turn the outline into a cut path."); return; }
+  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none";
+  selId=null; selId2=null; renderBg(); draw(); refreshEditPanel();
+  say("Made "+added+" cut path"+(added!==1?"s":"")+" from the photo. Edit them, or press Make it! to cut.");
+}
+$("bUseCut").onclick=integrateTrace;
 // Save SVG: serialize the retained doc with the viewBox cropped to the design's
 // bounding box (mm), so Tinkercad imports at true size. Nodes save as-is (cut
 // styling); Edit's kind reassignment isn't yet reflected in the saved styles.
@@ -1046,7 +1077,7 @@ document.addEventListener("keydown",(e)=>{
   const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
-  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
+  if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
 });
