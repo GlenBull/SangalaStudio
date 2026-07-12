@@ -647,7 +647,9 @@ function integrateTrace(){
   if(!refImg||!refImg.trace||!refImg.trace.paths.length){ say("Remove the background first to get an outline."); return; }
   ensureDoc();
   const W=refImg.trace.width, H=refImg.trace.height, sx=refImg.w/W, sy=refImg.h/H;
-  const ox=refImg.x, oy=refImg.y; let added=0;
+  // refImg is drawn in raw mat mm, but objects render through placeParams (Scale % + Position
+  // offset). Invert placeParams here so the cut lands exactly on the image, not offset by it.
+  const ox=refImg.x, oy=refImg.y, pp=placeParams(); let added=0;
   refImg.trace.paths.forEach(d=>{
     d.split(/(?=[Mm])/).forEach(sub=>{                 // one closed polygon per subpath
       if(!/\d/.test(sub)) return;
@@ -657,7 +659,7 @@ function integrateTrace(){
       let len=0; try{ len=path.getTotalLength(); }catch(e){}
       if(len>2){
         const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
-        for(let i=0;i<=n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([ox+p.x*sx, oy+p.y*sy]); }
+        for(let i=0;i<=n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([(ox+p.x*sx-pp.ox)/pp.s, (oy+p.y*sy-pp.oy)/pp.s]); }
         const simp=simplify(pts,0.3);                  // photo traces start lighter (0.3 mm); Simplify shrinks further
         makePolyObj(simp.length>=3?simp:pts,"cut"); added++;
       }
