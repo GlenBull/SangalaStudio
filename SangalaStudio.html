@@ -142,7 +142,7 @@
   <button id="pInt" title="Keep only where the two shapes overlap">◒ Intersect</button>
 </div>
 <div id="alignmenu" class="menu" style="position:fixed;z-index:31;display:none">
-  <div class="hint" id="alignhint" style="padding:.25rem .6rem;white-space:nowrap">Select two or more shapes to align.</div>
+  <div class="hint" id="alignhint" style="padding:.25rem .6rem;white-space:nowrap">Select 2+ shapes, or a shape + the photo (Shift+click), to align.</div>
   <button id="aVert" title="Line the shapes up on a vertical axis (same left-right center)">↕ Vertical</button>
   <button id="aHorz" title="Line the shapes up on a horizontal axis (same up-down center)">↔ Horizontal</button>
   <button id="aBoth" title="Center the shapes on each other (both axes)">✛ Center (both)</button>
@@ -1008,26 +1008,32 @@ function translateObj(o,dx,dy){
   else if(t==="circle"){ o.el.setAttribute("cx",fmtn((+o.el.getAttribute("cx")||0)+dx)); o.el.setAttribute("cy",fmtn((+o.el.getAttribute("cy")||0)+dy)); }
   else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
 }
-function alignTargets(){   // 2+ marquee-selected shapes, else the Combine pair (blue + orange)
-  if(selMulti.length>=2) return selMulti.map(id=>objects.find(o=>o.id===id)).filter(Boolean);
-  if(selId!=null && selId2!=null){ return [objects.find(o=>o.id===selId), objects.find(o=>o.id===selId2)].filter(Boolean); }
-  return [];
+// An "align item" carries a placed-mm bbox center + a way to move itself in placed mm.
+// Shapes live in design mm (move via translateObj, delta / placement scale); the reference
+// image already lives in placed mm. Both draw in the same placed-mm * k space, so aligning
+// their centers there lines them up on screen - a shape can be centred on the photo.
+function alignItems(){
+  const pp=placeParams(), items=[];
+  const centerArea=pl=>{ let a=1e9,b=1e9,c=-1e9,d=-1e9; pl.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);}); return {cx:(a+c)/2,cy:(b+d)/2,area:(c-a)*(d-b)}; };
+  const addShape=o=>{ if(!o||!o.poly) return; const m=centerArea(placePoly(o.poly));
+    items.push({cx:m.cx,cy:m.cy,area:m.area, move:(dpx,dpy)=>translateObj(o,dpx/pp.s,dpy/pp.s)}); };
+  if(selMulti.length>=2) selMulti.forEach(id=>addShape(objects.find(o=>o.id===id)));
+  else { addShape(selId!=null?objects.find(o=>o.id===selId):null); addShape(selId2!=null?objects.find(o=>o.id===selId2):null); }
+  if(refImg && refImg.img && selImg2)   // photo armed as an operand (Shift+click) is an align target too
+    items.push({cx:refImg.x+refImg.w/2, cy:refImg.y+refImg.h/2, area:refImg.w*refImg.h, move:(dpx,dpy)=>{refImg.x+=dpx; refImg.y+=dpy;}});
+  return items;
 }
 function alignSelection(mode){   // "v"=same center X (vertical axis), "h"=same center Y, "both"=center
-  const targets=alignTargets();
-  if(targets.length<2){ say("Select two or more shapes to align - marquee-drag around them, or click one and Shift+click another."); return; }
-  const box=o=>{ let a=1e9,b=1e9,c=-1e9,d=-1e9; o.poly.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);}); return {cx:(a+c)/2,cy:(b+d)/2,area:(c-a)*(d-b)}; };
-  const boxes=targets.map(box);
-  let ai=0; boxes.forEach((bx,i)=>{ if(bx.area>boxes[ai].area) ai=i; });   // biggest shape = the anchor, stays put
-  const tcx=boxes[ai].cx, tcy=boxes[ai].cy;
-  targets.forEach((o,i)=>{ if(i===ai) return;
-    const dx=(mode==="h")?0:(tcx-boxes[i].cx), dy=(mode==="v")?0:(tcy-boxes[i].cy);
-    translateObj(o,dx,dy); });
+  const items=alignItems();
+  if(items.length<2){ say("Select two or more things to align - marquee-drag shapes, or click one and Shift+click a 2nd shape or the photo."); return; }
+  let ai=0; items.forEach((it,i)=>{ if(it.area>items[ai].area) ai=i; });   // biggest = the anchor, stays put
+  const tcx=items[ai].cx, tcy=items[ai].cy;
+  items.forEach((it,i)=>{ if(i===ai) return;
+    it.move((mode==="h")?0:(tcx-it.cx), (mode==="v")?0:(tcy-it.cy)); });
   renderBg(); draw(); refreshEditPanel();
-  const nm={v:"Aligned vertically",h:"Aligned horizontally",both:"Centered"}[mode];
-  say(nm+" "+targets.length+" shapes.");
+  say({v:"Aligned vertically.",h:"Aligned horizontally.",both:"Centered."}[mode]);
 }
-function updateAlign(){ const ok=alignTargets().length>=2;
+function updateAlign(){ const ok=alignItems().length>=2;
   ["aVert","aHorz","aBoth"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
   const h=$("alignhint"); if(h) h.style.display=ok?"none":"block"; }
 function closeAlign(){ $("alignmenu").style.display="none"; }
