@@ -136,7 +136,7 @@
   <button id="mCircle" title="Draw a circle">◯ Circle</button>
 </div>
 <div id="combinemenu" class="menu" style="position:fixed;z-index:31;display:none">
-  <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes first (click one, Shift+click another).</div>
+  <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes, or a shape + the photo (click one, Shift+click the other).</div>
   <button id="pUnion" title="Merge both shapes into one outline">◑ Union</button>
   <button id="pDiff" title="Cut the 2nd (orange) shape out of the 1st (blue)">◐ Difference</button>
   <button id="pInt" title="Keep only where the two shapes overlap">◒ Intersect</button>
@@ -228,9 +228,6 @@
         <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify nodes</button>
         <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
       </div>
-      <div id="ecroprow" style="margin-top:.4rem;display:none">
-        <button class="ebtn" id="eCrop" style="width:100%">🖼️ Crop photo to this shape</button>
-      </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
     </div>
   </div>
@@ -258,6 +255,7 @@ let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, s
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
+let selImg2=false;           // the reference photo picked (Shift+click) as Combine's 2nd operand: Intersect crops the photo to the shape
 let selMulti=[];             // marquee multi-selection (object ids); when non-empty, single-select (selId) is cleared
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
@@ -373,7 +371,7 @@ function loadSVG(text){
   // it as a plain design and cut every shape (old behaviour).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
-  objects=[]; selId=null; selId2=null; selMulti=[];
+  objects=[]; selId=null; selId2=null; selImg2=false; selMulti=[];
   view.zoom=1; view.panX=0; view.panY=0; updateZoomUI();   // new design -> reset the magnify view
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
@@ -539,6 +537,10 @@ function draw(){
       [[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],[refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]]
         .forEach(c=>{ctx.beginPath();ctx.rect(c[0]*k-4,c[1]*k-4,8,8);ctx.fillStyle="#fff";ctx.fill();ctx.stroke();});
       ctx.restore();
+    }
+    if(selImg2){   // photo armed as Combine's 2nd operand (orange, matching the 2nd-shape cue)
+      ctx.save(); ctx.strokeStyle="#e8820c"; ctx.lineWidth=2.5;
+      ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.restore();
     }
   }
   const sl=placedScore();
@@ -755,11 +757,11 @@ function cropToShape(){
   const cutSVG='<polygon points="'+cutPts.map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" ")+'" fill="none" stroke="#ff0000" stroke-width="0.2"/>';
   const svg='<svg xmlns="'+SVGNS+'" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'
     +'<image x="'+fmtn(PX)+'" y="'+fmtn(PY)+'" width="'+fmtn(pw)+'" height="'+fmtn(ph)+'" xlink:href="'+dataURL+'" href="'+dataURL+'"/>'+cutSVG+'</svg>';
-  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  refImg=null; selImg2=false; if(typeof closeCombine==="function") closeCombine();
+  $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   loadSVG(svg); showMarks=true; $("bMarks").classList.add("on"); draw();
   say("Cropped the photo to the shape - print-and-cut ready. Print, then Make it! to cut it out.");
 }
-$("eCrop").onclick=cropToShape;
 // Trace tuning: re-trace the cached mask live (no model re-run). Threshold = tighter/looser
 // silhouette; Ignore specks = ImageTracer pathomit (drop small stray loops). Shared debounce.
 let traceTimer=null;
@@ -914,7 +916,7 @@ function setTool(t){ activeTool=t;
   ["tSelect","tShapes","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -938,9 +940,13 @@ function updateCombine(){
   const o1=selId!=null?objects.find(o=>o.id===selId):null;
   const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
   const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
-  const ok = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
-  ["pUnion","pDiff","pInt"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
-  const hint=$("combinehint"); if(hint) hint.style.display=ok?"none":"block";
+  const twoShapes = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
+  const imgOperand = o1 && !isBrick(o1) && selImg2 && refImg && refImg.img;   // shape + photo -> Intersect crops the photo to the shape
+  if($("pUnion")) $("pUnion").disabled = !twoShapes;
+  if($("pDiff"))  $("pDiff").disabled  = !twoShapes;
+  if($("pInt"))   $("pInt").disabled   = !(twoShapes || imgOperand);
+  const hint=$("combinehint"); if(hint){ hint.style.display=(twoShapes||imgOperand)?"none":"block";
+    hint.textContent = imgOperand ? "Intersect crops the photo to the shape." : "Select two shapes, or a shape + the photo (click one, Shift+click the other)."; }
 }
 // create a node-editable <polygon> object from a result ring (design mm, open ring).
 // Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
@@ -955,6 +961,7 @@ function makePolyObj(ring, kind){
 }
 function applyBool(op){
   const o1=selId!=null?objects.find(o=>o.id===selId):null;
+  if(op==="intersect" && selImg2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape + photo: Intersect = crop photo to shape
   const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
   if(!o1||!o2||o1===o2){ say("Pick two shapes: click one, then Shift+click another."); return; }
   ensureDoc();
@@ -1182,7 +1189,7 @@ function refreshEditPanel(){
     $("editinfo").textContent = selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
-    $("editdims").style.display="none"; $("esimprow").style.display="none"; $("ecroprow").style.display="none";
+    $("editdims").style.display="none"; $("esimprow").style.display="none";
     return;
   }
   const o=selObj();
@@ -1197,7 +1204,6 @@ function refreshEditPanel(){
   const isPoly = o.el && o.el.tagName && o.el.tagName.toLowerCase()==="polygon";   // Simplify only applies to node-built paths
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = (o.poly.length-1)+" nodes";
-  $("ecroprow").style.display = (refImg && refImg.img) ? "block" : "none";   // crop is offered only when a photo is loaded under the shape
 }
 function setKind(k){
   if(selMulti.length){ const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.kind=k; });
@@ -1279,10 +1285,11 @@ cv.addEventListener("click",(e)=>{
   const hit = (best && bd*k<=8) ? best : null;   // within 8 px of a line
   const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
-    if(hit && hit.id!==selId){ selId2=hit.id; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
-  } else if(hit){ selId=hit.id; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
-  else if(onImg){ selId=null; selId2=null; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
-  else { selId=null; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
+    if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
+    else if(onImg && refImg && refImg.img){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
+  } else if(hit){ selId=hit.id; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine."); }
+  else if(onImg){ selId=null; selId2=null; selImg2=false; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
+  else { selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
@@ -1393,7 +1400,7 @@ window.addEventListener("mouseup",()=>{
     const x0=Math.min(marquee.x0,marquee.x1), y0=Math.min(marquee.y0,marquee.y1), x1=Math.max(marquee.x0,marquee.x1), y1=Math.max(marquee.y0,marquee.y1);
     const isDrag=(x1-x0>1||y1-y0>1); marquee=null;
     if(isDrag){ const ids=[]; objects.forEach(o=>{ const bb=bbox([placePoly(o.poly)]); if(bb[0]>=x0&&bb[1]>=y0&&bb[2]<=x1&&bb[3]<=y1) ids.push(o.id); });
-      selMulti=ids; selId=null; selId2=null; selNode=null; if(refImg)refImg.sel=false; suppressClick=true;
+      selMulti=ids; selId=null; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; suppressClick=true;
       draw(); refreshEditPanel();
       say(ids.length? "Selected "+ids.length+" object"+(ids.length!==1?"s":"")+" - move, delete, or reclassify them together." : "Nothing inside the box."); }
     else draw();   // a click (no drag) -> let the click handler do single-select/deselect
