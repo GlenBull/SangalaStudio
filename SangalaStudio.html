@@ -141,6 +141,12 @@
   <button id="pDiff" title="Cut the 2nd (orange) shape out of the 1st (blue)">◐ Difference</button>
   <button id="pInt" title="Keep only where the two shapes overlap">◒ Intersect</button>
 </div>
+<div id="alignmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <div class="hint" id="alignhint" style="padding:.25rem .6rem;white-space:nowrap">Select two or more shapes to align.</div>
+  <button id="aVert" title="Line the shapes up on a vertical axis (same left-right center)">↕ Vertical</button>
+  <button id="aHorz" title="Line the shapes up on a horizontal axis (same up-down center)">↔ Horizontal</button>
+  <button id="aBoth" title="Center the shapes on each other (both axes)">✛ Center (both)</button>
+</div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test square</button>
   <button id="mScan">🎯 Scan test</button>
@@ -189,6 +195,7 @@
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
+    <button class="ltbtn" id="tAlign" title="Align shapes: Vertical / Horizontal / Center"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><rect x="4.5" y="5" width="15" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/><rect x="7.5" y="14.4" width="9" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/></svg><small>Align</small></button>
   </div>
   <div class="board cork">
     <div id="zoomctl">
@@ -987,6 +994,52 @@ document.addEventListener("click",(e)=>{ const t=$("combinemenu");
 $("pUnion").onclick=()=>{ applyBool("union"); closeCombine(); };
 $("pDiff").onclick=()=>{ applyBool("diff"); closeCombine(); };
 $("pInt").onclick=()=>{ applyBool("intersect"); closeCombine(); };
+
+/* ---------- Align (Vertical / Horizontal / Center) ---------- */
+// Objects share one placement transform (Scale % + Position), so aligning their
+// bbox centers in design-mm space aligns them on-page too. The biggest shape stays
+// put and the others move to its center axis - so "center circle in square" keeps
+// the square (the frame) fixed and drops the circle onto its middle.
+function translateObj(o,dx,dy){
+  if(!o||!o.el||(!dx&&!dy)) return;
+  o.poly=o.poly.map(p=>[p[0]+dx,p[1]+dy]);
+  const t=o.el.tagName.toLowerCase();
+  if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
+  else if(t==="circle"){ o.el.setAttribute("cx",fmtn((+o.el.getAttribute("cx")||0)+dx)); o.el.setAttribute("cy",fmtn((+o.el.getAttribute("cy")||0)+dy)); }
+  else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+}
+function alignTargets(){   // 2+ marquee-selected shapes, else the Combine pair (blue + orange)
+  if(selMulti.length>=2) return selMulti.map(id=>objects.find(o=>o.id===id)).filter(Boolean);
+  if(selId!=null && selId2!=null){ return [objects.find(o=>o.id===selId), objects.find(o=>o.id===selId2)].filter(Boolean); }
+  return [];
+}
+function alignSelection(mode){   // "v"=same center X (vertical axis), "h"=same center Y, "both"=center
+  const targets=alignTargets();
+  if(targets.length<2){ say("Select two or more shapes to align - marquee-drag around them, or click one and Shift+click another."); return; }
+  const box=o=>{ let a=1e9,b=1e9,c=-1e9,d=-1e9; o.poly.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);}); return {cx:(a+c)/2,cy:(b+d)/2,area:(c-a)*(d-b)}; };
+  const boxes=targets.map(box);
+  let ai=0; boxes.forEach((bx,i)=>{ if(bx.area>boxes[ai].area) ai=i; });   // biggest shape = the anchor, stays put
+  const tcx=boxes[ai].cx, tcy=boxes[ai].cy;
+  targets.forEach((o,i)=>{ if(i===ai) return;
+    const dx=(mode==="h")?0:(tcx-boxes[i].cx), dy=(mode==="v")?0:(tcy-boxes[i].cy);
+    translateObj(o,dx,dy); });
+  renderBg(); draw(); refreshEditPanel();
+  const nm={v:"Aligned vertically",h:"Aligned horizontally",both:"Centered"}[mode];
+  say(nm+" "+targets.length+" shapes.");
+}
+function updateAlign(){ const ok=alignTargets().length>=2;
+  ["aVert","aHorz","aBoth"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
+  const h=$("alignhint"); if(h) h.style.display=ok?"none":"block"; }
+function closeAlign(){ $("alignmenu").style.display="none"; }
+$("tAlign").onclick=(e)=>{ e.stopPropagation(); const t=$("alignmenu"), r=$("tAlign").getBoundingClientRect();
+  const open=t.style.display!=="flex";
+  if(open){ updateAlign(); t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }
+  t.style.display=open?"flex":"none"; };
+document.addEventListener("click",(e)=>{ const t=$("alignmenu");
+  if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tAlign").contains(e.target)) t.style.display="none"; });
+$("aVert").onclick=()=>{ alignSelection("v"); closeAlign(); };
+$("aHorz").onclick=()=>{ alignSelection("h"); closeAlign(); };
+$("aBoth").onclick=()=>{ alignSelection("both"); closeAlign(); };
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
 function startDraw(e){
   ensureDoc();
