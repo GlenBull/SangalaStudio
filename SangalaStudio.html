@@ -643,44 +643,49 @@ $("bRemoveBg").onclick=async()=>{
 // Step 5: turn the traced subject outline into cut objects, then drop the reference image.
 // Flatten each subpath (ImageTracer's L/Q Beziers) via an off-DOM <path>, map mask-pixels
 // to design mm at the image's placement, and hand to makePolyObj (simplifies at 0.08 mm).
+// Confirm: build a PRINT-AND-CUT design and load it through the proven print path.
+// The subject (background removed, over white) becomes a printable <image>; its traced
+// outline becomes red cut paths at the same page position. Print lays down the subject +
+// registration marks; Make it! (Marks on) registers and cuts it out - for a collage.
 function integrateTrace(){
   if(!refImg||!refImg.trace||!refImg.trace.paths.length){ say("Remove the background first to get an outline."); return; }
-  ensureDoc();
-  const W=refImg.trace.width, H=refImg.trace.height, sx=refImg.w/W, sy=refImg.h/H;
-  // refImg is drawn in raw mat mm, but objects render through placeParams (Scale % + Position
-  // offset). Invert placeParams here so the cut lands exactly on the image, not offset by it.
-  const ox=refImg.x, oy=refImg.y, pp=placeParams(); let added=0;
+  const W=refImg.trace.width, H=refImg.trace.height;
+  // subject over white (hard alpha at the threshold, so the white edge = the cut line)
+  const disp=document.createElement("canvas"); disp.width=W; disp.height=H;
+  const dcx=disp.getContext("2d"); dcx.fillStyle="#ffffff"; dcx.fillRect(0,0,W,H);
+  const tmp=document.createElement("canvas"); tmp.width=W; tmp.height=H;
+  const tcx=tmp.getContext("2d"); tcx.drawImage(refImg.img,0,0,W,H);
+  const im=tcx.getImageData(0,0,W,H), mm=refImg.mask.getContext("2d").getImageData(0,0,W,H);
+  for(let i=0;i<im.data.length;i+=4) im.data[i+3]=(mm.data[i]>=traceThreshold)?255:0;
+  tcx.putImageData(im,0,0); dcx.drawImage(tmp,0,0);
+  const dataURL=disp.toDataURL("image/png");
+  // place the subject on the Letter page, centred and clamped inside the registration marks
+  const maxW=PAGE_LW-2*INSET-10, maxH=PAGE_LH-2*INSET-10;
+  const fit=Math.min(1, maxW/refImg.w, maxH/refImg.h), iw=refImg.w*fit, ih=refImg.h*fit;
+  const PX=(PAGE_LW-iw)/2, PY=(PAGE_LH-ih)/2, sx=iw/W, sy=ih/H;
+  let cutSVG="", ncut=0;
   refImg.trace.paths.forEach(d=>{
-    d.split(/(?=[Mm])/).forEach(sub=>{                 // one closed polygon per subpath
-      if(!/\d/.test(sub)) return;
-      const svg=document.createElementNS(SVGNS,"svg"), path=document.createElementNS(SVGNS,"path");
-      path.setAttribute("d",sub); svg.appendChild(path);
-      svg.style.cssText="position:absolute;left:-9999px;top:0"; document.body.appendChild(svg);
-      let len=0; try{ len=path.getTotalLength(); }catch(e){}
-      if(len>2){
-        const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
-        for(let i=0;i<=n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([(ox+p.x*sx-pp.ox)/pp.s, (oy+p.y*sy-pp.oy)/pp.s]); }
-        const simp=simplify(pts,0.3);                  // photo traces start lighter (0.3 mm); Simplify shrinks further
-        makePolyObj(simp.length>=3?simp:pts,"cut"); added++;
+    d.split(/(?=[Mm])/).forEach(sub=>{ if(!/\d/.test(sub)) return;
+      const s=document.createElementNS(SVGNS,"svg"), pth=document.createElementNS(SVGNS,"path");
+      pth.setAttribute("d",sub); s.appendChild(pth); s.style.cssText="position:absolute;left:-9999px;top:0"; document.body.appendChild(s);
+      let len=0; try{ len=pth.getTotalLength(); }catch(e){}
+      if(len>2){ const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
+        for(let i=0;i<=n;i++){ const p=pth.getPointAtLength(len*i/n); pts.push([PX+p.x*sx, PY+p.y*sy]); }
+        const simp=simplify(pts,0.3), keep=(simp.length>=3?simp:pts);
+        cutSVG+='<polygon points="'+keep.map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" ")+'" fill="none" stroke="#ff0000" stroke-width="0.2"/>'; ncut++;
       }
-      svg.remove();
+      s.remove();
     });
   });
-  if(!added){ say("Couldn't turn the outline into a cut path."); return; }
-  // Remove the background: composite the subject over white (hard alpha at the threshold,
-  // so the white edge matches the cut line). Keep it as a static backdrop under the cut.
-  const mc=refImg.mask, MW=mc.width, MH=mc.height;
-  const disp=document.createElement("canvas"); disp.width=MW; disp.height=MH;
-  const dcx=disp.getContext("2d"); dcx.fillStyle="#ffffff"; dcx.fillRect(0,0,MW,MH);
-  const tmp=document.createElement("canvas"); tmp.width=MW; tmp.height=MH;
-  const tcx=tmp.getContext("2d"); tcx.drawImage(refImg.img,0,0,MW,MH);
-  const im=tcx.getImageData(0,0,MW,MH), mm=mc.getContext("2d").getImageData(0,0,MW,MH);
-  for(let i=0;i<im.data.length;i+=4) im.data[i+3]=(mm.data[i]>=traceThreshold)?255:0;   // subject opaque, background clear
-  tcx.putImageData(im,0,0); dcx.drawImage(tmp,0,0);
-  refImg.cutout=disp; refImg.confirmed=true; refImg.sel=false; refImg.trace=null;
-  $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
-  selId=null; selId2=null; renderBg(); draw(); refreshEditPanel();
-  say("Background removed - subject on white. Made "+added+" cut path"+(added!==1?"s":"")+". Press Make it! to cut.");
+  if(!ncut){ say("Couldn't turn the outline into a cut path."); return; }
+  const svg='<svg xmlns="'+SVGNS+'" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'
+    +'<image x="'+fmtn(PX)+'" y="'+fmtn(PY)+'" width="'+fmtn(iw)+'" height="'+fmtn(ih)+'" xlink:href="'+dataURL+'" href="'+dataURL+'"/>'
+    +cutSVG+'</svg>';
+  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  loadSVG(svg);                                        // proven print-and-cut path: image prints, red paths cut
+  showMarks=true; $("bMarks").classList.add("on");
+  draw();
+  say("Background removed. Print-and-cut ready: Print the subject + marks, then Make it! to cut it out.");
 }
 $("bUseCut").onclick=integrateTrace;
 // Silhouette threshold: re-trace the cached mask live (no model re-run), tighter/looser.
