@@ -103,7 +103,7 @@
 <div id="setup" class="panel">
     <h2 class="marker">Material</h2>
     <select id="material">
-      <option>Paper</option><option>Cardstock</option><option>Heavy cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
+      <option>Paper</option><option>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
     </select>
     <div class="two">
       <div><label class="fld">Force</label><input type="number" id="force" min="1" max="33" value="14"></div>
@@ -121,10 +121,10 @@
     <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
     <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
     <div class="two">
-      <div><label class="fld">From left</label><input type="number" id="offx" min="0" max="8" step="0.1" value="0.5"></div>
-      <div><label class="fld">From top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
+      <div><label class="fld">From Left</label><input type="number" id="offx" min="0" max="8" step="0.1" value="0.5"></div>
+      <div><label class="fld">From Top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
     </div>
-    <div class="hint">Set your material and position, then close Setup and press Make it.</div>
+    <div class="hint">Set your material and position, then close Setup and press Make It!</div>
     <label class="fld" style="margin-top:.7rem;display:flex;align-items:center;gap:.4rem;cursor:pointer">
       <input type="checkbox" id="mode3d" style="width:auto"> Enable 3D (extrude &amp; STL export)</label>
     <div class="hint" style="margin-top:.2rem">For 3D printing only. Leave off for die-cutter (2D) work.</div>
@@ -148,10 +148,10 @@
   <button id="aBoth" title="Center the shapes on each other (both axes)">✛ Center (both)</button>
 </div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
-  <button id="mTest">⬜ Test square</button>
-  <button id="mScan">🎯 Scan test</button>
-  <button id="mManual">🕹️ Manual align</button>
-  <button id="mUnload">⏏️ Unload mat</button>
+  <button id="mTest">⬜ Test Square</button>
+  <button id="mScan">🎯 Scan Test</button>
+  <button id="mManual">🕹️ Manual Align</button>
+  <button id="mUnload">⏏️ Unload Mat</button>
   <button id="mRaw">⌨️ Send GPGL…</button>
 </div>
 <div id="jogpanel" class="panel" style="position:fixed;z-index:30;display:none;width:250px">
@@ -210,14 +210,14 @@
 
   <div class="panel">
     <h2 class="marker">Fabricate</h2>
-    <button class="go" id="make" disabled>Make it!</button>
+    <button class="go" id="make" disabled>Make It!</button>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
     <div id="tracetune" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
-      <h2 class="marker" style="margin-top:0">Silhouette threshold</h2>
+      <h2 class="marker" style="margin-top:0">Silhouette Threshold</h2>
       <input type="range" id="thrRange" min="20" max="235" step="5" value="128" style="width:100%">
       <div class="hint" style="display:flex;justify-content:space-between;margin-top:.1rem"><span>looser (more)</span><span id="thrVal"></span><span>tighter (less)</span></div>
-      <h2 class="marker" style="margin-top:.6rem">Ignore specks</h2>
+      <h2 class="marker" style="margin-top:.6rem">Ignore Specks</h2>
       <input type="range" id="pomRange" min="0" max="200" step="5" value="8" style="width:100%">
       <div class="hint" style="display:flex;justify-content:space-between;margin-top:.1rem"><span>keep all</span><span id="pomVal"></span><span>drop more</span></div>
     </div>
@@ -226,14 +226,14 @@
       <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
       <div class="two" style="margin-top:.5rem">
         <button class="ebtn" id="eCut" disabled>✂️ Cut</button>
-        <button class="ebtn" id="eScore" disabled>⁝ Score / Fold</button>
+        <button class="ebtn" id="eScore" disabled>⁝ Fold</button>
       </div>
       <div class="two" style="margin-top:.4rem">
-        <button class="ebtn" id="ePrint" disabled>🖨️ Print only</button>
+        <button class="ebtn" id="ePrint" disabled>🖨️ Print Only</button>
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
       </div>
       <div id="esimprow" style="margin-top:.4rem;display:none;align-items:center;gap:.5rem">
-        <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify nodes</button>
+        <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify Nodes</button>
         <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
       </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
@@ -274,7 +274,7 @@ let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoo
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
-const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
+const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
@@ -747,7 +747,7 @@ function integrateTrace(){
   loadSVG(svg);                                        // proven print-and-cut path: image prints, red paths cut
   showMarks=true; $("bMarks").classList.add("on");
   draw();
-  say("Background removed. Print-and-cut ready: Print the subject + marks, then Make it! to cut it out.");
+  say("Background removed. Print-and-cut ready: Print the subject + marks, then Make It! to cut it out.");
 }
 $("bUseCut").onclick=integrateTrace;
 // Crop the imported photo to a drawn shape: everything outside the shape is removed and the
@@ -778,7 +778,7 @@ function cropToShape(){
   refImg=null; selImg2=false; if(typeof closeCombine==="function") closeCombine();
   $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   loadSVG(svg); showMarks=true; $("bMarks").classList.add("on"); draw();
-  say("Cropped the photo to the shape - print-and-cut ready. Print, then Make it! to cut it out.");
+  say("Cropped the photo to the shape - print-and-cut ready. Print, then Make It! to cut it out.");
 }
 // Trace tuning: re-trace the cached mask live (no model re-run). Threshold = tighter/looser
 // silhouette; Ignore specks = ImageTracer pathomit (drop small stray loops). Shared debounce.
@@ -907,7 +907,7 @@ $("mode3d").onchange=e=>{ mode3D=e.target.checked; $("bStl").style.display=mode3
   $("tBrick").style.display=mode3D?"":"none";                     // Brick is a 3D/LEGO feature: hide it until 3D is enabled
   if(!mode3D && activeTool==="brick") setTool("select");         // don't leave a hidden tool active
   refreshEditPanel(); };
-$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test square loaded (30 mm).");};
+$("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test Square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
   if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
 /* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
@@ -1246,7 +1246,7 @@ $("bMarks").onclick=()=>{ showMarks=!showMarks; $("bMarks").classList.toggle("on
   say(showMarks?"Registration marks ON - shown in the preview and included when you Print.":"Registration marks OFF - preview and print omit them."); };
 $("bMarks").classList.toggle("on",showMarks);
 /* ---------- Edit mode: click an object to select it ---------- */
-const KIND_LABEL={cut:"cut",score:"score / fold",print:"print-only"};
+const KIND_LABEL={cut:"cut",score:"fold",print:"print-only"};
 function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
 // readout of the selected shape's dimensions in whole mm, as a 2-column table with
 // right-justified numbers so they line up (rect: W/H | X/Y; circle: ⌀ | center).
