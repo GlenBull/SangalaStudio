@@ -85,8 +85,7 @@
   <div class="logo"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
-    <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
-    <button class="tbtn" id="bImg"><span class="glyph">🖼️</span><small>Open Image</small></button>
+    <button class="tbtn" id="bOpen" title="Open an SVG design or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
     <button class="tbtn" id="bRemoveBg" style="display:none"><span class="glyph">🪄</span><small>Remove BG</small></button>
     <button class="tbtn" id="bUseCut" style="display:none"><span class="glyph">✅</span><small>Confirm</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
@@ -98,8 +97,7 @@
   </div>
   <div class="spacer"></div>
   <div class="conn" id="conn">Not connected</div>
-  <input type="file" id="file" accept=".svg" style="display:none">
-  <input type="file" id="imgfile" accept="image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none">
+  <input type="file" id="file" accept=".svg,image/svg+xml,image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none">
 </header>
 
 <div id="setup" class="panel">
@@ -627,12 +625,14 @@ $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
+// Open handles both an SVG design and a photo: .svg -> loadSVG; .png/.jpg -> loadImageFile
+// (a REFERENCE layer for tracing - it never cuts, prints, or saves; the traced vector is the design).
 $("bOpen").onclick=()=>$("file").click();
-$("file").onchange=e=>{const f=e.target.files[0];if(f)f.text().then(loadSVG);};
-// Import a .jpg/.png as a REFERENCE layer for tracing. It is not part of the design:
-// it never cuts, prints, or saves - the vector you trace from it is the design.
-$("bImg").onclick=()=>$("imgfile").click();
-$("imgfile").onchange=e=>{const f=e.target.files[0]; if(f) loadImageFile(f); e.target.value="";};
+$("file").onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+  const nm=(f.name||"").toLowerCase();
+  if(nm.endsWith(".svg")||f.type==="image/svg+xml") f.text().then(loadSVG);
+  else loadImageFile(f);
+  e.target.value=""; };
 function loadImageFile(file){
   const rd=new FileReader();
   rd.onload=ev=>{ const img=new Image();
