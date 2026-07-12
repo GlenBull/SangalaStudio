@@ -29,6 +29,8 @@
   .menu{background:#efe0c4;border:2px solid #d8c4a0;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.3);padding:.3rem;flex-direction:column;gap:.15rem}
   .menu button{font-size:.92rem;text-align:left;padding:.45rem .8rem;border:none;background:none;border-radius:6px;cursor:pointer;color:#5a4a34;white-space:nowrap}
   .menu button:hover{background:#e0cfa8}
+  .menu button:disabled{color:#b3a58a;cursor:default}
+  .menu button:disabled:hover{background:none}
   .tbtn small{font-size:.64rem;color:#eaf1f8;line-height:1.05;text-align:center}
   .spacer{flex:1}
   .conn{color:#eaf1f8;font-size:.82rem;text-align:right;max-width:280px}
@@ -130,6 +132,12 @@
   </div>
 
 
+<div id="combinemenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes first (click one, Shift+click another).</div>
+  <button id="pUnion" title="Merge both shapes into one outline">◑ Union</button>
+  <button id="pDiff" title="Cut the 2nd (orange) shape out of the 1st (blue)">◐ Difference</button>
+  <button id="pInt" title="Keep only where the two shapes overlap">◒ Intersect</button>
+</div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test square</button>
   <button id="mScan">🎯 Scan test</button>
@@ -178,10 +186,7 @@
     <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
-    <div class="ltitle marker" style="margin-top:.5rem">Combine</div>
-    <button class="ltbtn" id="pUnion" title="Union: merge both shapes into one outline" disabled>◑<small>Union</small></button>
-    <button class="ltbtn" id="pDiff" title="Difference: cut the 2nd (orange) shape out of the 1st (blue)" disabled>◐<small>Diff</small></button>
-    <button class="ltbtn" id="pInt" title="Intersect: keep only where the two shapes overlap" disabled>◒<small>Intersect</small></button>
+    <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
   </div>
   <div class="board cork">
     <div id="zoomctl">
@@ -879,6 +884,7 @@ function updateCombine(){
   const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
   const ok = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
   ["pUnion","pDiff","pInt"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
+  const hint=$("combinehint"); if(hint) hint.style.display=ok?"none":"block";
 }
 // create a node-editable <polygon> object from a result ring (design mm, open ring).
 // Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
@@ -907,9 +913,17 @@ function applyBool(op){
   const nm={union:"Union",diff:"Difference",intersect:"Intersect"}[op];
   say(nm+": made "+rings.length+" shape"+(rings.length!==1?"s":"")+". Click it to select.");
 }
-$("pUnion").onclick=()=>applyBool("union");
-$("pDiff").onclick=()=>applyBool("diff");
-$("pInt").onclick=()=>applyBool("intersect");
+// Combine flyout: the palette icon opens a submenu with Union / Difference / Intersect.
+function closeCombine(){ $("combinemenu").style.display="none"; }
+$("tCombine").onclick=(e)=>{ e.stopPropagation(); const t=$("combinemenu"), r=$("tCombine").getBoundingClientRect();
+  const open=t.style.display!=="flex";
+  if(open){ updateCombine(); t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }   // fly out to the right of the palette
+  t.style.display=open?"flex":"none"; };
+document.addEventListener("click",(e)=>{ const t=$("combinemenu");
+  if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tCombine").contains(e.target)) t.style.display="none"; });
+$("pUnion").onclick=()=>{ applyBool("union"); closeCombine(); };
+$("pDiff").onclick=()=>{ applyBool("diff"); closeCombine(); };
+$("pInt").onclick=()=>{ applyBool("intersect"); closeCombine(); };
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
 function startDraw(e){
   ensureDoc();
