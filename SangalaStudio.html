@@ -255,6 +255,7 @@ let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, s
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
+let selMulti=[];             // marquee multi-selection (object ids); when non-empty, single-select (selId) is cleared
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
@@ -369,7 +370,7 @@ function loadSVG(text){
   // it as a plain design and cut every shape (old behaviour).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
-  objects=[]; selId=null; selId2=null;
+  objects=[]; selId=null; selId2=null; selMulti=[];
   view.zoom=1; view.panX=0; view.panY=0; updateZoomUI();   // new design -> reset the magnify view
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
@@ -573,6 +574,15 @@ function draw(){
         nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
           ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
         ctx.restore();}}}
+  if(selMulti.length){   // marquee multi-selection: dashed outline around each selected object
+    ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
+    selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return; const ring=placePoly(o.poly);
+      ctx.beginPath(); ring.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
+    ctx.restore(); }
+  if(marquee){   // the live rubber-band box
+    const x0=Math.min(marquee.x0,marquee.x1)*k, y0=Math.min(marquee.y0,marquee.y1)*k, x1=Math.max(marquee.x0,marquee.x1)*k, y1=Math.max(marquee.y0,marquee.y1)*k;
+    ctx.save(); ctx.fillStyle="rgba(26,95,180,.08)"; ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    ctx.fillRect(x0,y0,x1-x0,y1-y0); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.restore(); }
   ctx.restore();   // end magnify (pan/zoom) transform
   ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);
   const chk=pl.concat(sl);
@@ -871,7 +881,7 @@ function setTool(t){ activeTool=t;
   ["tSelect","tShapes","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -946,7 +956,7 @@ function startDraw(e){
   if(activeTool==="rect"){ el=svgNode("rect",{x:sx,y:sy,width:0,height:0});
     poly=[[sx,sy],[sx,sy],[sx,sy],[sx,sy],[sx,sy]]; d={mode:"resize",shape:"rect",anchor:[sx,sy]}; }
   else { el=svgNode("circle",{cx:sx,cy:sy,r:0}); poly=circlePoly(sx,sy,0); d={mode:"resize",shape:"circle",center:[sx,sy]}; }
-  const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id; selId2=null;
+  const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id; selId2=null; selMulti=[];
   d.obj=o; d.moved=false; d.draw=true; drag=d;
   e.preventDefault(); draw(); refreshEditPanel();
 }
@@ -961,7 +971,7 @@ function makeBrick(x0,y0){
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r)}); }
-  selId=bodyId; selId2=null; bgImg=null; draw(); refreshEditPanel();
+  selId=bodyId; selId2=null; selMulti=[]; bgImg=null; draw(); refreshEditPanel();
   say("Added a 2 x 3 LEGO brick: 24 x 16 x 9.6 mm body + six 4.8 mm studs.");
 }
 // Brick tool: click the canvas to place the brick's top-left there, then auto-release to select
@@ -1133,7 +1143,16 @@ $("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: 
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
-  const panel=$("editpanel"), o=selObj();
+  const panel=$("editpanel");
+  if(selMulti.length){   // marquee multi-selection: reclassify / delete apply to all; no per-object dims
+    panel.style.display="block";
+    $("editinfo").textContent = selMulti.length+" objects selected. Change them all to:";
+    ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
+    ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
+    $("editdims").style.display="none"; $("esimprow").style.display="none";
+    return;
+  }
+  const o=selObj();
   if(!o){ panel.style.display="none"; return; }   // panel appears only while a shape is selected
   panel.style.display="block";
   $("editinfo").textContent = "Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:";
@@ -1146,9 +1165,17 @@ function refreshEditPanel(){
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = (o.poly.length-1)+" nodes";
 }
-function setKind(k){ const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
+function setKind(k){
+  if(selMulti.length){ const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.kind=k; });
+    renderBg(); draw(); refreshEditPanel(); say("Changed "+selMulti.length+" objects to "+KIND_LABEL[k]+"."); return; }
+  const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
   renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
-function deleteSel(){ const o=selObj(); if(!o) return;
+function deleteSel(){
+  if(selMulti.length){ const set=new Set(selMulti), n=selMulti.length;
+    objects.forEach(o=>{ if(set.has(o.id)&&o.el&&o.el.remove) o.el.remove(); });
+    objects=objects.filter(o=>!set.has(o.id)); selMulti=[]; selId=null; selId2=null;
+    renderBg(); draw(); refreshEditPanel(); say("Deleted "+n+" objects."); return; }
+  const o=selObj(); if(!o) return;
   if(o.el&&o.el.remove) o.el.remove();          // drop it from the retained doc too, so it neither cuts nor prints
   objects=objects.filter(x=>x.id!==o.id); selId=null; selId2=null;
   renderBg(); draw(); refreshEditPanel(); say("Deleted the selected object."); }
@@ -1177,6 +1204,10 @@ document.addEventListener("keydown",(e)=>{
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
   if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
+  if(selMulti.length){ e.preventDefault(); const set=new Set(selMulti), n=selMulti.length;   // delete the whole marquee selection
+    objects.forEach(o=>{ if(set.has(o.id)&&o.el&&o.el.remove) o.el.remove(); });
+    objects=objects.filter(o=>!set.has(o.id)); selMulti=[]; selId=null; selId2=null;
+    renderBg(); draw(); refreshEditPanel(); say("Deleted "+n+" objects."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
 });
@@ -1215,16 +1246,16 @@ cv.addEventListener("click",(e)=>{
   const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
     if(hit && hit.id!==selId){ selId2=hit.id; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
-  } else if(hit){ selId=hit.id; selId2=null; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
-  else if(onImg){ selId=null; selId2=null; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
-  else { selId=null; selId2=null; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
+  } else if(hit){ selId=hit.id; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape to Combine."); }
+  else if(onImg){ selId=null; selId2=null; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
+  else { selId=null; selId2=null; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
 // rect: corner handle resizes (opposite corner anchored), body moves.
 // circle: cardinal handle changes radius (center fixed), body moves the center.
-let drag=null, suppressClick=false;
+let drag=null, suppressClick=false, marquee=null;
 cv.addEventListener("mousedown",(e)=>{
   if(e.button===1 || (spaceHeld && e.button===0)){   // pan: middle-mouse, or hold Space + left-drag
     const p=canvasPt(e); panDrag={sx:p[0],sy:p[1],px:view.panX,py:view.panY}; cv.style.cursor="grabbing"; e.preventDefault(); return; }
@@ -1240,6 +1271,20 @@ cv.addEventListener("mousedown",(e)=>{
       cv.style.cursor="nwse-resize"; e.preventDefault(); return; }
     if(mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h){
       drag={mode:"imgmove",gx:mx-refImg.x,gy:my-refImg.y,moved:false}; cv.style.cursor="move"; e.preventDefault(); return; }
+  }
+  {   // marquee multi-select: group-move a selected set, or rubber-band on empty canvas
+    const {mx,my,k}=evtMM(e), pp=placeParams();
+    const onObjId=(o)=>{ const p=placePoly(o.poly);
+      if(p.length===1) return Math.hypot(mx-p[0][0],my-p[0][1])*k<=8;
+      for(let i=0;i+1<p.length;i++) if(segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1])*k<=8) return true;
+      const bb=bbox([p]); return mx>=bb[0]&&mx<=bb[2]&&my>=bb[1]&&my<=bb[3]; };
+    if(selMulti.length && selMulti.some(id=>{const o=objects.find(x=>x.id===id);return o&&onObjId(o);})){   // drag any member -> move the group
+      drag={mode:"groupmove",start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],moved:false,
+        orig:selMulti.map(id=>{const o=objects.find(x=>x.id===id),N=s=>+o.el.getAttribute(s)||0,t=o.el.tagName.toLowerCase();
+          return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy")};})};
+      cv.style.cursor="move"; e.preventDefault(); return; }
+    const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
+    if(!(refImg&&refImg.sel) && !onImg && !objects.some(onObjId)){ marquee={x0:mx,y0:my,x1:mx,y1:my}; e.preventDefault(); return; }
   }
   if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
@@ -1268,7 +1313,14 @@ cv.addEventListener("mousedown",(e)=>{
 });
 window.addEventListener("mousemove",(e)=>{
   if(panDrag){ const p=canvasPt(e); view.panX=panDrag.px+(p[0]-panDrag.sx); view.panY=panDrag.py+(p[1]-panDrag.sy); clampPan(); draw(); return; }
+  if(marquee){ const {mx,my}=evtMM(e); marquee.x1=mx; marquee.y1=my; draw(); return; }
   if(!drag) return;
+  if(drag.mode==="groupmove"){ const {mx,my}=evtMM(e), pp=placeParams(), ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
+    drag.orig.forEach(g=>{ const o=g.o; o.poly=g.poly.map(p=>[p[0]+ddx,p[1]+ddy]);
+      if(g.t==="rect"){ o.el.setAttribute("x",fmtn(g.x+ddx)); o.el.setAttribute("y",fmtn(g.y+ddy)); }
+      else if(g.t==="circle"){ o.el.setAttribute("cx",fmtn(g.cx+ddx)); o.el.setAttribute("cy",fmtn(g.cy+ddy)); }
+      else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")); });
+    drag.moved=true; draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(!refImg) return; const {mx,my}=evtMM(e);
     if(drag.mode==="imgmove"){ refImg.x=mx-drag.gx; refImg.y=my-drag.gy; }
     else { let w=Math.abs(mx-drag.ax), h=Math.abs(my-drag.ay);      // resize about the opposite corner, keep aspect
@@ -1303,7 +1355,17 @@ window.addEventListener("mousemove",(e)=>{
 });
 window.addEventListener("mouseup",()=>{
   if(panDrag){ panDrag=null; suppressClick=true; cv.style.cursor=spaceHeld?"grab":"default"; return; }
+  if(marquee){   // finish a rubber-band: select every object whose bbox is fully inside it
+    const x0=Math.min(marquee.x0,marquee.x1), y0=Math.min(marquee.y0,marquee.y1), x1=Math.max(marquee.x0,marquee.x1), y1=Math.max(marquee.y0,marquee.y1);
+    const isDrag=(x1-x0>1||y1-y0>1); marquee=null;
+    if(isDrag){ const ids=[]; objects.forEach(o=>{ const bb=bbox([placePoly(o.poly)]); if(bb[0]>=x0&&bb[1]>=y0&&bb[2]<=x1&&bb[3]<=y1) ids.push(o.id); });
+      selMulti=ids; selId=null; selId2=null; selNode=null; if(refImg)refImg.sel=false; suppressClick=true;
+      draw(); refreshEditPanel();
+      say(ids.length? "Selected "+ids.length+" object"+(ids.length!==1?"s":"")+" - move, delete, or reclassify them together." : "Nothing inside the box."); }
+    else draw();   // a click (no drag) -> let the click handler do single-select/deselect
+    return; }
   if(!drag) return;
+  if(drag.mode==="groupmove"){ const moved=drag.moved; drag=null; cv.style.cursor="default"; if(moved){ suppressClick=true; say(selMulti.length+" object"+(selMulti.length!==1?"s":"")+" moved."); } draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
     const o=drag.obj, el=o.el, t=el.tagName.toLowerCase();
