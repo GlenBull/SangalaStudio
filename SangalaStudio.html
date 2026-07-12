@@ -80,7 +80,7 @@
     <button class="tbtn" id="bOpen"><span class="glyph">📂</span><small>Open SVG</small></button>
     <button class="tbtn" id="bImg"><span class="glyph">🖼️</span><small>Open Image</small></button>
     <button class="tbtn" id="bRemoveBg" style="display:none"><span class="glyph">🪄</span><small>Remove BG</small></button>
-    <button class="tbtn" id="bUseCut" style="display:none"><span class="glyph">✅</span><small>Use Outline</small></button>
+    <button class="tbtn" id="bUseCut" style="display:none"><span class="glyph">✅</span><small>Confirm</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
@@ -493,20 +493,17 @@ function draw(){
   // show the cutout over a checkerboard so the transparent background reads as transparent.
   if(refImg && refImg.img && refImg.img.complete && refImg.img.naturalWidth){
     const rx=refImg.x*k, ry=refImg.y*k, rw=refImg.w*k, rh=refImg.h*k;
-    if(refImg.cutout){
-      ctx.save(); ctx.beginPath(); ctx.rect(rx,ry,rw,rh); ctx.clip();
-      const s=9; for(let yy=0;yy<rh;yy+=s)for(let xx=0;xx<rw;xx+=s){ ctx.fillStyle=((((xx/s)|0)+((yy/s)|0))&1)?"#cfd3d6":"#ffffff"; ctx.fillRect(rx+xx,ry+yy,s,s); }
-      ctx.restore();
-      try{ ctx.drawImage(refImg.cutout, rx,ry,rw,rh); }catch(e){}
-      if(refImg.trace && refImg.trace.paths && refImg.trace.paths.length){   // traced subject outline (mask-pixel coords -> image region)
+    if(refImg.confirmed && refImg.cutout){
+      try{ ctx.drawImage(refImg.cutout, rx,ry,rw,rh); }catch(e){}   // background removed: subject on white
+    } else {
+      try{ ctx.drawImage(refImg.img, rx,ry,rw,rh); }catch(e){}      // adjust: the full photo stays in place
+      if(refImg.trace && refImg.trace.paths && refImg.trace.paths.length){   // red boundary over the photo (mask-px -> image region)
         const sx=rw/refImg.trace.width, sy=rh/refImg.trace.height;
         ctx.save(); ctx.translate(rx,ry); ctx.scale(sx,sy);
         ctx.strokeStyle="#dc2626"; ctx.lineWidth=1.6/Math.max(sx,1e-6); ctx.lineJoin="round";
         refImg.trace.paths.forEach(d=>{ try{ ctx.stroke(new Path2D(d)); }catch(e){} });
         ctx.restore();
       }
-    } else {
-      try{ ctx.drawImage(refImg.img, rx,ry,rw,rh); }catch(e){}
     }
     if(refImg.sel){
       ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5;
@@ -630,21 +627,16 @@ $("bRemoveBg").onclick=async()=>{
   if(!refImg||!refImg.img){ say("Open an image first."); return; }
   if(!window.SangalaBg||!window.ort){ say("Background remover isn't loaded - reload the page."); return; }
   const btn=$("bRemoveBg"); btn.disabled=true;
-  say("Removing background... first run loads the model (~15 MB), then it's quick.");
+  say("Finding the subject... first run loads the model (~15 MB), then it's quick.");
   try{
     const maskCanvas=await SangalaBg.mask(refImg.img);
-    const W=maskCanvas.width, H=maskCanvas.height;
-    const cut=document.createElement("canvas"); cut.width=W; cut.height=H;
-    const cx=cut.getContext("2d"); cx.drawImage(refImg.img,0,0,W,H);
-    const ci=cx.getImageData(0,0,W,H), mi=maskCanvas.getContext("2d").getImageData(0,0,W,H);
-    for(let i=0;i<ci.data.length;i+=4) ci.data[i+3]=mi.data[i];   // subject alpha = mask gray value
-    cx.putImageData(ci,0,0);
-    refImg.mask=maskCanvas; refImg.cutout=cut; refImg.sel=true;
-    try{ refImg.trace=SangalaBg.trace(maskCanvas,{threshold:traceThreshold}); }catch(te){ refImg.trace=null; }   // step 4: vector outline of the subject
+    // Leave the photo IN PLACE; just show the red boundary over it. Nothing is removed
+    // until Confirm, so you can adjust the threshold against the actual image.
+    refImg.mask=maskCanvas; refImg.cutout=null; refImg.confirmed=false; refImg.sel=true;
+    try{ refImg.trace=SangalaBg.trace(maskCanvas,{threshold:traceThreshold}); }catch(te){ refImg.trace=null; }
     if(refImg.trace && refImg.trace.paths.length){ $("bUseCut").style.display=""; $("tracetune").style.display="block"; $("thrRange").value=traceThreshold; $("thrVal").textContent=traceThreshold; }
     draw();
-    const np=refImg.trace?refImg.trace.paths.length:0;
-    say("Background removed and traced - the red outline follows the subject ("+np+" path"+(np!==1?"s":"")+"). (Making it a cut path comes next.)");
+    say("Subject boundary found (red) - the photo stays in place. Adjust the threshold, then Confirm to remove the background.");
   }catch(e){ say("Background removal failed: "+((e&&e.message)||e)); }
   btn.disabled=false;
 };
@@ -673,9 +665,20 @@ function integrateTrace(){
     });
   });
   if(!added){ say("Couldn't turn the outline into a cut path."); return; }
-  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  // Remove the background: composite the subject over white (hard alpha at the threshold,
+  // so the white edge matches the cut line). Keep it as a static backdrop under the cut.
+  const mc=refImg.mask, MW=mc.width, MH=mc.height;
+  const disp=document.createElement("canvas"); disp.width=MW; disp.height=MH;
+  const dcx=disp.getContext("2d"); dcx.fillStyle="#ffffff"; dcx.fillRect(0,0,MW,MH);
+  const tmp=document.createElement("canvas"); tmp.width=MW; tmp.height=MH;
+  const tcx=tmp.getContext("2d"); tcx.drawImage(refImg.img,0,0,MW,MH);
+  const im=tcx.getImageData(0,0,MW,MH), mm=mc.getContext("2d").getImageData(0,0,MW,MH);
+  for(let i=0;i<im.data.length;i+=4) im.data[i+3]=(mm.data[i]>=traceThreshold)?255:0;   // subject opaque, background clear
+  tcx.putImageData(im,0,0); dcx.drawImage(tmp,0,0);
+  refImg.cutout=disp; refImg.confirmed=true; refImg.sel=false; refImg.trace=null;
+  $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   selId=null; selId2=null; renderBg(); draw(); refreshEditPanel();
-  say("Made "+added+" cut path"+(added!==1?"s":"")+" from the photo. Edit them, or press Make it! to cut.");
+  say("Background removed - subject on white. Made "+added+" cut path"+(added!==1?"s":"")+". Press Make it! to cut.");
 }
 $("bUseCut").onclick=integrateTrace;
 // Silhouette threshold: re-trace the cached mask live (no model re-run), tighter/looser.
