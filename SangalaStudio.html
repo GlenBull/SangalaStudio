@@ -31,6 +31,7 @@
   .menu button:hover{background:#e0cfa8}
   .menu button:disabled{color:#b3a58a;cursor:default}
   .menu button:disabled:hover{background:none}
+  .menu button.on{background:#d8c4a0;font-weight:600}
   .tbtn small{font-size:.64rem;color:#eaf1f8;line-height:1.05;text-align:center}
   .spacer{flex:1}
   .conn{color:#eaf1f8;font-size:.82rem;text-align:right;max-width:280px}
@@ -132,6 +133,10 @@
   </div>
 
 
+<div id="shapesmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <button id="mRect" title="Draw a rectangle">▭ Rectangle</button>
+  <button id="mCircle" title="Draw a circle">◯ Circle</button>
+</div>
 <div id="combinemenu" class="menu" style="position:fixed;z-index:31;display:none">
   <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes first (click one, Shift+click another).</div>
   <button id="pUnion" title="Merge both shapes into one outline">◑ Union</button>
@@ -182,8 +187,7 @@
   <div class="ltools">
     <div class="ltitle marker">Tools</div>
     <button class="ltbtn on" id="tSelect" title="Select / move (normal mode)"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M5.5 3.2 L5.5 20.5 L9.8 16.5 L12.5 22.5 L15 21.3 L12.3 15.5 L18.2 15.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.7" stroke-linejoin="round"/></svg><small>Select</small></button>
-    <button class="ltbtn" id="tRect" title="Rectangle">▭<small>Rect</small></button>
-    <button class="ltbtn" id="tCirc" title="Circle">◯<small>Circle</small></button>
+    <button class="ltbtn" id="tShapes" title="Draw a shape: Rectangle or Circle"><svg width="22" height="20" viewBox="0 0 26 22" style="display:block" aria-hidden="true"><rect x="2" y="5" width="12" height="12" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.9"/><circle cx="18" cy="14" r="6.2" fill="none" stroke="#7a3b12" stroke-width="1.9"/></svg><small>Shapes</small></button>
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick">🧱<small>Brick</small></button>
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
@@ -864,15 +868,24 @@ function svgNode(name,attrs){
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
 let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag to draw; "brick" = click to place
 function setTool(t){ activeTool=t;
-  ["tSelect","tRect","tCirc","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
-  const btn={select:"tSelect",rect:"tRect",circle:"tCirc",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
+  ["tSelect","tShapes","tBrick","tNode"].forEach(id=>$(id).classList.remove("on"));
+  const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",brick:"tBrick",node:"tNode"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="brick") ? "crosshair" : "default";
   if(t==="rect"||t==="circle"||t==="brick"){ selId=null; selId2=null; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
-$("tRect").onclick=()=>setTool(activeTool==="rect"?"select":"rect");
-$("tCirc").onclick=()=>setTool(activeTool==="circle"?"select":"circle");
+// Shapes flyout: the palette icon opens a submenu to pick Rectangle or Circle to draw.
+function closeShapes(){ $("shapesmenu").style.display="none"; }
+$("tShapes").onclick=(e)=>{ e.stopPropagation(); const t=$("shapesmenu"), r=$("tShapes").getBoundingClientRect();
+  const open=t.style.display!=="flex";
+  if(open){ $("mRect").classList.toggle("on",activeTool==="rect"); $("mCircle").classList.toggle("on",activeTool==="circle");
+    t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }   // fly out to the right of the palette
+  t.style.display=open?"flex":"none"; };
+document.addEventListener("click",(e)=>{ const t=$("shapesmenu");
+  if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tShapes").contains(e.target)) t.style.display="none"; });
+$("mRect").onclick=()=>{ setTool(activeTool==="rect"?"select":"rect"); closeShapes(); };
+$("mCircle").onclick=()=>{ setTool(activeTool==="circle"?"select":"circle"); closeShapes(); };
 $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 /* ---------- Combine (Union / Difference / Intersect) ---------- */
