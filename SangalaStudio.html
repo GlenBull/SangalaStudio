@@ -228,6 +228,9 @@
         <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify nodes</button>
         <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
       </div>
+      <div id="ecroprow" style="margin-top:.4rem;display:none">
+        <button class="ebtn" id="eCrop" style="width:100%">🖼️ Crop photo to this shape</button>
+      </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
     </div>
   </div>
@@ -727,6 +730,36 @@ function integrateTrace(){
   say("Background removed. Print-and-cut ready: Print the subject + marks, then Make it! to cut it out.");
 }
 $("bUseCut").onclick=integrateTrace;
+// Crop the imported photo to a drawn shape: everything outside the shape is removed and the
+// result becomes a print-and-cut (print the cropped photo, cut the shape). For collages.
+function cropToShape(){
+  const o=selObj();
+  if(!refImg||!refImg.img){ say("Open a photo first, then draw a shape over it."); return; }
+  if(!o||!o.poly){ say("Select the shape you drew over the photo."); return; }
+  const img=refImg.img, IW=img.naturalWidth||img.width, IH=img.naturalHeight||img.height;
+  const placed=placePoly(o.poly);                 // shape outline in screen mm (same space as refImg.x/y)
+  const px=placed.map(p=>[ (p[0]-refImg.x)/refImg.w*IW, (p[1]-refImg.y)/refImg.h*IH ]);
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9; px.forEach(q=>{minx=Math.min(minx,q[0]);miny=Math.min(miny,q[1]);maxx=Math.max(maxx,q[0]);maxy=Math.max(maxy,q[1]);});
+  minx=Math.max(0,Math.floor(minx)); miny=Math.max(0,Math.floor(miny)); maxx=Math.min(IW,Math.ceil(maxx)); maxy=Math.min(IH,Math.ceil(maxy));
+  const CW=maxx-minx, CH=maxy-miny;
+  if(CW<3||CH<3){ say("That shape isn't over the photo - move it onto the image, then try again."); return; }
+  const c=document.createElement("canvas"); c.width=CW; c.height=CH; const cx=c.getContext("2d");
+  cx.fillStyle="#ffffff"; cx.fillRect(0,0,CW,CH);                    // outside the shape -> white (cut away)
+  cx.save(); cx.beginPath(); px.forEach((q,i)=>{ const x=q[0]-minx,y=q[1]-miny; i?cx.lineTo(x,y):cx.moveTo(x,y); }); cx.closePath(); cx.clip();
+  cx.drawImage(img,-minx,-miny,IW,IH); cx.restore();                 // photo, clipped to the shape
+  const dataURL=c.toDataURL("image/png");
+  const iw=CW/IW*refImg.w, ih=CH/IH*refImg.h;                        // crop size in mm
+  const maxW=PAGE_LW-2*INSET-10, maxH=PAGE_LH-2*INSET-10, fit=Math.min(1,maxW/iw,maxH/ih);
+  const pw=iw*fit, ph=ih*fit, PX=(PAGE_LW-pw)/2, PY=(PAGE_LH-ph)/2, sx=pw/CW, sy=ph/CH;
+  const cutPts=simplify(px.map(q=>[PX+(q[0]-minx)*sx, PY+(q[1]-miny)*sy]),0.3);
+  const cutSVG='<polygon points="'+cutPts.map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" ")+'" fill="none" stroke="#ff0000" stroke-width="0.2"/>';
+  const svg='<svg xmlns="'+SVGNS+'" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'
+    +'<image x="'+fmtn(PX)+'" y="'+fmtn(PY)+'" width="'+fmtn(pw)+'" height="'+fmtn(ph)+'" xlink:href="'+dataURL+'" href="'+dataURL+'"/>'+cutSVG+'</svg>';
+  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  loadSVG(svg); showMarks=true; $("bMarks").classList.add("on"); draw();
+  say("Cropped the photo to the shape - print-and-cut ready. Print, then Make it! to cut it out.");
+}
+$("eCrop").onclick=cropToShape;
 // Trace tuning: re-trace the cached mask live (no model re-run). Threshold = tighter/looser
 // silhouette; Ignore specks = ImageTracer pathomit (drop small stray loops). Shared debounce.
 let traceTimer=null;
@@ -1149,7 +1182,7 @@ function refreshEditPanel(){
     $("editinfo").textContent = selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
-    $("editdims").style.display="none"; $("esimprow").style.display="none";
+    $("editdims").style.display="none"; $("esimprow").style.display="none"; $("ecroprow").style.display="none";
     return;
   }
   const o=selObj();
@@ -1164,6 +1197,7 @@ function refreshEditPanel(){
   const isPoly = o.el && o.el.tagName && o.el.tagName.toLowerCase()==="polygon";   // Simplify only applies to node-built paths
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = (o.poly.length-1)+" nodes";
+  $("ecroprow").style.display = (refImg && refImg.img) ? "block" : "none";   // crop is offered only when a photo is loaded under the shape
 }
 function setKind(k){
   if(selMulti.length){ const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.kind=k; });
