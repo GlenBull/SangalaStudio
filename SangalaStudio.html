@@ -88,7 +88,7 @@
 </head>
 <body class="denim">
 <header class="denim">
-  <div class="logo"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
+  <div class="logo" id="brand"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen" title="Open an SVG design or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
@@ -96,7 +96,7 @@
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
-    <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
+    <button class="tbtn" id="bTestMenu" style="display:none"><span class="glyph">🧪</span><small>Test</small></button>
     <button class="tbtn" id="bSetup"><span class="glyph">⚙️</span><small>Setup</small></button>
   </div>
   <div class="spacer"></div>
@@ -1385,6 +1385,14 @@ function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
   if(open){t.style.left=Math.max(8,r.left-20)+"px";t.style.top=(r.bottom+8)+"px";}t.style.display=open?"flex":"none";};
 document.addEventListener("click",(e)=>{const t=$("testmenu");if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("bTestMenu").contains(e.target))t.style.display="none";});
+/* ---------- Developer mode: Alt-click the "Sangala Studio" wordmark to show/hide the Test tools.
+   Hidden from novices by default, persisted per machine. Documented in the Tech Manual, not the User Guide. ---------- */
+let devMode=false; try{ devMode = localStorage.getItem("sangalaDev")==="1"; }catch(e){}
+function applyDevMode(){ $("bTestMenu").style.display = devMode ? "" : "none"; if(!devMode) $("testmenu").style.display="none"; }
+applyDevMode();
+$("brand").addEventListener("click",(e)=>{ if(!e.altKey) return; e.preventDefault();
+  devMode=!devMode; try{ localStorage.setItem("sangalaDev", devMode?"1":"0"); }catch(err){}
+  applyDevMode(); say(devMode ? "Developer mode ON - the Test button is shown." : "Developer mode OFF - the Test button is hidden."); });
 $("make").onclick=makeIt;
 $("bPrint").onclick=printSheet;
 $("bMarks").onclick=()=>{ showMarks=!showMarks; $("bMarks").classList.toggle("on",showMarks); draw();
