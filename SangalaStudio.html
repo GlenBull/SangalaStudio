@@ -221,6 +221,8 @@
     <button class="go" id="make" disabled>Make It!</button>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
+    <label id="plateRow" style="display:none;align-items:center;gap:.45rem;cursor:pointer;margin:.55rem 0 .1rem;color:#5a4a34;font-size:.9rem;font-weight:600" title="Show the A1 Mini build plate in the 3D View. Turn off to orbit under the object and see its underside.">
+      <input type="checkbox" id="showPlate" checked style="width:auto;margin:0"> Show the build plate (A1&nbsp;Mini)</label>
     <div id="tracetune" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Silhouette Threshold</h2>
       <input type="range" id="thrRange" min="20" max="235" step="5" value="128" style="width:100%">
@@ -926,13 +928,14 @@ async function exportSTL(){
 $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
-let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null;
+let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=true;
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
   let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
   pvTris.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
-  const b=pvBed(mn,mx), bx0=Math.min(mn[0],b.x0),bx1=Math.max(mx[0],b.x1), by0=Math.min(mn[1],b.y0),by1=Math.max(mx[1],b.y1), bz0=Math.min(0,mn[2]), bz1=mx[2];
+  let bx0=mn[0],bx1=mx[0],by0=mn[1],by1=mx[1],bz0=mn[2],bz1=mx[2];
+  if(pvPlate){ const b=pvBed(mn,mx); bx0=Math.min(bx0,b.x0);bx1=Math.max(bx1,b.x1);by0=Math.min(by0,b.y0);by1=Math.max(by1,b.y1);bz0=Math.min(0,bz0); }   // include the whole bed when it's shown
   pvCenter=[(bx0+bx1)/2,(by0+by1)/2,(bz0+bz1)/2];
   const span=Math.max(bx1-bx0,by1-by0,bz1-bz0)||1; pvBase=Math.min($("pv").width,$("pv").height)*0.62/span;
 }
@@ -951,7 +954,7 @@ function renderPreview(){
     const rx=x*ca-y*sa, ry=x*sa+y*ca;                 // yaw about Z (up)
     const pz=ry*se + z*ce;                            // pitch about X: pz = vertical on screen
     return [cx+rx*scale, cy-pz*scale, ry*ce - z*se]; };   // 3rd = depth into screen (bigger = farther)
-  // ---- build plate (3D-printer bed) at z=0: a gridded plane so Base reads as the gap between the object and the bed ----
+  if(pvPlate){   // ---- build plate (A1 Mini bed) at z=0: gridded plane so Base reads as the gap object-to-bed; toggle off to orbit under the object ----
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   for(const t of pvTris) for(const p of t){ if(p[0]<mnx)mnx=p[0]; if(p[1]<mny)mny=p[1]; if(p[0]>mxx)mxx=p[0]; if(p[1]>mxy)mxy=p[1]; }
   const bed=pvBed([mnx,mny],[mxx,mxy]), gx0=bed.x0,gy0=bed.y0,gx1=bed.x1,gy1=bed.y1, P0=(x,y)=>proj([x,y,0]);
@@ -962,6 +965,7 @@ function renderPreview(){
   for(let y=Math.ceil(gy0/10)*10; y<=gy1; y+=10){ const a=P0(gx0,y),b=P0(gx1,y); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); }
   g.stroke();
   g.strokeStyle="#8b95a4"; g.lineWidth=1.5; g.beginPath(); g.moveTo(q00[0],q00[1]); g.lineTo(q10[0],q10[1]); g.lineTo(q11[0],q11[1]); g.lineTo(q01[0],q01[1]); g.closePath(); g.stroke();   // plate edge
+  }
   const L=[0.38,-0.42,0.82], Ll=Math.hypot(L[0],L[1],L[2]); L[0]/=Ll;L[1]/=Ll;L[2]/=Ll;   // world light from upper-front
   const base=[214,74,48], faces=[];                   // warm brick-red plastic
   for(const t of pvTris){
@@ -980,9 +984,11 @@ function renderPreview(){
     g.beginPath(); g.moveTo(f.a[0],f.a[1]); g.lineTo(f.b[0],f.b[1]); g.lineTo(f.c[0],f.c[1]); g.closePath();
     g.fill(); g.stroke();
   }
-  g.fillStyle="rgba(58,72,90,.85)"; g.textAlign="left"; g.textBaseline="alphabetic";   // bed label
-  g.font="600 "+Math.max(11,Math.round(W*0.024))+"px 'Segoe UI',system-ui,sans-serif";
-  g.fillText("Bambu A1 Mini bed · 180 × 180 mm", 12, H-12);
+  if(pvPlate){   // bed label
+    g.fillStyle="rgba(58,72,90,.85)"; g.textAlign="left"; g.textBaseline="alphabetic";
+    g.font="600 "+Math.max(11,Math.round(W*0.024))+"px 'Segoe UI',system-ui,sans-serif";
+    g.fillText("Bambu A1 Mini bed · 180 × 180 mm", 12, H-12);
+  }
 }
 function openPreview(){
   const {tris,n}=buildTris();
@@ -1004,11 +1010,13 @@ function sizePvToCv(){   // match #pv's box + drawing buffer to the design canva
 function closePreview(){ pvOn=false; $("pv").style.display="none"; $("pvhint").style.display="none"; $("bPreview").classList.remove("on"); }
 function togglePreview(){ pvOn?closePreview():openPreview(); }
 $("bPreview").onclick=togglePreview;
+$("showPlate").onchange=e=>{ pvPlate=e.target.checked; if(pvPlate && pvPitch<0.05) pvPitch=0.05;   // re-frame (bed in/out of view) and re-render if the preview is up
+  if(pvOn){ pvBounds(); renderPreview(); } };
 (function(){ const pv=$("pv");
   pv.addEventListener("mousedown",e=>{ pvDrag=[e.clientX,e.clientY,pvYaw,pvPitch]; e.preventDefault(); });
   window.addEventListener("mousemove",e=>{ if(!pvDrag)return;
     pvYaw=pvDrag[2]+(e.clientX-pvDrag[0])*0.01;
-    pvPitch=Math.max(0.05,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });   // stay at/above the plate
+    pvPitch=Math.max(pvPlate?0.05:-1.45,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });   // plate shown: stay at/above it; hidden: orbit under to see the underside
   window.addEventListener("mouseup",()=>{ pvDrag=null; });
   pv.addEventListener("wheel",e=>{ e.preventDefault(); pvZoom=Math.max(0.25,Math.min(6,pvZoom*Math.exp(-e.deltaY*0.0012))); renderPreview(); },{passive:false});
   window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvBounds(); renderPreview(); } });   // keep the overlay glued to the canvas
@@ -1019,6 +1027,7 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   $("bMode").innerHTML=on?'<span class="glyph">📦</span><small>3D</small>':'<span class="glyph">📐</span><small>2D</small>';   // label flips 2D<->3D each click
   $("bStl").style.display=on?"":"none";
   $("bPreview").style.display=on?"":"none"; if(!on) closePreview();   // 3D preview is a 3D-only tool
+  $("plateRow").style.display=on?"flex":"none";                       // build-plate toggle applies to the 3D preview
   $("tBrick").style.display=on?"":"none";                         // Brick is a 3D/LEGO feature: hide it until 3D is enabled
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
   say(on?"Design in 3D, then Export STL for the 3D printer."      // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
