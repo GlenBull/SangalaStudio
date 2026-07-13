@@ -232,6 +232,10 @@
         <button class="ebtn" id="ePrint" disabled>🖨️ Print Only</button>
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
       </div>
+      <div id="groupsrow" style="margin-top:.4rem;display:none">
+        <button class="ebtn" id="eGroup" style="width:100%">▦ Group</button>
+        <button class="ebtn" id="eUngroup" style="width:100%;display:none">▤ Ungroup</button>
+      </div>
       <div id="esimprow" style="margin-top:.4rem;display:none;align-items:center;gap:.5rem">
         <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify Nodes</button>
         <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
@@ -265,6 +269,7 @@ let selId=null;              // currently selected object id (null = nothing sel
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
 let selImg2=false;           // the reference photo picked (Shift+click) as Combine's 2nd operand: Intersect crops the photo to the shape
 let selMulti=[];             // marquee multi-selection (object ids); when non-empty, single-select (selId) is cleared
+let groupSeq=0;              // group ids: objects sharing a non-null .group select and move as one unit
 let penPts=[];               // Pen tool: in-progress polygon vertices (design mm)
 let penHover=null;           // Pen tool: current cursor (placed mm) for the rubber-band segment
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
@@ -1292,12 +1297,17 @@ function refreshEditPanel(){
   const panel=$("editpanel");
   if(selMulti.length){   // marquee multi-selection: reclassify / delete apply to all; no per-object dims
     panel.style.display="block";
-    $("editinfo").textContent = selMulti.length+" objects selected. Change them all to:";
+    const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
+    const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
+    $("editinfo").textContent = (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none";
+    $("groupsrow").style.display="block";
+    $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     return;
   }
+  $("groupsrow").style.display="none";
   const o=selObj();
   if(!o){ panel.style.display="none"; return; }   // panel appears only while a shape is selected
   panel.style.display="block";
@@ -1329,6 +1339,18 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
+// Group: bind the current multi-selection into one unit (shared .group id) so it moves/selects together.
+function groupSel(){
+  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then Group."); return; }
+  groupSeq++; const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.group=groupSeq; });
+  refreshEditPanel(); draw(); say("Grouped "+selMulti.length+" objects - they now select and move as one. Ungroup to separate them.");
+}
+function ungroupSel(){
+  const set=new Set(selMulti); let n=0; objects.forEach(o=>{ if(set.has(o.id)&&o.group!=null){ o.group=null; n++; } });
+  refreshEditPanel(); draw(); say("Ungrouped "+n+" objects.");
+}
+$("eGroup").onclick=groupSel;
+$("eUngroup").onclick=ungroupSel;
 // Simplify: reduce a polygon's node count (Douglas-Peucker), escalating each press.
 // Works on any node-built path - traced photo outlines especially.
 function simplifySel(){
@@ -1393,7 +1415,10 @@ cv.addEventListener("click",(e)=>{
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
     if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
     else if(onImg && refImg && refImg.img){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
-  } else if(hit){ selId=hit.id; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine."); }
+  } else if(hit && hit.group!=null){   // a grouped object -> select the whole group (moves/deletes as one)
+    selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+    say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
+  else if(hit){ selId=hit.id; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine."); }
   else if(onImg){ selId=null; selId2=null; selImg2=false; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
   else { selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
@@ -1426,6 +1451,9 @@ cv.addEventListener("mousedown",(e)=>{
       if(p.length===1) return Math.hypot(mx-p[0][0],my-p[0][1])*k<=8;
       for(let i=0;i+1<p.length;i++) if(segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1])*k<=8) return true;
       const bb=bbox([p]); return mx>=bb[0]&&mx<=bb[2]&&my>=bb[1]&&my<=bb[3]; };
+    const gHit=objects.find(o=>o.group!=null && onObjId(o));   // pressing on a grouped object selects its whole group first, so the drag moves the group
+    if(gHit){ const g=objects.filter(o=>o.group===gHit.group).map(o=>o.id);
+      if(!(selMulti.length===g.length && g.every(id=>selMulti.includes(id)))){ selMulti=g; selId=null; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; } }
     if(selMulti.length && selMulti.some(id=>{const o=objects.find(x=>x.id===id);return o&&onObjId(o);})){   // drag any member -> move the group
       drag={mode:"groupmove",start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],moved:false,
         orig:selMulti.map(id=>{const o=objects.find(x=>x.id===id),N=s=>+o.el.getAttribute(s)||0,t=o.el.tagName.toLowerCase();
