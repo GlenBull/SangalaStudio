@@ -1116,14 +1116,14 @@ function startDraw(e){
 function makeBrick(x0,y0){
   ensureDoc();
   const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
+  const gid=++groupSeq, ids=[];   // the brick's body + studs are auto-grouped so it moves as one
   const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0});
-  objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]]});
-  const bodyId=objSeq;
+  objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]],group:gid}); ids.push(objSeq);
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
-    objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r)}); }
-  selId=bodyId; selId2=null; selMulti=[]; bgImg=null; draw(); refreshEditPanel();
-  say("Added a 2 x 3 LEGO brick: 24 x 16 x 9.6 mm body + six 4.8 mm studs.");
+    objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r),group:gid}); ids.push(objSeq); }
+  selMulti=ids; selId=null; selId2=null; bgImg=null; draw(); refreshEditPanel();
+  say("Added a grouped 2 x 3 LEGO brick (24 x 16 x 9.6 mm body + six studs) - drag to move it as one, or Ungroup to edit a part.");
 }
 // Brick tool: click the canvas to place the brick's top-left there, then auto-release to select
 function placeBrick(e){
