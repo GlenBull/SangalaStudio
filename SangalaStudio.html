@@ -628,7 +628,7 @@ async function connect(){
   say("Connecting...");
   try{
     const r=await fetch("/connect"); const j=await r.json();
-    if(j.ok){connected=true;MAT_W=j.width||203;$("conn").textContent="Connected: "+j.model+" ("+j.fw+")";
+    if(j.ok){connected=true;MAT_W=j.width||203;$("conn").textContent="Connected: "+j.model;
       $("make").disabled=false;say("Connected. Open a design or load the test square.");draw();}
     else{connected=false;$("conn").textContent="Not connected";say("Could not connect: "+j.error);}
   }catch(e){say("Could not reach the helper: "+e.message);}
