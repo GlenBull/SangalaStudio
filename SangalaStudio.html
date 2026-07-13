@@ -226,7 +226,7 @@
     <div id="editpanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Selected object</h2>
       <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
-      <div class="two" style="margin-top:.5rem">
+      <div class="two" id="kindrow1" style="margin-top:.5rem">
         <button class="ebtn" id="eCut" disabled>✂️ Cut</button>
         <button class="ebtn" id="eScore" disabled>⁝ Fold</button>
       </div>
@@ -1308,6 +1308,11 @@ function applyDim(dim,v){
 }
 $("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: survives readout rebuilds
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
+function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) concept; hide it in 3D and let Delete fill the row
+  $("kindrow1").style.display = mode3D?"none":"";
+  $("ePrint").style.display   = mode3D?"none":"";
+  $("eDelete").style.gridColumn = mode3D?"1/-1":"";
+}
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   const panel=$("editpanel");
@@ -1315,7 +1320,8 @@ function refreshEditPanel(){
     panel.style.display="block";
     const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
     const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
-    $("editinfo").textContent = (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
+    setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
+    $("editinfo").textContent = (isGroup?"Group of ":"")+selMulti.length+" objects selected"+(mode3D?".":". Change them all to:");
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none";
@@ -1327,7 +1333,8 @@ function refreshEditPanel(){
   const o=selObj();
   if(!o){ panel.style.display="none"; return; }   // panel appears only while a shape is selected
   panel.style.display="block";
-  $("editinfo").textContent = "Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:";
+  setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
+  $("editinfo").textContent = mode3D ? "Selected object." : ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:");
   showDims(o);
   ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
   $("eCut").classList.toggle("on",   o.kind==="cut");
