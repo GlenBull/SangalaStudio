@@ -51,13 +51,14 @@
   .ltbtn:disabled:hover{background:linear-gradient(#fffdf7,#e8dcc2)}
   #setup{position:fixed;z-index:30;display:none;width:272px}
   .panel{border-radius:12px;padding:.7rem;border:2px solid #d8c4a0;background:#efe0c4;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+  #fab{display:flex;flex-direction:column}   /* so the zoom control can pin to the bottom */
   .panel h2{margin:.1rem 0 .5rem;font-size:1.05rem;color:#7a3b12}
   label.fld{display:block;font-size:.8rem;color:#6b5a44;margin:.5rem 0 .1rem}
   select,input[type=number]{font-size:1rem;padding:.2rem .3rem;border:1px solid #cbb78f;border-radius:6px;background:#fffaf0;width:100%}
   input.dimin{width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
   .board{position:relative;border-radius:12px;padding:14px;border:6px solid #8a6a44;box-shadow:inset 0 0 24px rgba(60,40,20,.4)}
-  #zoomctl{position:absolute;left:24px;bottom:24px;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,.92);border:1px solid #c9b48c;border-radius:9px;padding:3px 5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.82rem;color:#5a4326;user-select:none}
+  #zoomctl{margin-top:auto;align-self:center;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,.92);border:1px solid #c9b48c;border-radius:9px;padding:3px 5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.82rem;color:#5a4326;user-select:none}
   #pv{position:absolute;border-radius:8px;cursor:grab;touch-action:none}
   #pv:active{cursor:grabbing}
   #pvhint{position:absolute;left:50%;top:22px;transform:translateX(-50%);background:rgba(30,44,62,.82);color:#eaf1f8;font-size:.8rem;padding:.3rem .7rem;border-radius:20px;user-select:none;pointer-events:none;white-space:nowrap}
@@ -203,18 +204,12 @@
     <button class="ltbtn" id="bRemoveBg" style="display:none" title="Remove the background from the selected photo to make a silhouette">🪄<small>Remove BG</small></button>
   </div>
   <div class="board cork">
-    <div id="zoomctl">
-      <button id="zoomOut" title="Zoom out">&minus;</button>
-      <span id="zoomPct">100%</span>
-      <button id="zoomIn" title="Zoom in">+</button>
-      <button id="zoomFit" title="Fit the whole page">Fit</button>
-    </div>
     <canvas id="cv" width="560" height="760"></canvas>
     <canvas id="pv" width="560" height="760" style="display:none"></canvas>
     <div id="pvhint" style="display:none">Drag to rotate &middot; Scroll to zoom &middot; press <b>3D View</b> again to edit</div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="fab">
     <h2 class="marker">Fabricate</h2>
     <div class="conn" id="conn">Not connected</div>
     <button class="go" id="make" disabled>Make It!</button>
@@ -252,6 +247,12 @@
       </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
       <div id="brickctl" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
+    </div>
+    <div id="zoomctl">
+      <button id="zoomOut" title="Zoom out">&minus;</button>
+      <span id="zoomPct">100%</span>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomFit" title="Fit the whole page">Fit</button>
     </div>
   </div>
 </div>
