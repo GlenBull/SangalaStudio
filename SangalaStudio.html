@@ -58,6 +58,9 @@
   .two{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
   .board{position:relative;border-radius:12px;padding:14px;border:6px solid #8a6a44;box-shadow:inset 0 0 24px rgba(60,40,20,.4)}
   #zoomctl{position:absolute;left:24px;bottom:24px;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,.92);border:1px solid #c9b48c;border-radius:9px;padding:3px 5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.82rem;color:#5a4326;user-select:none}
+  #pv{position:absolute;border-radius:8px;cursor:grab;touch-action:none}
+  #pv:active{cursor:grabbing}
+  #pvhint{position:absolute;left:50%;top:22px;transform:translateX(-50%);background:rgba(30,44,62,.82);color:#eaf1f8;font-size:.8rem;padding:.3rem .7rem;border-radius:20px;user-select:none;pointer-events:none;white-space:nowrap}
   #zoomctl button{width:26px;height:24px;border:1px solid #c9b48c;border-radius:6px;background:linear-gradient(#fffdf7,#efe6d3);cursor:pointer;font-size:1rem;line-height:1;color:#7a3b12}
   #zoomctl button:hover{background:#fff}
   #zoomctl #zoomFit{width:auto;padding:0 7px;font-size:.78rem}
@@ -93,6 +96,7 @@
     <button class="tbtn" id="bUseCut" style="display:none"><span class="glyph">✅</span><small>Confirm</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
+    <button class="tbtn" id="bPreview" style="display:none" title="Rotatable 3D preview of the model"><span class="glyph">👁️</span><small>3D View</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu"><span class="glyph">🧪</span><small>Test</small></button>
@@ -207,6 +211,8 @@
       <button id="zoomFit" title="Fit the whole page">Fit</button>
     </div>
     <canvas id="cv" width="560" height="760"></canvas>
+    <canvas id="pv" width="560" height="760" style="display:none"></canvas>
+    <div id="pvhint" style="display:none">Drag to rotate &middot; Scroll to zoom &middot; press <b>3D View</b> again to edit</div>
   </div>
 
   <div class="panel">
@@ -901,25 +907,97 @@ function stlAscii(tris,name){
     s+=" endloop\nendfacet\n"; });
   return s+"endsolid "+name+"\n";
 }
-async function exportSTL(){
+function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
-  if(!bricks.length&&!plain.length){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   let tris=[];
   bricks.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0; tris=tris.concat(brickTris(g("x"),g("y"),g("data-fit"))); });   // hollow brick from body origin; Fit = per-brick clutch clearance
   plain.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase(), z0=g("data-z0"), z1=z0+g("data-z");
     tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1) : cylTris(g("cx"),g("cy"),g("r"),z0,z1)); });
-  const n=bricks.length+plain.length;
+  return {tris, n:bricks.length+plain.length, bricks:bricks.length};
+}
+async function exportSTL(){
+  const {tris,n,bricks}=buildTris();
+  if(!n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
-  if(name) say("Exported "+name+" - "+n+" object"+(n!==1?"s":"")+(bricks.length?" ("+bricks.length+" hollow brick"+(bricks.length!==1?"s":"")+")":"")+", "+tris.length+" triangles.");
+  if(name) say("Exported "+name+" - "+n+" object"+(n!==1?"s":"")+(bricks?" ("+bricks+" hollow brick"+(bricks!==1?"s":"")+")":"")+", "+tris.length+" triangles.");
 }
 $("bStl").onclick=exportSTL;
+
+/* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
+let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null;
+function pvFit(){   // center the model and scale it to ~62% of the preview canvas
+  let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
+  pvTris.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
+  pvCenter=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
+  const span=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  pvBase=Math.min($("pv").width,$("pv").height)*0.62/span;
+}
+function renderPreview(){
+  const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
+  const bg=g.createLinearGradient(0,0,0,H); bg.addColorStop(0,"#dfe7ef"); bg.addColorStop(1,"#c3cedb");
+  g.fillStyle=bg; g.fillRect(0,0,W,H);
+  const ca=Math.cos(pvYaw),sa=Math.sin(pvYaw),ce=Math.cos(pvPitch),se=Math.sin(pvPitch);
+  const scale=pvBase*pvZoom, cx=W/2, cy=H/2, C=pvCenter;
+  const proj=p=>{ const x=p[0]-C[0], y=p[1]-C[1], z=p[2]-C[2];
+    const rx=x*ca-y*sa, ry=x*sa+y*ca;                 // yaw about Z (up)
+    const pz=ry*se + z*ce;                            // pitch about X: pz = vertical on screen
+    return [cx+rx*scale, cy-pz*scale, ry*ce - z*se]; };   // 3rd = depth into screen (bigger = farther)
+  const L=[0.38,-0.42,0.82], Ll=Math.hypot(L[0],L[1],L[2]); L[0]/=Ll;L[1]/=Ll;L[2]/=Ll;   // world light from upper-front
+  const base=[214,74,48], faces=[];                   // warm brick-red plastic
+  for(const t of pvTris){
+    const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],
+          vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;   // outward normal
+    if((nx*sa+ny*ca)*ce - nz*se >= 0) continue;       // backface cull: rotated-normal depth points away
+    const a=proj(t[0]),b=proj(t[1]),c=proj(t[2]);
+    const shade=0.34+0.66*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+    faces.push({a,b,c,shade,depth:(a[2]+b[2]+c[2])/3});
+  }
+  faces.sort((p,q)=>q.depth-p.depth);                 // painter's: farthest first
+  for(const f of faces){ const s=f.shade,
+      col="rgb("+(base[0]*s|0)+","+(base[1]*s|0)+","+(base[2]*s|0)+")";
+    g.fillStyle=col; g.strokeStyle=col; g.lineWidth=1; // same-color hairline stroke closes seams between a quad's two triangles
+    g.beginPath(); g.moveTo(f.a[0],f.a[1]); g.lineTo(f.b[0],f.b[1]); g.lineTo(f.c[0],f.c[1]); g.closePath();
+    g.fill(); g.stroke();
+  }
+}
+function openPreview(){
+  const {tris,n}=buildTris();
+  if(!n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  pvTris=tris; pvOn=true;
+  $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
+  $("pvhint").style.display="block"; $("bPreview").classList.add("on");
+  pvFit(); renderPreview();
+  say("3D preview - drag to rotate, scroll to zoom. Press 3D View again to edit.");
+}
+function sizePvToCv(){   // match #pv's box + drawing buffer to the design canvas's current on-screen rectangle
+  const pv=$("pv"), board=cv.parentElement;
+  const cr=cv.getBoundingClientRect(), br=board.getBoundingClientRect();
+  pv.style.left=(cr.left-br.left-board.clientLeft)+"px";
+  pv.style.top =(cr.top -br.top -board.clientTop )+"px";
+  pv.style.width=cr.width+"px"; pv.style.height=cr.height+"px";
+  pv.width=Math.max(1,Math.round(cr.width)); pv.height=Math.max(1,Math.round(cr.height));   // square-pixel buffer at the shown size
+}
+function closePreview(){ pvOn=false; $("pv").style.display="none"; $("pvhint").style.display="none"; $("bPreview").classList.remove("on"); }
+function togglePreview(){ pvOn?closePreview():openPreview(); }
+$("bPreview").onclick=togglePreview;
+(function(){ const pv=$("pv");
+  pv.addEventListener("mousedown",e=>{ pvDrag=[e.clientX,e.clientY,pvYaw,pvPitch]; e.preventDefault(); });
+  window.addEventListener("mousemove",e=>{ if(!pvDrag)return;
+    pvYaw=pvDrag[2]+(e.clientX-pvDrag[0])*0.01;
+    pvPitch=Math.max(-1.45,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });
+  window.addEventListener("mouseup",()=>{ pvDrag=null; });
+  pv.addEventListener("wheel",e=>{ e.preventDefault(); pvZoom=Math.max(0.25,Math.min(6,pvZoom*Math.exp(-e.deltaY*0.0012))); renderPreview(); },{passive:false});
+  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvFit(); renderPreview(); } });   // keep the overlay glued to the canvas
+})();
 function setMode3D(on){   // single source of truth for 2D<->3D; driven by the header toggle AND the Setup checkbox
   mode3D=on;
   $("bMode").classList.toggle("on",on);                          // blue .on glyph tile when in 3D
   $("bMode").innerHTML=on?'<span class="glyph">📦</span><small>3D</small>':'<span class="glyph">📐</span><small>2D</small>';   // label flips 2D<->3D each click
   $("bStl").style.display=on?"":"none";
+  $("bPreview").style.display=on?"":"none"; if(!on) closePreview();   // 3D preview is a 3D-only tool
   $("tBrick").style.display=on?"":"none";                         // Brick is a 3D/LEGO feature: hide it until 3D is enabled
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
   say(on?"Design in 3D, then Export STL for the 3D printer."      // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
