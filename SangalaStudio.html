@@ -405,11 +405,14 @@ function loadSVG(text){
       poly.push([X,Y]);}
     return poly.length>=2?simplify(poly,0.08):null;
   }
+  const gmap={};   // remap saved data-group ids to fresh session group ids (avoid collisions with groupSeq)
   els.forEach(el=>{
     // silo files classify by line style; a plain (no-red) design cuts every shape (old behaviour).
     const kind = silo ? classifyKind(el) : "cut";
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
-    objects.push({id:++objSeq, el:el, kind:kind, orig:kind, poly:poly});
+    const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
+    let grp=null; if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; grp=gmap[dg]; }
+    objects.push({id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp});
   });
   if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
   if(!silo) normalize();
@@ -808,6 +811,8 @@ async function saveSVG(){
   if(!svgEl||!objects.length){say("Add a shape first, then Save SVG.");return;}
   const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
   const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
+  objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping so it survives Save -> reopen
+    if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group"); });
   const clone=svgEl.cloneNode(true);
   clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
   clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
