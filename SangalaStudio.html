@@ -898,7 +898,8 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock){
          ...boxTris(x0,y0,wall,H,0,Zt), ...boxTris(x1-wall,y0,wall,H,0,Zt));     // left + right walls
   t.push(...boxTris(x0,y0,W,H,Zc,Zt));                                           // roof slab (overlaps wall tops)
   if(studs) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs on top (off = smooth top, e.g. a wing)
-  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                  // anti-stud tubes underneath (off = smooth bottom); interior grid only
+  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                  // anti-stud tubes to clip onto studs below (interior grid only)
+  else      t.push(...boxTris(x0,y0,W,H,0,Math.min(wall,Zt)));                                                                        // no dock -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
 function stlAscii(tris,name){
@@ -1445,11 +1446,11 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left">'+label+':</td>'
      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'"></td>'
      +'<td style="padding-left:.15rem;color:#8a7350">'+unit+'</td>';
-  const flag=(f,label,on)=>'<label style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
+  const flag=(f,label,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
   return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
     +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
     +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,0,"mm")+'</tr></table>'
-    +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn)+flag("dock","Dock (bottom)",dockOn)+'</div>';
+    +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Dock (bottom)",dockOn,"On = anti-stud tubes to clip onto studs below. Off = flat closed base to glue to a surface.")+'</div>';
 }
 function showBrickCtl(o){ const el=$("brickctl");
   if(!o||!mode3D){ el.style.display="none"; return; }
