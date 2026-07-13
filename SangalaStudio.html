@@ -129,9 +129,6 @@
       <div><label class="fld">From Top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
     </div>
     <div class="hint">Set your material and position, then close Setup and press Make It!</div>
-    <label class="fld" style="margin-top:.7rem;display:flex;align-items:center;gap:.4rem;cursor:pointer">
-      <input type="checkbox" id="mode3d" style="width:auto"> Enable 3D (extrude &amp; STL export)</label>
-    <div class="hint" style="margin-top:.2rem">For 3D printing only. Leave off for die-cutter (2D) work.</div>
   </div>
 
 
@@ -920,7 +917,6 @@ async function exportSTL(){
 $("bStl").onclick=exportSTL;
 function setMode3D(on){   // single source of truth for 2D<->3D; driven by the header toggle AND the Setup checkbox
   mode3D=on;
-  $("mode3d").checked=on;                                         // keep the Setup checkbox in sync
   $("bMode").classList.toggle("on",on);                          // blue .on glyph tile when in 3D
   $("bMode").innerHTML=on?'<span class="glyph">📦</span><small>3D</small>':'<span class="glyph">📐</span><small>2D</small>';   // label flips 2D<->3D each click
   $("bStl").style.display=on?"":"none";
@@ -931,7 +927,6 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   if(!on && activeTool==="brick") setTool("select");             // don't leave a hidden tool active
   refreshEditPanel();
 }
-$("mode3d").onchange=e=>setMode3D(e.target.checked);
 $("bMode").onclick=()=>setMode3D(!mode3D);                        // one button, label toggles 2D<->3D
 $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test Square loaded (30 mm).");};
 $("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
