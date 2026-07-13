@@ -889,16 +889,16 @@ function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + in
 }
 // A hollow 2x3 LEGO brick from primitive closed solids (slicer fuses the overlaps):
 // 4 wall boxes + roof slab + 6 stud cylinders + 2 tubes. Standard dims, origin (x0,y0).
-function brickTris(x0,y0,fit,cols,rows,Zt){
-  cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6);   // cols x rows studs; Zt = brick height (extrude depth)
+function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock){
+  cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
   const U=8, W=cols*U, H=rows*U, roof=1.0, wall=1.2, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
   // Fit = clutch clearance (mm): trim the stud diameter so mating printed bricks aren't over-tight. 0 = nominal.
   const studR=Math.max(1.5, 2.4 - (fit||0)/2), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   t.push(...boxTris(x0,y0,W,wall,0,Zt), ...boxTris(x0,y1-wall,W,wall,0,Zt),      // front + back walls
          ...boxTris(x0,y0,wall,H,0,Zt), ...boxTris(x1-wall,y0,wall,H,0,Zt));     // left + right walls
   t.push(...boxTris(x0,y0,W,H,Zc,Zt));                                           // roof slab (overlaps wall tops)
-  for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs sink into roof
-  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                 // anti-stud tubes at interior grid points (only when cols>=2 & rows>=2)
+  if(studs) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs on top (off = smooth top, e.g. a wing)
+  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                  // anti-stud tubes underneath (off = smooth bottom); interior grid only
   return t;
 }
 function stlAscii(tris,name){
@@ -916,7 +916,7 @@ function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH th
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
   let tris=[];
-  bricks.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0; tris=tris.concat(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6)); });   // hollow brick: origin + Fit + cols/rows + height
+  bricks.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0"; tris=tris.concat(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"))); });   // hollow brick: origin + Fit + cols/rows + height + studs/dock
   plain.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase(), z0=g("data-z0"), z1=z0+g("data-z");
     tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1) : cylTris(g("cx"),g("cy"),g("r"),z0,z1)); });
   return {tris, n:bricks.length+plain.length, bricks:bricks.length};
@@ -1243,7 +1243,7 @@ function makeBrick(x0,y0){
   ensureDoc();
   const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
   const gid=++groupSeq, ids=[];   // the brick's body + studs are auto-grouped so it moves as one
-  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2});
+  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1"});
   objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]],group:gid}); ids.push(objSeq);
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
@@ -1258,8 +1258,8 @@ function rebuildBrick(o){   // regenerate a brick's body size + stud grid from i
   o.poly=[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]];
   const old=objects.filter(x=>x.group===gid && x.el&&x.el.getAttribute&&x.el.getAttribute("data-brickpart"));   // drop old studs
   old.forEach(s=>{ if(s.el&&s.el.remove) s.el.remove(); }); const oset=new Set(old.map(s=>s.id)); objects=objects.filter(x=>!oset.has(x.id));
-  const ids=[o.id];
-  for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
+  const ids=[o.id], studsOn=o.el.getAttribute("data-studs")!=="0";
+  if(studsOn) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;   // 2D stud circles only when studs are on (smooth top = none)
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":1.8,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r),group:gid}); ids.push(objSeq); }
   selMulti=ids; selId=null; selId2=null;   // keep the whole brick group selected
@@ -1440,13 +1440,16 @@ function selectedBrick(){   // the brick body object if the current selection is
 }
 function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const cols=Math.max(1,Math.round(g("data-cols")||3)), rows=Math.max(1,Math.round(g("data-rows")||2)),
-        depth=Math.round((g("data-z")||9.6)*10)/10, fit=Math.round(g("data-fit")*10)/10;
+        depth=Math.round((g("data-z")||9.6)*10)/10, fit=Math.round(g("data-fit")*10)/10,
+        studsOn=o.el.getAttribute("data-studs")!=="0", dockOn=o.el.getAttribute("data-dock")!=="0";
   const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left">'+label+':</td>'
      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'"></td>'
      +'<td style="padding-left:.15rem;color:#8a7350">'+unit+'</td>';
+  const flag=(f,label,on)=>'<label style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
   return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
     +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
-    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,0,"mm")+'</tr></table>';
+    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,0,"mm")+'</tr></table>'
+    +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn)+flag("dock","Dock (bottom)",dockOn)+'</div>';
 }
 function showBrickCtl(o){ const el=$("brickctl");
   if(!o||!mode3D){ el.style.display="none"; return; }
@@ -1458,7 +1461,14 @@ function applyBrickDim(dim,v,live){ const o=selectedBrick(); if(!o) return;
   if(dim==="z"){ o.el.setAttribute("data-z", fmtn(Math.max(3.2,v))); pvRefresh(); if(!live) showBrickCtl(o); return; }   // extrude height; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit", fmtn(Math.max(0,v))); pvRefresh(); if(!live) showBrickCtl(o); return; }
 }
-const onBrickEdit=(e,live)=>{ const el=e.target; if(el&&el.dataset&&el.dataset.brickdim!=null) applyBrickDim(el.dataset.brickdim, +el.value||0, live); };
+function applyBrickFlag(flag,on){ const o=selectedBrick(); if(!o) return;
+  o.el.setAttribute(flag==="studs"?"data-studs":"data-dock", on?"1":"0");
+  if(flag==="studs"){ rebuildBrick(o); draw(); refreshEditPanel(); }   // studs also add/remove the 2D stud circles
+  pvRefresh();
+}
+const onBrickEdit=(e,live)=>{ const el=e.target;
+  if(el&&el.dataset&&el.dataset.brickdim!=null) applyBrickDim(el.dataset.brickdim, +el.value||0, live);
+  else if(el&&el.dataset&&el.dataset.brickflag!=null && !live) applyBrickFlag(el.dataset.brickflag, el.checked); };   // checkbox: handle on change only
 $("brickctl").addEventListener("input",  e=>onBrickEdit(e,true));
 $("brickctl").addEventListener("change", e=>onBrickEdit(e,false));
 function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) concept; hide it in 3D and let Delete fill the row
