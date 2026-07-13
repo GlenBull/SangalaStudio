@@ -927,12 +927,16 @@ $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null;
-function pvFit(){   // center the model and scale it to ~62% of the preview canvas
+function pvBounds(refit){   // recenter on the model; if refit, also set the fit scale (~62% of the canvas)
   let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
   pvTris.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
   pvCenter=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
-  const span=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
-  pvBase=Math.min($("pv").width,$("pv").height)*0.62/span;
+  if(refit){ const span=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1; pvBase=Math.min($("pv").width,$("pv").height)*0.62/span; }
+}
+function pvRefresh(){   // live update: rebuild the tris from the current model, keep the camera (recenter only), re-render
+  if(!pvOn) return;
+  const b=buildTris(); if(!b.n){ closePreview(); return; }   // last 3D object removed -> leave preview
+  pvTris=b.tris; pvBounds(false); renderPreview();
 }
 function renderPreview(){
   const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
@@ -969,7 +973,7 @@ function openPreview(){
   pvTris=tris; pvOn=true;
   $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
-  pvFit(); renderPreview();
+  pvBounds(true); renderPreview();
   say("3D preview - drag to rotate, scroll to zoom. Press 3D View again to edit.");
 }
 function sizePvToCv(){   // match #pv's box + drawing buffer to the design canvas's current on-screen rectangle
@@ -990,7 +994,7 @@ $("bPreview").onclick=togglePreview;
     pvPitch=Math.max(-1.45,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });
   window.addEventListener("mouseup",()=>{ pvDrag=null; });
   pv.addEventListener("wheel",e=>{ e.preventDefault(); pvZoom=Math.max(0.25,Math.min(6,pvZoom*Math.exp(-e.deltaY*0.0012))); renderPreview(); },{passive:false});
-  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvFit(); renderPreview(); } });   // keep the overlay glued to the canvas
+  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvBounds(true); renderPreview(); } });   // keep the overlay glued to the canvas
 })();
 function setMode3D(on){   // single source of truth for 2D<->3D; driven by the header toggle AND the Setup checkbox
   mode3D=on;
@@ -1370,8 +1374,8 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v){
   const o=selObj(); if(!o||!o.el) return;
-  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); showDims(o); return; }   // depth / base Z; no 2D change
-  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); showDims(o); return; }   // brick clutch clearance; no 2D change
+  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); showDims(o); pvRefresh(); return; }   // depth / base Z; no 2D change, but the 3D preview updates live
+  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); showDims(o); pvRefresh(); return; }   // brick clutch clearance; no 2D change
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
@@ -1382,7 +1386,7 @@ function applyDim(dim,v){
     o.el.setAttribute("cx",fmtn(cx));o.el.setAttribute("cy",fmtn(cy));o.el.setAttribute("r",fmtn(r));
     o.poly=circlePoly(cx,cy,r);
   }
-  draw(); showDims(o);
+  draw(); showDims(o); pvRefresh();
 }
 $("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: survives readout rebuilds
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
