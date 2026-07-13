@@ -1372,10 +1372,10 @@ function dimText(o){
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
 // apply one edited dimension to the selected shape, keeping the other (exact) values
-function applyDim(dim,v){
+function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
-  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); showDims(o); pvRefresh(); return; }   // depth / base Z; no 2D change, but the 3D preview updates live
-  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); showDims(o); pvRefresh(); return; }   // brick clutch clearance; no 2D change
+  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }   // depth / base Z; no 2D change, but the 3D preview updates live
+  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }   // brick clutch clearance; no 2D change
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
@@ -1386,10 +1386,12 @@ function applyDim(dim,v){
     o.el.setAttribute("cx",fmtn(cx));o.el.setAttribute("cy",fmtn(cy));o.el.setAttribute("r",fmtn(r));
     o.poly=circlePoly(cx,cy,r);
   }
-  draw(); showDims(o); pvRefresh();
+  draw(); if(!live)showDims(o); pvRefresh();
 }
-$("editdims").addEventListener("change",e=>{ const el=e.target;   // delegated: survives readout rebuilds
-  if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0); });
+const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
+  if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0, live); };
+$("editdims").addEventListener("input",  e=>onDimEdit(e,true));    // live: spinner steps and typing update the preview immediately
+$("editdims").addEventListener("change", e=>onDimEdit(e,false));   // commit (blur / Enter): also re-render the rounded readout
 function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) concept; hide it in 3D and let Delete fill the row
   $("kindrow1").style.display = mode3D?"none":"";
   $("ePrint").style.display   = mode3D?"none":"";
