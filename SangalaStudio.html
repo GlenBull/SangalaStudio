@@ -927,16 +927,18 @@ $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null;
-function pvBounds(refit){   // recenter on the model; if refit, also set the fit scale (~62% of the canvas)
+const PV_MGN=(mn,mx)=>Math.max(6, 0.2*Math.max(mx[0]-mn[0], mx[1]-mn[1]));   // build-plate margin around the model footprint
+function pvBounds(){   // fit/center on the model PLUS the build plate at z=0, so the Base gap is always framed
   let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
   pvTris.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
-  pvCenter=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
-  if(refit){ const span=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1; pvBase=Math.min($("pv").width,$("pv").height)*0.62/span; }
+  const m=PV_MGN(mn,mx), bx0=mn[0]-m,bx1=mx[0]+m, by0=mn[1]-m,by1=mx[1]+m, bz0=Math.min(0,mn[2]), bz1=mx[2];
+  pvCenter=[(bx0+bx1)/2,(by0+by1)/2,(bz0+bz1)/2];
+  const span=Math.max(bx1-bx0,by1-by0,bz1-bz0)||1; pvBase=Math.min($("pv").width,$("pv").height)*0.62/span;
 }
-function pvRefresh(){   // live update: rebuild the tris from the current model, keep the camera (recenter only), re-render
+function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so Base/Depth read against the stationary plate
   if(!pvOn) return;
   const b=buildTris(); if(!b.n){ closePreview(); return; }   // last 3D object removed -> leave preview
-  pvTris=b.tris; pvBounds(false); renderPreview();
+  pvTris=b.tris; renderPreview();
 }
 function renderPreview(){
   const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
@@ -948,6 +950,17 @@ function renderPreview(){
     const rx=x*ca-y*sa, ry=x*sa+y*ca;                 // yaw about Z (up)
     const pz=ry*se + z*ce;                            // pitch about X: pz = vertical on screen
     return [cx+rx*scale, cy-pz*scale, ry*ce - z*se]; };   // 3rd = depth into screen (bigger = farther)
+  // ---- build plate (3D-printer bed) at z=0: a gridded plane so Base reads as the gap between the object and the bed ----
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(const t of pvTris) for(const p of t){ if(p[0]<mnx)mnx=p[0]; if(p[1]<mny)mny=p[1]; if(p[0]>mxx)mxx=p[0]; if(p[1]>mxy)mxy=p[1]; }
+  const pm=PV_MGN([mnx,mny],[mxx,mxy]), gx0=mnx-pm,gy0=mny-pm,gx1=mxx+pm,gy1=mxy+pm, P0=(x,y)=>proj([x,y,0]);
+  const q00=P0(gx0,gy0),q10=P0(gx1,gy0),q11=P0(gx1,gy1),q01=P0(gx0,gy1);
+  g.fillStyle="#c9cfd8"; g.beginPath(); g.moveTo(q00[0],q00[1]); g.lineTo(q10[0],q10[1]); g.lineTo(q11[0],q11[1]); g.lineTo(q01[0],q01[1]); g.closePath(); g.fill();
+  g.strokeStyle="rgba(110,122,140,.45)"; g.lineWidth=1; g.beginPath();
+  for(let x=Math.ceil(gx0/10)*10; x<=gx1; x+=10){ const a=P0(x,gy0),b=P0(x,gy1); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); }   // 10 mm grid
+  for(let y=Math.ceil(gy0/10)*10; y<=gy1; y+=10){ const a=P0(gx0,y),b=P0(gx1,y); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); }
+  g.stroke();
+  g.strokeStyle="#8b95a4"; g.lineWidth=1.5; g.beginPath(); g.moveTo(q00[0],q00[1]); g.lineTo(q10[0],q10[1]); g.lineTo(q11[0],q11[1]); g.lineTo(q01[0],q01[1]); g.closePath(); g.stroke();   // plate edge
   const L=[0.38,-0.42,0.82], Ll=Math.hypot(L[0],L[1],L[2]); L[0]/=Ll;L[1]/=Ll;L[2]/=Ll;   // world light from upper-front
   const base=[214,74,48], faces=[];                   // warm brick-red plastic
   for(const t of pvTris){
@@ -973,7 +986,7 @@ function openPreview(){
   pvTris=tris; pvOn=true;
   $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
-  pvBounds(true); renderPreview();
+  pvBounds(); renderPreview();
   say("3D preview - drag to rotate, scroll to zoom. Press 3D View again to edit.");
 }
 function sizePvToCv(){   // match #pv's box + drawing buffer to the design canvas's current on-screen rectangle
@@ -991,10 +1004,10 @@ $("bPreview").onclick=togglePreview;
   pv.addEventListener("mousedown",e=>{ pvDrag=[e.clientX,e.clientY,pvYaw,pvPitch]; e.preventDefault(); });
   window.addEventListener("mousemove",e=>{ if(!pvDrag)return;
     pvYaw=pvDrag[2]+(e.clientX-pvDrag[0])*0.01;
-    pvPitch=Math.max(-1.45,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });
+    pvPitch=Math.max(0.05,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });   // stay at/above the plate
   window.addEventListener("mouseup",()=>{ pvDrag=null; });
   pv.addEventListener("wheel",e=>{ e.preventDefault(); pvZoom=Math.max(0.25,Math.min(6,pvZoom*Math.exp(-e.deltaY*0.0012))); renderPreview(); },{passive:false});
-  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvBounds(true); renderPreview(); } });   // keep the overlay glued to the canvas
+  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvBounds(); renderPreview(); } });   // keep the overlay glued to the canvas
 })();
 function setMode3D(on){   // single source of truth for 2D<->3D; driven by the header toggle AND the Setup checkbox
   mode3D=on;
