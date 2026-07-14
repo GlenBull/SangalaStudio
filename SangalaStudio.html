@@ -1079,6 +1079,20 @@ function renderPreview(){
         pvZbuf[i]=z; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
       } }
   }
+  // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim) or against the
+  // background (the silhouette). The threshold tracks the view, so a flat face's own gradient never trips it. ----
+  const ceA=Math.abs(ce)||1e-6, seA=Math.abs(se)||1e-6;
+  const flatGrad=Math.max(ceA/seA, seA/ceA)/scale;      // the largest depth change a flat face can show across one pixel
+  const eT=Math.max(0.3, 1.8*flatGrad);                 // a real step (a 1.8 mm stud) is far bigger than that
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x, z=pvZbuf[i]; if(z===Infinity) continue;   // background
+    let edge=false, zn;
+    if(x+1<W){ zn=pvZbuf[i+1]; if(zn===Infinity || zn-z>eT) edge=true; }
+    if(!edge && x>0){ zn=pvZbuf[i-1]; if(zn===Infinity || zn-z>eT) edge=true; }
+    if(!edge && y+1<H){ zn=pvZbuf[i+W]; if(zn===Infinity || zn-z>eT) edge=true; }
+    if(!edge && y>0){ zn=pvZbuf[i-W]; if(zn===Infinity || zn-z>eT) edge=true; }
+    if(edge){ const p=i<<2; px[p]=(px[p]*0.45)|0; px[p+1]=(px[p+1]*0.45)|0; px[p+2]=(px[p+2]*0.45)|0; }
+  }
   g.putImageData(img,0,0);
   if(pvPlate){   // bed label
     g.fillStyle="rgba(58,72,90,.85)"; g.textAlign="left"; g.textBaseline="alphabetic";
