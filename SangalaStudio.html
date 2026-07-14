@@ -1569,13 +1569,34 @@ $("pInt").onclick=()=>{ applyBool("intersect"); closeCombine(); };
 // bbox centers in design-mm space aligns them on-page too. The biggest shape stays
 // put and the others move to its center axis - so "center circle in square" keeps
 // the square (the frame) fixed and drops the circle onto its middle.
+// o.poly (design mm) is the source of truth; the SVG element has to be kept in step with it. Shapes the app
+// drew live in a document measured in mm, so their points can simply be rewritten. A shape from an IMPORTED
+// file (a Snap! drawing arrives as polylines, a Silhouette design as paths) is in the FILE's units - writing
+// mm into it would mangle it - so shift the whole element with a transform instead.
+const PX_MM=25.4/96;
+function unitMm(el){ const m=el&&el.getCTM&&el.getCTM(); return m ? (Math.hypot(m.a,m.b)||1)*PX_MM : 1; }   // mm per user unit
+function elShift(o){ return [ +(o.el.getAttribute("data-shx")||0), +(o.el.getAttribute("data-shy")||0) ]; }  // how far it has been moved, in mm
+function placeEl(o){
+  if(!o||!o.el||!o.poly) return;
+  const t=o.el.tagName.toLowerCase();
+  if(t==="rect"||t==="circle") return;                       // those carry their own position attributes
+  if(Math.abs(unitMm(o.el)-1)<0.01 && (t==="polygon"||t==="polyline")){   // the app's own document: 1 unit = 1 mm
+    const p=o.poly, closed = p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<1e-9 && Math.abs(p[0][1]-p[p.length-1][1])<1e-9;
+    o.el.setAttribute("points",(closed?p.slice(0,-1):p).map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" "));   // an OPEN stroke keeps its last point
+    return;
+  }
+  if(!o.el.hasAttribute("data-tr0")) o.el.setAttribute("data-tr0", o.el.getAttribute("transform")||"");   // remember the file's own transform
+  const sh=elShift(o), u=unitMm(o.el.parentNode)||unitMm(o.el);   // the translate lands in the parent's units
+  o.el.setAttribute("transform","translate("+fmtn(sh[0]/u)+","+fmtn(sh[1]/u)+") "+o.el.getAttribute("data-tr0"));
+}
 function translateObj(o,dx,dy){
-  if(!o||!o.el||(!dx&&!dy)) return;
+  if(!o||!o.el||!o.poly||(!dx&&!dy)) return;
   o.poly=o.poly.map(p=>[p[0]+dx,p[1]+dy]);
   const t=o.el.tagName.toLowerCase();
   if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
   else if(t==="circle"){ o.el.setAttribute("cx",fmtn((+o.el.getAttribute("cx")||0)+dx)); o.el.setAttribute("cy",fmtn((+o.el.getAttribute("cy")||0)+dy)); }
-  else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+  else { const sh=elShift(o);
+    o.el.setAttribute("data-shx",fmtn(sh[0]+dx)); o.el.setAttribute("data-shy",fmtn(sh[1]+dy)); placeEl(o); }
 }
 /* ---------- Duplicate: Ctrl+C copies the selection, Ctrl+V pastes it (Cmd on a Mac) ---------- */
 let clipboard=null, pasteN=0;
@@ -2179,7 +2200,7 @@ cv.addEventListener("mousedown",(e)=>{
     if(selMulti.length && selMulti.some(id=>{const o=objects.find(x=>x.id===id);return o&&onObjId(o);})){   // drag any member -> move the group
       drag={mode:"groupmove",start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],moved:false,
         orig:selMulti.map(id=>{const o=objects.find(x=>x.id===id),N=s=>+o.el.getAttribute(s)||0,t=o.el.tagName.toLowerCase();
-          return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy")};})};
+          return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy"),sh:elShift(o)};})};
       cv.style.cursor="move"; e.preventDefault(); return; }
     const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
     if(!(refImg&&refImg.sel) && !onImg && !objects.some(onObjId)){ marquee={x0:mx,y0:my,x1:mx,y1:my}; e.preventDefault(); return; }
@@ -2188,12 +2209,11 @@ cv.addEventListener("mousedown",(e)=>{
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
-  if(t==="polygon"){   // node-edited shape: no parametric resize; drag the body to translate it
-    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);
+  if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, or any stroke from an imported design (a Snap! drawing arrives as
+    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);   // polylines, a Silhouette file as paths): no parametric resize, but drag the body to move it
     if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys))
-      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),moved:false},cv.style.cursor="move",e.preventDefault();
+      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),sh0:elShift(o),moved:false},cv.style.cursor="move",e.preventDefault();
     return; }
-  if(t!=="rect"&&t!=="circle") return;
   const N=s=>+o.el.getAttribute(s)||0;
   let hit=-1,bd=8;
   disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8 px of a handle
@@ -2218,7 +2238,7 @@ window.addEventListener("mousemove",(e)=>{
     drag.orig.forEach(g=>{ const o=g.o; o.poly=g.poly.map(p=>[p[0]+ddx,p[1]+ddy]);
       if(g.t==="rect"){ o.el.setAttribute("x",fmtn(g.x+ddx)); o.el.setAttribute("y",fmtn(g.y+ddy)); }
       else if(g.t==="circle"){ o.el.setAttribute("cx",fmtn(g.cx+ddx)); o.el.setAttribute("cy",fmtn(g.cy+ddy)); }
-      else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")); });
+      else { o.el.setAttribute("data-shx",fmtn(g.sh[0]+ddx)); o.el.setAttribute("data-shy",fmtn(g.sh[1]+ddy)); placeEl(o); } });
     drag.moved=true; draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(!refImg) return; const {mx,my}=evtMM(e);
     if(drag.mode==="imgmove"){ refImg.x=mx-drag.gx; refImg.y=my-drag.gy; }
@@ -2234,9 +2254,10 @@ window.addEventListener("mousemove",(e)=>{
     o.poly[i]=[dx,dy]; if(i===0) o.poly[o.poly.length-1]=[dx,dy];   // keep the ring closed
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
-  if(drag.mode==="polymove"){ const o=drag.obj, ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole polygon
+  if(drag.mode==="polymove"){ const o=drag.obj, ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
-    o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+    o.el.setAttribute("data-shx",fmtn(drag.sh0[0]+ddx)); o.el.setAttribute("data-shy",fmtn(drag.sh0[1]+ddy));
+    placeEl(o);
     drag.moved=true; draw(); return; }
   if(drag.mode==="rotate"){ const o=drag.obj;
     let delta=Math.atan2(dy-drag.cy,dx-drag.cx)-drag.a0;
