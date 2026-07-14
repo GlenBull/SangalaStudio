@@ -190,10 +190,14 @@ namespace DieCutterApp
         static void RespondCors(NetworkStream ns, string ctype, string bodyText, string statusLine = "200 OK")
         {
             byte[] body = Encoding.UTF8.GetBytes(bodyText ?? "");
+            // Snap! runs on a PUBLIC site and we are a LOCAL address, so the browser treats this as a private-network
+            // request: it preflights, and refuses unless we say so. Without the Allow-Private-Network grant the POST
+            // never leaves Chrome, even though curl reaches us perfectly well.
             var head = Encoding.ASCII.GetBytes(
                 "HTTP/1.1 " + statusLine + "\r\nContent-Type: " + ctype + "; charset=utf-8\r\nContent-Length: " +
                 body.Length + "\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-                "Access-Control-Allow-Headers: Content-Type\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
+                "Access-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\n" +
+                "Access-Control-Max-Age: 86400\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
             ns.Write(head, 0, head.Length); ns.Write(body, 0, body.Length);
         }
 
