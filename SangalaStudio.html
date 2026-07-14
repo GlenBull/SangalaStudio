@@ -962,6 +962,31 @@ function prismTris(ring,z0,z1){   // extrude a polygon ring (design mm) into a s
     for(let tri of [[a0,b0,b1],[a0,b1,a1]]){ const nn=nrm(tri[0],tri[1],tri[2]); if(nn[0]*ox+nn[1]*oy<0) tri=[tri[0],tri[2],tri[1]]; t.push(tri); } }
   return t;
 }
+function ptInPoly(x,y,ring){   // ray-cast point-in-polygon; ring may be closed (last == first)
+  let p=ring; const n=p.length;
+  if(n>1 && Math.abs(p[0][0]-p[n-1][0])<1e-9 && Math.abs(p[0][1]-p[n-1][1])<1e-9) p=p.slice(0,-1);
+  let inside=false;
+  for(let i=0,j=p.length-1;i<p.length;j=i++){ const xi=p[i][0],yi=p[i][1],xj=p[j][0],yj=p[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/((yj-yi)||1e-12)+xi)) inside=!inside; }
+  return inside;
+}
+function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outline
+  for(let i=0;i+1<ring.length;i++) d=Math.min(d, segDist(x,y,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]));
+  return d;
+}
+function studsFor(ring,z1,fit){   // LEGO studs on the top face of an extruded shape: the global 8 mm grid, only where a stud fully fits on the face
+  const U=8, studR=Math.max(1.5, 2.4-(fit||0)/2), studH=1.8, WELD=0.2, t=[];
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
+  for(let i=Math.floor((mnx-U/2)/U); i<=Math.ceil((mxx-U/2)/U); i++)
+    for(let j=Math.floor((mny-U/2)/U); j<=Math.ceil((mxy-U/2)/U); j++){
+      const cx=U/2+i*U, cy=U/2+j*U;                                   // stud centres sit at cell centres, as on a brick
+      if(!ptInPoly(cx,cy,ring)) continue;
+      if(edgeDist(cx,cy,ring) < studR+0.2) continue;                  // skip any stud that would hang off the edge
+      t.push(...cylTris(cx,cy,studR,z1-WELD,z1+studH));               // sinks into the top face so the slicer fuses it
+    }
+  return t;
+}
 function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
@@ -971,7 +996,9 @@ function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH th
   plain.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase(), z0=g("data-z0"), z1=z0+g("data-z");
     tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1)
       : t==="circle" ? cylTris(g("cx"),g("cy"),g("r"),z0,z1)
-      : prismTris(o.poly,z0,z1)); });   // freeform polygon (Pen / Node) -> extruded prism
+      : prismTris(o.poly,z0,z1));                                            // freeform polygon (Pen / Node) -> extruded prism
+    if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,g("data-fit")));   // LEGO studs on its top face
+  });
   return {tris, n:bricks.length+plain.length, bricks:bricks.length};
 }
 async function exportSTL(){
@@ -1375,7 +1402,7 @@ function ensurePolygon(o){
   if(o.el.tagName.toLowerCase()==="polygon") return;   // already editable
   const nodes=shapeNodes(o);                            // rect -> 4 corners, in order
   const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-  ["data-z","data-z0"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base
+  ["data-z","data-z0","data-studs"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and studs
   const poly=svgNode("polygon",attrs);
   if(o.el&&o.el.remove) o.el.remove();
   o.el=poly; o.poly=nodes.concat([nodes[0]]);           // closed ring for preview/cut
@@ -1532,7 +1559,12 @@ function dimText(o){
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="0.1" data-dim="'+p[2]+'" value="'+p[1]+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">mm</td>')
     :'<td></td><td></td><td></td>';
-  return '<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+  let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+  if(mode3D && !o.el.hasAttribute("data-brick")){   // an extruded shape can carry LEGO studs on its top face
+    const on=o.el.getAttribute("data-studs")==="1";
+    html+='<label title="Add LEGO studs to the top face, on the 8 mm grid, wherever one fits" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-top:.45rem"><input type="checkbox" data-dimflag="studs" '+(on?"checked":"")+' style="width:auto;margin:0"> Studs (top)</label>';
+  }
+  return html;
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
 // apply one edited dimension to the selected shape, keeping the other (exact) values
@@ -1552,8 +1584,11 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   }
   draw(); if(!live)showDims(o); pvRefresh();
 }
+function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // Studs on an extruded shape's top face
+  if(flag==="studs"){ o.el.setAttribute("data-studs", on?"1":"0"); showDims(o); pvRefresh(); } }
 const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
-  if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0, live); };
+  if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0, live);
+  else if(el&&el.dataset&&el.dataset.dimflag!=null && !live) applyDimFlag(el.dataset.dimflag, el.checked); };   // checkbox: on change only
 $("editdims").addEventListener("input",  e=>onDimEdit(e,true));    // live: spinner steps and typing update the preview immediately
 $("editdims").addEventListener("change", e=>onDimEdit(e,false));   // commit (blur / Enter): also re-render the rounded readout
 /* ---------- Brick size controls (Columns / Rows / Depth / Fit), shown when a brick is selected in 3D ---------- */
