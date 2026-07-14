@@ -28,6 +28,9 @@ namespace DieCutterApp
         static string _lastStatus = "idle";
         static int _port = 0;
         static string _htmlPath;
+        static string _snapLibPath;
+        static string _snapSvg;                      // a drawing Snap! has posted, waiting for the page to collect it
+        static readonly object _snapLock = new object();
         static double _jogX = 15.9, _jogY = 15.9;   // current manual-jog head position (mm)
         static bool _framed = false;                 // has the machine been Setup() since connect (for /raw debug)
         static readonly System.Globalization.CultureInfo INV = System.Globalization.CultureInfo.InvariantCulture;
@@ -36,6 +39,7 @@ namespace DieCutterApp
         static void Main()
         {
             _htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SangalaStudio.html");
+            _snapLibPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sangala for Snap.xml");
 
             TcpListener listener = null;
             for (int p = 8787; p <= 8807 && listener == null; p++)
@@ -105,7 +109,16 @@ namespace DieCutterApp
                     body = Encoding.UTF8.GetString(buf, 0, got);
                 }
 
-                if (method == "GET" && (path == "/" || path == "/index.html")) ServeHtml(ns);
+                // ---- Snap! bridge. These routes carry DESIGNS ONLY and are the only ones that answer a
+                // cross-origin caller (Snap! runs on another origin, so nothing reaches us without CORS).
+                // Nothing here moves the die cutter: a Snap! script can put a drawing on the mat, but a
+                // human still has to press Make It.
+                if (method == "OPTIONS") { RespondCors(ns, "text/plain", ""); }
+                else if (method == "POST" && path == "/snap/svg") { lock (_snapLock) { _snapSvg = body; } RespondCors(ns, "text/plain", "ok"); }
+                else if (method == "GET" && path == "/snap/svg")     // the page polls this; reading takes the drawing off the spike
+                { string s; lock (_snapLock) { s = _snapSvg; _snapSvg = null; } RespondCors(ns, "image/svg+xml", s ?? ""); }
+                else if (method == "GET" && path == "/snap/library.xml") ServeSnapLibrary(ns);
+                else if (method == "GET" && (path == "/" || path == "/index.html")) ServeHtml(ns);
                 else if (method == "GET" && path.StartsWith("/assets/", StringComparison.Ordinal)) ServeAsset(ns, path);
                 else if (path == "/connect") Respond(ns, "application/json", DoConnect());
                 else if (path == "/status") Respond(ns, "application/json", "{\"status\":\"" + Esc(_lastStatus) + "\"}");
@@ -163,6 +176,25 @@ namespace DieCutterApp
                 "HTTP/1.1 200 OK\r\nContent-Type: " + ct + "\r\nContent-Length: " + data.Length +
                 "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
             ns.Write(head, 0, head.Length); ns.Write(data, 0, data.Length);
+        }
+
+        // Serve the Snap! blocks library from the helper itself, so a student loads it with
+        // extensions.snap.berkeley.edu/snap/snap.html#open:http://127.0.0.1:<port>/snap/library.xml
+        // - no internet, no download, no file dialog.
+        static void ServeSnapLibrary(NetworkStream ns)
+        {
+            if (!File.Exists(_snapLibPath)) { RespondCors(ns, "text/plain", "Sangala for Snap.xml not found next to the program.", "404 Not Found"); return; }
+            RespondCors(ns, "text/xml", File.ReadAllText(_snapLibPath, Encoding.UTF8));
+        }
+
+        static void RespondCors(NetworkStream ns, string ctype, string bodyText, string statusLine = "200 OK")
+        {
+            byte[] body = Encoding.UTF8.GetBytes(bodyText ?? "");
+            var head = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 " + statusLine + "\r\nContent-Type: " + ctype + "; charset=utf-8\r\nContent-Length: " +
+                body.Length + "\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                "Access-Control-Allow-Headers: Content-Type\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
+            ns.Write(head, 0, head.Length); ns.Write(body, 0, body.Length);
         }
 
         static void Respond(NetworkStream ns, string ctype, string bodyText, string statusLine = "200 OK")

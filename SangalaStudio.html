@@ -708,6 +708,28 @@ $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
+/* ---------- Snap! bridge: a turtle drawing made in Snap! lands on the mat ----------
+   Snap! logs its pen strokes as vectors (its "Log pen vectors" setting) and can hand them over as
+   an SVG of <polyline>s - one per unbroken stroke of a single pen colour. Our helper takes that
+   SVG on /snap/svg and holds it; this page collects it. From there it is an ordinary design.
+   The PEN COLOUR is the instruction: blue = fold, any other colour = cut (or draw, with a pen in
+   the holder). So an existing Snap! turtle program needs no new blocks - only recolouring. */
+function snapSvgToSangala(text){
+  return text.replace(/stroke:rgb\((\d+),\s*(\d+),\s*(\d+)\)/g, (m,rs,gs,bs)=>{
+    const r=+rs, g=+gs, b=+bs, blue = b>120 && b>r+40 && b>g+40;
+    return blue ? "stroke:#ff0000;stroke-dasharray:4 1.2" : "stroke:#ff0000";   // fold lines are perforated; everything else is a cut/draw line
+  });
+}
+async function pollSnap(){
+  if(location.protocol==="file:") return;                       // no helper behind a file:// page
+  try{
+    const r=await fetch("/snap/svg",{cache:"no-store"}); if(!r.ok) return;
+    const t=await r.text(); if(!t || t.indexOf("<svg")<0) return;
+    loadSVG(snapSvgToSangala(t));
+    say("Received a drawing from Snap! - "+objects.length+" stroke"+(objects.length!==1?"s":"")+" on the mat. Put a pen in the holder and press Make It to draw it.");
+  }catch(e){}                                                   // helper not up, or nothing waiting - stay quiet
+}
+setInterval(pollSnap,1500);
 // Open handles both an SVG design and a photo: .svg -> loadSVG; .png/.jpg -> loadImageFile
 // (a REFERENCE layer for tracing - it never cuts, prints, or saves; the traced vector is the design).
 $("bOpen").onclick=()=>$("file").click();
