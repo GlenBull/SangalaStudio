@@ -282,6 +282,7 @@ let selId2=null;             // secondary selection (Shift+click) - the 2nd oper
 let selImg2=false;           // the reference photo picked (Shift+click) as Combine's 2nd operand: Intersect crops the photo to the shape
 let selMulti=[];             // marquee multi-selection (object ids); when non-empty, single-select (selId) is cleared
 let groupSeq=0;              // group ids: objects sharing a non-null .group select and move as one unit
+let hist=[], histBusy=false, histTimer=null;   // Undo (Ctrl-Z): debounced snapshots of the design
 let penPts=[];               // Pen tool: in-progress polygon vertices (design mm)
 let penHover=null;           // Pen tool: current cursor (placed mm) for the rubber-band segment
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
@@ -537,6 +538,7 @@ function renderBg(){
 }
 
 function draw(){
+  scheduleCommit();   // Undo: snapshot the design after edits settle (deduped; skipped during a restore)
   const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
   cv.height=900; cv.width=Math.round(900*dw/dh);
   const baseK=cv.height/dh, k=baseK*view.zoom;   // zoom folds into k; strokes/handles stay screen-px (no ctx.scale)
@@ -986,6 +988,7 @@ function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, s
   const span=Math.max(bx1-bx0,by1-by0,bz1-bz0)||1; pvBase=Math.min($("pv").width,$("pv").height)*0.62/span;
 }
 function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so Base/Depth read against the stationary plate
+  scheduleCommit();   // Undo: 3D-only edits (Depth/Base/Fit) may not redraw the 2D canvas, so snapshot here too
   if(!pvOn) return;
   const b=buildTris(); if(!b.n){ closePreview(); return; }   // last 3D object removed -> leave preview
   pvTris=b.tris; renderPreview();
@@ -1106,6 +1109,42 @@ function svgNode(name,attrs){
   el.setAttribute("fill","none"); el.setAttribute("stroke","#ff0000"); el.setAttribute("stroke-width","0.2");
   svgEl.appendChild(el); return el;
 }
+/* ---------- Undo (Ctrl-Z): debounced snapshots of the design, restored on demand ---------- */
+function serializeState(){
+  return { objSeq:objSeq, groupSeq:groupSeq, printFile:printFile,
+    objs: objects.map(o=>({ id:o.id,
+      tag: (o.el&&o.el.tagName)? o.el.tagName.toLowerCase():null,
+      attrs: (o.el&&o.el.attributes)? Array.from(o.el.attributes).map(a=>[a.name,a.value]):[],
+      kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null, group:o.group })) };
+}
+function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
+  if(hist.length && hist[hist.length-1]===s) return; hist.push(s); if(hist.length>60) hist.shift(); }
+function scheduleCommit(){ if(histBusy) return; clearTimeout(histTimer); histTimer=setTimeout(commit,350); }   // snapshot once edits settle
+function restoreState(st){
+  objects.forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });      // drop current elements from the retained doc
+  ensureDoc();
+  objects = st.objs.map(so=>{ let el=null;
+    if(so.tag){ el=document.createElementNS(SVGNS,so.tag); so.attrs.forEach(a=>el.setAttribute(a[0],a[1])); svgEl.appendChild(el); }
+    return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null, group:so.group }; });
+  objSeq=st.objSeq; groupSeq=st.groupSeq; printFile=st.printFile;
+  selId=null; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false;
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();
+}
+function undo(){
+  if(histTimer){ clearTimeout(histTimer); histTimer=null; commit(); }   // flush a settling change so it is on the stack
+  if(hist.length<2){ say("Nothing to undo."); return; }
+  hist.pop();                                                            // discard the current state
+  histBusy=true; restoreState(JSON.parse(hist[hist.length-1])); histBusy=false;   // restore the previous
+  say("Undid the last change.");
+}
+window.addEventListener("keydown",(e)=>{   // Ctrl-Z / Cmd-Z
+  if((e.ctrlKey||e.metaKey) && !e.shiftKey && !e.altKey && (e.key==="z"||e.key==="Z")){
+    const tg=(e.target&&e.target.tagName||"").toLowerCase();
+    if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo
+    e.preventDefault(); undo();
+  }
+});
+commit();   // seed with the initial (empty) state
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
 let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag to draw; "brick" = click to place
 function setTool(t){ activeTool=t;
