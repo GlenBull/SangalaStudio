@@ -1010,7 +1010,7 @@ async function exportSTL(){
 $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
-let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false;
+let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null;
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
@@ -1050,23 +1050,36 @@ function renderPreview(){
   g.strokeStyle="#8b95a4"; g.lineWidth=1.5; g.beginPath(); g.moveTo(q00[0],q00[1]); g.lineTo(q10[0],q10[1]); g.lineTo(q11[0],q11[1]); g.lineTo(q01[0],q01[1]); g.closePath(); g.stroke();   // plate edge
   }
   const L=[0.38,-0.42,0.82], Ll=Math.hypot(L[0],L[1],L[2]); L[0]/=Ll;L[1]/=Ll;L[2]/=Ll;   // world light from upper-front
-  const base=[214,74,48], faces=[];                   // warm brick-red plastic
+  // ---- model: rasterize with a PER-PIXEL depth buffer. Sorting whole triangles (painter's) mis-orders a small
+  // stud against the large flat face it sits on, so the face paints over it. A z-buffer keeps whatever is nearest. ----
+  const base=[214,74,48];                             // warm brick-red plastic
+  const img=g.getImageData(0,0,W,H), px=img.data;     // composite over the background + plate already drawn
+  if(!pvZbuf || pvZbuf.length!==W*H) pvZbuf=new Float32Array(W*H);
+  pvZbuf.fill(Infinity);                              // depth: smaller = nearer
   for(const t of pvTris){
     const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],
           vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;   // outward normal
     if((nx*sa+ny*ca)*ce - nz*se >= 0) continue;       // backface cull: rotated-normal depth points away
     const a=proj(t[0]),b=proj(t[1]),c=proj(t[2]);
-    const shade=0.34+0.66*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
-    faces.push({a,b,c,shade,depth:(a[2]+b[2]+c[2])/3});
+    const s=0.34+0.66*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+    const R=(base[0]*s)|0, G=(base[1]*s)|0, B=(base[2]*s)|0;
+    let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
+    let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
+    if(x0>x1||y0>y1) continue;
+    const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]); if(Math.abs(den)<1e-9) continue;   // degenerate
+    const inv=1/den;
+    for(let y=y0;y<=y1;y++){ const fy=y+0.5;
+      for(let x=x0;x<=x1;x++){ const fx=x+0.5;
+        const w0=((b[1]-c[1])*(fx-c[0])+(c[0]-b[0])*(fy-c[1]))*inv; if(w0<0) continue;   // barycentric inside-test
+        const w1=((c[1]-a[1])*(fx-c[0])+(a[0]-c[0])*(fy-c[1]))*inv; if(w1<0) continue;
+        const w2=1-w0-w1; if(w2<0) continue;
+        const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
+        if(z>=pvZbuf[i]) continue;                    // something nearer is already there
+        pvZbuf[i]=z; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
+      } }
   }
-  faces.sort((p,q)=>q.depth-p.depth);                 // painter's: farthest first
-  for(const f of faces){ const s=f.shade,
-      col="rgb("+(base[0]*s|0)+","+(base[1]*s|0)+","+(base[2]*s|0)+")";
-    g.fillStyle=col; g.strokeStyle=col; g.lineWidth=1; // same-color hairline stroke closes seams between a quad's two triangles
-    g.beginPath(); g.moveTo(f.a[0],f.a[1]); g.lineTo(f.b[0],f.b[1]); g.lineTo(f.c[0],f.c[1]); g.closePath();
-    g.fill(); g.stroke();
-  }
+  g.putImageData(img,0,0);
   if(pvPlate){   // bed label
     g.fillStyle="rgba(58,72,90,.85)"; g.textAlign="left"; g.textBaseline="alphabetic";
     g.font="600 "+Math.max(11,Math.round(W*0.024))+"px 'Segoe UI',system-ui,sans-serif";
