@@ -1396,13 +1396,16 @@ function redo(){
   histBusy=true; restoreState(JSON.parse(s)); histBusy=false;
   say("Redid the change.");
 }
-window.addEventListener("keydown",(e)=>{   // Ctrl-Z undo; Ctrl-Shift-Z or Ctrl-Y redo (Cmd on a Mac)
+window.addEventListener("keydown",(e)=>{   // Ctrl-Z undo; Ctrl-Shift-Z or Ctrl-Y redo; Ctrl-C / Ctrl-V duplicate (Cmd on a Mac)
   if(!(e.ctrlKey||e.metaKey) || e.altKey) return;
   const tg=(e.target&&e.target.tagName||"").toLowerCase();
-  if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo
+  if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo / copy / paste
   const k=(e.key||"").toLowerCase();
   if(k==="z" && !e.shiftKey){ e.preventDefault(); undo(); }
   else if((k==="z" && e.shiftKey) || k==="y"){ e.preventDefault(); redo(); }
+  else if(k==="c"){ if(String(window.getSelection?window.getSelection():"")) return;   // text is highlighted -> that is what the user meant to copy
+    e.preventDefault(); copySel(); }
+  else if(k==="v"){ e.preventDefault(); pasteClip(); }
 });
 commit();   // seed with the initial (empty) state
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
@@ -1528,6 +1531,39 @@ function translateObj(o,dx,dy){
   if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
   else if(t==="circle"){ o.el.setAttribute("cx",fmtn((+o.el.getAttribute("cx")||0)+dx)); o.el.setAttribute("cy",fmtn((+o.el.getAttribute("cy")||0)+dy)); }
   else o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+}
+/* ---------- Duplicate: Ctrl+C copies the selection, Ctrl+V pastes it (Cmd on a Mac) ---------- */
+let clipboard=null, pasteN=0;
+const PASTE_STEP=5;   // mm each pasted copy is offset by, so it lands beside the original instead of exactly on top of it
+function selectedIds(){ return selMulti.length ? selMulti.slice() : (selId!=null ? [selId] : []); }
+function copySel(){
+  const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then Ctrl+C."); return; }
+  const set=new Set(ids);
+  clipboard=objects.filter(o=>set.has(o.id)&&o.el&&o.el.tagName).map(o=>({
+    tag:o.el.tagName.toLowerCase(),
+    attrs:Array.from(o.el.attributes).map(a=>[a.name,a.value]),   // carries Depth/Base, studs, sockets, removed cells, Fit - the copy is a true twin
+    kind:o.kind, orig:o.orig, poly:o.poly?o.poly.map(p=>[p[0],p[1]]):null, group:o.group }));
+  pasteN=0;
+  say("Copied "+clipboard.length+" shape"+(clipboard.length!==1?"s":"")+" - Ctrl+V pastes a copy.");
+}
+function pasteClip(){
+  if(!clipboard||!clipboard.length){ say("Nothing copied yet - select a shape and press Ctrl+C."); return; }
+  ensureDoc();
+  const d=PASTE_STEP*(++pasteN);      // paste again and the next copy steps further, so repeats fan out instead of stacking
+  const gmap={}, ids=[];
+  clipboard.forEach(c=>{
+    const el=document.createElementNS(SVGNS,c.tag);
+    c.attrs.forEach(a=>el.setAttribute(a[0],a[1]));
+    svgEl.appendChild(el);
+    let grp=null; if(c.group!=null){ if(!(c.group in gmap)) gmap[c.group]=++groupSeq; grp=gmap[c.group]; }   // a copied group (or fused piece, or brick) stays bound - as its OWN group
+    const o={id:++objSeq, el:el, kind:c.kind, orig:c.orig, poly:c.poly?c.poly.map(p=>[p[0],p[1]]):null, group:grp};
+    objects.push(o); if(o.poly) translateObj(o,d,d); ids.push(o.id);
+  });
+  if(ids.length>1){ selMulti=ids; selId=null; } else { selMulti=[]; selId=ids[0]; }
+  selId2=null; selImg2=false; selNode=null;
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();
+  clearTimeout(histTimer); histTimer=null; commit();   // snapshot now, not on the usual delay: rapid pastes must undo one at a time
+  say("Pasted "+ids.length+" shape"+(ids.length!==1?"s":"")+" - drag it into place. Ctrl+V again for another.");
 }
 // An "align item" carries a placed-mm bbox center + a way to move itself in placed mm.
 // Shapes live in design mm (move via translateObj, delta / placement scale); the reference
