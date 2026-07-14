@@ -216,7 +216,7 @@
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
     <label id="plateRow" style="display:none;align-items:center;gap:.45rem;cursor:pointer;margin:.55rem 0 .1rem;color:#5a4a34;font-size:.9rem;font-weight:600" title="Show the A1 Mini build plate in the 3D View. Turn off to orbit under the object and see its underside.">
-      <input type="checkbox" id="showPlate" checked style="width:auto;margin:0"> Show the build plate (A1&nbsp;Mini)</label>
+      <input type="checkbox" id="showPlate" style="width:auto;margin:0"> Show the build plate (A1&nbsp;Mini)</label>
     <div id="tracetune" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Silhouette Threshold</h2>
       <input type="range" id="thrRange" min="20" max="235" step="5" value="128" style="width:100%">
@@ -974,7 +974,7 @@ async function exportSTL(){
 $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
-let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=true;
+let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false;
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
