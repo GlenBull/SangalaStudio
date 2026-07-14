@@ -14,6 +14,41 @@ USB only, user-mode.** This constraint is absolute.
 - **One change at a time, then let the user test on the physical machine, then commit.** Do not batch many untested changes — that already cost a multi-hour unrecoverable break once. Commit (or tag) after each verified-good state so any regression is a `git diff` away, not a guess.
 - Terminology: the machine is a **die cutter** / **Digital Fabrication Tool**. Always write the full term **"die cutter"** — never abbreviate or truncate to "cutter" (or use "cutting"). In schools the bare word "cutter" can evoke self-harm (a teen who slashes their arms); the full "die cutter" keeps the meaning unambiguous. Applies to UI text, code comments, and chat. Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication Tool** (mixed case). Show the mat/page in inches as whole numbers.
 
+## Document formatting standards (User Guide & Tech Manual .docx)
+- **Never regenerate a doc to revise it — edit the user's actual file IN PLACE** (surgical
+  text edits only; run no document-wide formatting commands). Regenerating wipes his manual
+  formatting and has caused repeated rework. New version = copy to the next version number, edit,
+  then MOVE the prior version into the `.Archive` subfolder (main folder shows only the current).
+- Body = **Times New Roman 11 pt**, black, never below 11 pt; code identifiers in Consolas.
+- Numbered lists for step sequences; **3 pt space after each list item**. A label leading a list
+  item is **italic** (not bold). Labels: Title-Case every word EXCEPT words in parentheses (lowercase).
+- **FIGURE CAPTIONS — apply ALL FOUR, and VERIFY each before delivering.** Sit the caption
+  directly beneath its figure ("Figure N. <sentence>", numbered sequentially through the document;
+  renumber the later figures when inserting one):
+  1. **3 pt space between the figure and its caption** (space-before on the caption paragraph).
+  2. **Centered** beneath the figure.
+  3. **Italic** — the whole caption.
+  4. **If it wraps to two lines, BALANCE them** (roughly equal length) with a manual line break
+     (Shift+Enter) at a word boundary near the middle. A long first line over a stub is wrong.
+- **TABLES — two kinds of rule; apply ALL and VERIFY each before delivering.**
+  **(A) Structure/content conventions I must APPLY (these are NOT in the XML — cannot be cloned;
+  I generate them):** every table has a **numbered title with a descriptive caption**
+  ("Table N. <caption>"); tables are **numbered sequentially through the document**; the
+  **column-heading row sits in the row directly below the title**. (Draft the number + caption for
+  Glen's approval — I can't clone these.)
+  **(B) Visual formatting — clone the EXACT values from Table 8 of the Tech Manual, do NOT
+  reconstruct from memory:**
+  1. Table **centered on the page**.
+  2. **Arial 10 pt** throughout.
+  3. **Cell paragraph spacing: 3 pt before, 2 pt after** on every cell — this is PARAGRAPH spacing
+     (space-before/space-after), **NOT** cell top/bottom margins. (The rule most often missed.)
+  4. Left/right cell margins present; label column slightly left-indented.
+  5. Title row = one cell **merged across all columns**, Arial 10 pt **Bold**.
+  6. Column-heading row: Arial 10 pt **Italic**, **centered**.
+  7. Body cells: Arial 10 pt regular, left-aligned.
+  8. Borders: single-line grid; the column-heading→body divider is a **double** line.
+- Delivery: give the plain Windows file path in text (no preview cards / no `computer://` links).
+
 ## Approval & git safety
 - **Auto-approve (standing consent):** work confined to this repo, the temp
   scratch folder, and pushing commits to this GitHub repo. No need to ask.
