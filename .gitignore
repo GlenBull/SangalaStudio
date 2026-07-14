@@ -14,6 +14,10 @@ versions/
 # Binary design docs — live in Dropbox, not the repo
 Houses/*.docx
 
+# Superseded manual versions: the current one is in the repo, its history is in git.
+# (Keeping 129 MB of past .docx revisions would bloat every clone a school makes.)
+.Archive/
+
 # OS / Dropbox / editor cruft
 .DS_Store
 Thumbs.db
