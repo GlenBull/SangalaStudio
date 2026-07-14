@@ -411,7 +411,31 @@ function loadSVG(text){
   view.zoom=1; view.panX=0; view.panY=0; updateZoomUI();   // new design -> reset the magnify view
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
+  // A polyline/polygon/line ALREADY carries its vertices, so take them as they are. Walking along it instead
+  // (as a curve must be walked) lands sample points either side of every corner rather than on it, leaving two
+  // nodes 0.2 mm apart where the user sees one - and dragging one of them pulls the shape apart.
+  function verts(el){
+    const t=el.tagName.toLowerCase(), m=el.getCTM();
+    let raw=[];
+    if(t==="polyline"||t==="polygon"){
+      const n=(el.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number);
+      for(let i=0;i+1<n.length;i+=2) raw.push([n[i],n[i+1]]);
+      if(t==="polygon" && raw.length>2) raw.push([raw[0][0],raw[0][1]]);   // a polygon closes itself
+    } else if(t==="line"){
+      const N=s=>+el.getAttribute(s)||0; raw=[[N("x1"),N("y1")],[N("x2"),N("y2")]];
+    } else return null;
+    const out=[];
+    for(const p of raw){
+      let X,Y;
+      if(m){ rootPt.x=p[0]; rootPt.y=p[1]; const q=rootPt.matrixTransform(m); X=q.x*PX2MM; Y=q.y*PX2MM; }
+      else { X=p[0]*scale; Y=p[1]*scale; }
+      if(!isFinite(X)||!isFinite(Y)) return null;
+      out.push([X,Y]);
+    }
+    return out.length>=2 ? closeRing(dedupePoly(out)) : null;
+  }
   function sample(el){
+    const v=verts(el); if(v) return v;                 // it has real vertices - no need to walk it
     const len=el.getTotalLength?el.getTotalLength():0; if(!len) return null;
     const m=el.getCTM(); const sc=m?Math.hypot(m.a,m.b):1;
     // getCTM() maps to pixel space -> convert px->mm; if no CTM the raw points are
@@ -424,7 +448,7 @@ function loadSVG(text){
       else { X=p.x*scale; Y=p.y*scale; }
       if(!isFinite(X)||!isFinite(Y)) return null;   // bad point -> skip the whole path (no mangled shapes)
       poly.push([X,Y]);}
-    return poly.length>=2?simplify(poly,0.08):null;
+    return poly.length>=2?closeRing(dedupePoly(simplify(poly,0.08))):null;   // one node per corner, and a closed shape's ends exactly together
   }
   const gmap={};   // remap saved data-group ids to fresh session group ids (avoid collisions with groupSeq)
   els.forEach(el=>{
@@ -454,12 +478,30 @@ function placeParams(){ return { s:printFile?1:((+$("scale").value||100)/100), o
 function placePoly(poly){ const pp=placeParams(); return poly.map(q=>[q[0]*pp.s+pp.ox, q[1]*pp.s+pp.oy]); }
 // Inkscape-style node handles for a selected object, in design mm (pre-placement).
 // Type-appropriate: rect -> 4 corners; circle -> 4 cardinal points; else poly vertices.
+// A closed shape stores its first point twice - the ring closes back on itself - and the two must always be
+// treated as ONE node. An IMPORTED shape is re-sampled, so its last point lands a whisker from the first
+// rather than exactly on it; comparing them exactly declares the ring open, shows a second node stacked on
+// the first, and the corner comes apart when you drag it. So the test carries a tolerance (0.02 mm - far
+// below anything the blade or the eye can tell apart), and closeRing() snaps the two together on import.
+const RING_TOL=0.02;
+function isClosedRing(p){ return p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<RING_TOL && Math.abs(p[0][1]-p[p.length-1][1])<RING_TOL; }
+// A closed shape in a file usually repeats its first point to shut the ring - and re-sampling then adds a
+// closing point of its own on TOP of it, so the corner ends up in the list three times running. Two of them
+// showed as nodes stacked on each other, and dragging one left the others behind: the shape came apart.
+function dedupePoly(p){
+  const out=[];
+  p.forEach(q=>{ const l=out[out.length-1];
+    if(l && Math.abs(l[0]-q[0])<RING_TOL && Math.abs(l[1]-q[1])<RING_TOL) return;   // same place as the point before it - one node, not two
+    out.push(q); });
+  return out.length>=2 ? out : p;
+}
+function closeRing(p){ if(isClosedRing(p)) p[p.length-1]=[p[0][0],p[0][1]]; return p; }   // make the ring exactly closed
 function shapeNodes(o){
   const el=o.el, t=el&&el.tagName&&el.tagName.toLowerCase(), N=s=>+el.getAttribute(s)||0;
   if(t==="rect"){const x=N("x"),y=N("y"),w=N("width"),h=N("height"); return [[x,y],[x+w,y],[x+w,y+h],[x,y+h]];}
   if(t==="circle"){const cx=N("cx"),cy=N("cy"),r=N("r"); return [[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]];}
-  const p=o.poly.slice();   // fallback: poly vertices, minus the duplicated closing point
-  if(p.length>1&&p[0][0]===p[p.length-1][0]&&p[0][1]===p[p.length-1][1]) p.pop();
+  const p=o.poly.slice();                        // fallback: poly vertices, minus the duplicated closing point
+  if(isClosedRing(p)) p.pop();
   return p;
 }
 function segDist(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
@@ -1587,7 +1629,6 @@ $("pInt").onclick=()=>{ applyBool("intersect"); closeCombine(); };
 const PX_MM=25.4/96;
 function unitMm(el){ const m=el&&el.getCTM&&el.getCTM(); return m ? (Math.hypot(m.a,m.b)||1)*PX_MM : 1; }   // mm per user unit
 function elShift(o){ return [ +(o.el.getAttribute("data-shx")||0), +(o.el.getAttribute("data-shy")||0) ]; }  // how far it has been moved, in mm
-function isClosedRing(p){ return p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<1e-9 && Math.abs(p[0][1]-p[p.length-1][1])<1e-9; }
 // Write o.poly (mm) into a points list in the ELEMENT's own coordinate system. Its CTM says how its units map
 // to the page, so the inverse says how mm map back into its units - exact whatever the file's scale, viewBox,
 // nesting or transform. For a shape the app drew that is the identity, so this is also just "the points".
@@ -2288,8 +2329,9 @@ window.addEventListener("mousemove",(e)=>{
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
+    const closed=isClosedRing(o.poly);                       // ask BEFORE moving it: once the first point has moved, the ring no longer LOOKS closed
     o.poly[i]=[dx,dy];
-    if(i===0 && isClosedRing(o.poly)) o.poly[o.poly.length-1]=[dx,dy];   // a closed ring keeps its ends together; an open stroke does not
+    if(i===0 && closed) o.poly[o.poly.length-1]=[dx,dy];     // a closed ring's two ends are one node and move together; an open stroke's do not
     placeEl(o);
     drag.moved=true; draw(); return; }
   if(drag.mode==="polymove"){ const o=drag.obj, ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
