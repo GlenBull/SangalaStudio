@@ -920,17 +920,18 @@ function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + in
 }
 // A hollow 2x3 LEGO brick from primitive closed solids (slicer fuses the overlaps):
 // 4 wall boxes + roof slab + 6 stud cylinders + 2 tubes. Standard dims, origin (x0,y0).
-function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock){
+function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow){
   cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
   const U=8, W=cols*U, H=rows*U, roof=1.0, wall=1.2, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
   // Fit = clutch clearance (mm): trim the stud diameter so mating printed bricks aren't over-tight. 0 = nominal.
   const studR=Math.max(1.5, 2.4 - (fit||0)/2), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
-  t.push(...boxTris(x0,y0,W,wall,0,Zt), ...boxTris(x0,y1-wall,W,wall,0,Zt),      // front + back walls
-         ...boxTris(x0,y0,wall,H,0,Zt), ...boxTris(x1-wall,y0,wall,H,0,Zt));     // left + right walls
-  t.push(...boxTris(x0,y0,W,H,Zc,Zt));                                           // roof slab (overlaps wall tops)
+  const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
+  t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
+         ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
+  t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab (overlaps wall tops)
   if(studs) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs on top (off = smooth top, e.g. a wing)
   if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                  // anti-stud tubes to clip onto studs below (interior grid only)
-  else      t.push(...boxTris(x0,y0,W,H,0,Math.min(wall,Zt)));                                                                        // no dock -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
+  else      t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
 function stlAscii(tris,name){
@@ -1099,43 +1100,101 @@ function clipToBox(ring,x0,y0,x1,y1){   // Sutherland-Hodgman: the part of a pol
 // into the mesh itself. One cap carrying every socket makes a polygon so slit-riddled that ear clipping gives up on it.
 // So chop the shape on the SAME 8 mm grid the sockets sit on: each cell becomes its own prism carrying at most ONE
 // hole - which triangulates exactly - and the slicer fuses the cells back into one part, just as it fuses the studs on.
-function socketedSolid(ring,z0,z1,fit,skips){
+function socketedSolid(ring,z0,z1,fit,skips,solid){
   const U=8, OV=0.1, d=Math.min(SOCK_DEPTH,(z1-z0)-SOCK_WALL);
-  if(d<=0.4) return prismTris(ring,z0,z1);                                    // too thin to take a socket
+  solid=solid||ring;                                                          // the ring to cut the prisms from; the socket grid always comes off the ORIGINAL outline
+  if(d<=0.4) return prismTris(solid,z0,z1);                                   // too thin to take a socket
   const r=socketRadius(fit), t=[], has=new Set();
   socketCells(ring,fit).forEach(c=>{ if(!(skips&&skips.has(c.i+","+c.j))) has.add(c.i+","+c.j); });
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
   for(let i=0; mnx+i*U<mxx; i++) for(let j=0; mny+j*U<mxy; j++){
     const bx=mnx+i*U, by=mny+j*U;
-    const reg=clipToBox(ring, bx-OV, by-OV, bx+U+OV, by+U+OV);                // cells overlap by a hair, so touching prisms fuse instead of meeting face-to-face
+    const reg=clipToBox(solid, bx-OV, by-OV, bx+U+OV, by+U+OV);               // cells overlap by a hair, so touching prisms fuse instead of meeting face-to-face
     if(reg.length<3) continue;
     const hs=has.has(i+","+j) ? [{x:bx+U/2, y:by+U/2, r:r, d:d}] : [];
     t.push(...prismTris(reg,z0,z1,hs));
   }
   return t;
 }
+/* ---------- Fuse: shapes bound into one group print as ONE piece ---------- */
+const FUSE_GROW=0.1;   // grow each fused member by a hair so touching members OVERLAP. Two solids that merely meet face to
+                       // face are a coin toss for the slicer; an overlap always welds - the same trick that sticks studs on.
+function offsetRing(ring,d){   // push a polygon's edges outward by d and re-corner them (miter)
+  let p=ring.map(q=>[q[0],q[1]]);
+  if(p.length>1 && _samePt(p[0],p[p.length-1])) p.pop();
+  if(p.length<3) return ring;
+  const n=p.length;
+  let A=0; for(let i=0;i<n;i++){ const a=p[i],b=p[(i+1)%n]; A+=a[0]*b[1]-b[0]*a[1]; } const ccw=A>0;
+  const ln=[];
+  for(let i=0;i<n;i++){ const a=p[i], b=p[(i+1)%n], dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
+    ln.push({ax:a[0]+(ccw?dy:-dy)/L*d, ay:a[1]+(ccw?-dx:dx)/L*d, dx:dx, dy:dy}); }   // the edge, shifted along its outward normal
+  const out=[];
+  for(let i=0;i<n;i++){ const L1=ln[(i+n-1)%n], L2=ln[i];                             // corner i = where the two shifted edges now cross
+    const den=L1.dx*L2.dy-L1.dy*L2.dx;
+    if(Math.abs(den)<1e-9){ out.push([L2.ax,L2.ay]); continue; }                      // straight through
+    const t=((L2.ax-L1.ax)*L2.dy-(L2.ay-L1.ay)*L2.dx)/den;
+    let x=L1.ax+L1.dx*t, y=L1.ay+L1.dy*t, r=Math.hypot(x-p[i][0], y-p[i][1]);
+    if(r>4*d){ const k=4*d/r; x=p[i][0]+(x-p[i][0])*k; y=p[i][1]+(y-p[i][1])*k; }     // a needle-sharp corner would throw a long spike - clamp it
+    out.push([x,y]); }
+  out.push([out[0][0],out[0][1]]);
+  return out;
+}
+function zRange(o){ const g=s=>+o.el.getAttribute(s)||0, z0=g("data-z0"); return [z0, z0+g("data-z")]; }
+function bodiesTouch(a,b){   // do two 3D bodies actually meet? (overlapping in plan AND in height) - if not, fusing them changes nothing
+  const [a0,a1]=zRange(a), [b0,b1]=zRange(b);
+  if(Math.min(a1,b1)-Math.max(a0,b0) < -0.05) return false;
+  const A=a.poly, B=b.poly; if(!A||!B) return false;
+  for(const p of A) if(ptInPoly(p[0],p[1],B)) return true;
+  for(const p of B) if(ptInPoly(p[0],p[1],A)) return true;
+  for(let i=0;i+1<A.length;i++) for(let j=0;j+1<B.length;j++)
+    if(segDist(A[i][0],A[i][1],B[j][0],B[j][1],B[j+1][0],B[j+1][1]) < 0.25) return true;   // edges within a quarter mm count as touching
+  return false;
+}
+function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
+  const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
+  if(o.el.hasAttribute("data-brick"))
+    return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G);   // hollow brick: origin + Fit + cols/rows + height + studs/sockets
+  const t=o.el.tagName.toLowerCase(), fit=g("data-fit"), skips=studSkips(o.el);
+  const z1=g("data-z0")+g("data-z"), z0=(fuse && g("data-z0")>0) ? g("data-z0")-G : g("data-z0");   // a fused body stacked on another reaches down into it
+  const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
+  let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
+    : t==="rect"   ? boxTris(g("x")-G,g("y")-G,g("width")+2*G,g("height")+2*G,z0,z1)
+    : t==="circle" ? cylTris(g("cx"),g("cy"),g("r")+G,z0,z1)
+    : prismTris(solid,z0,z1);                                                 // freeform polygon (Pen / Node) -> extruded prism
+  if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
+  return tris;
+}
 function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
-  let tris=[];
-  bricks.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0"; tris=tris.concat(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"))); });   // hollow brick: origin + Fit + cols/rows + height + studs/dock
-  plain.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase(), z0=g("data-z0"), z1=z0+g("data-z");
-    const fit=g("data-fit"), skips=studSkips(o.el);
-    tris=tris.concat(o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
-      : t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1)
-      : t==="circle" ? cylTris(g("cx"),g("cy"),g("r"),z0,z1)
-      : prismTris(o.poly,z0,z1));                                            // freeform polygon (Pen / Node) -> extruded prism
-    if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));       // LEGO studs on its top face, minus any removed
-  });
-  return {tris, n:bricks.length+plain.length, bricks:bricks.length};
+  const bodies=bricks.concat(plain);
+  const per={}; bodies.forEach(o=>{ if(o.group!=null) per[o.group]=(per[o.group]||0)+1; });   // bodies per group; 2+ = fused into one printed piece
+  const parts=new Map();                                                                      // a PART is one printed piece: a fused group, or a body on its own
+  bodies.forEach(o=>{ const fuse=o.group!=null && per[o.group]>1, key=o.group!=null ? "g"+o.group : "o"+o.id;
+    if(!parts.has(key)) parts.set(key,[]);
+    parts.get(key).push(...bodyTris(o,fuse)); });
+  const list=Array.from(parts.values());
+  return {tris:[].concat.apply([],list), n:bodies.length, bricks:bricks.length, parts:list};
 }
 async function exportSTL(){
-  const {tris,n,bricks}=buildTris();
+  const {tris,n,bricks,parts}=buildTris();
   if(!n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
-  const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
-  if(name) say("Exported "+name+" - "+n+" object"+(n!==1?"s":"")+(bricks?" ("+bricks+" hollow brick"+(bricks!==1?"s":"")+")":"")+", "+tris.length+" triangles.");
+  if(parts.length===1){
+    const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
+    if(name) say("Exported "+name+" - "+n+" object"+(n!==1?"s":"")+(bricks?" ("+bricks+" hollow brick"+(bricks!==1?"s":"")+")":"")+", "+tris.length+" triangles.");
+    return;
+  }
+  say("Saving "+parts.length+" printed pieces, one STL each - a Save dialog opens for each. (Fused shapes count as one piece.)");
+  let saved=0;
+  for(let i=0;i<parts.length;i++){
+    const nm=await saveBlob(new Blob([stlAscii(parts[i],"sangala_part"+(i+1))],{type:"model/stl"}),"sangala-part"+(i+1)+".stl","STL model",".stl");
+    if(!nm) break;                                                     // cancelled - stop asking
+    saved++;
+  }
+  say(saved ? "Exported "+saved+" of "+parts.length+" pieces, "+tris.length+" triangles in all."
+            : "Export cancelled - nothing written.");
 }
 $("bStl").onclick=exportSTL;
 
@@ -1807,11 +1866,15 @@ function refreshEditPanel(){
     const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
     const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
     setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
-    $("editinfo").textContent = (isGroup?"Group of ":"")+selMulti.length+" objects selected"+(mode3D?".":". Change them all to:");
+    $("editinfo").textContent = mode3D ? (isGroup?"Fused: ":"")+selMulti.length+" objects selected"+(isGroup?" - one printed piece.":".")
+                                       : (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none";
     $("groupsrow").style.display="block";
+    $("eGroup").textContent   = mode3D ? "⛓ Fuse into one piece" : "▦ Group";       // in 3D a group IS the printed piece
+    $("eUngroup").textContent = mode3D ? "⛓ Unfuse" : "▤ Ungroup";
+    $("eGroup").title = mode3D ? "Print these as a single solid: they grow a hair so they overlap, and the slicer welds them. They must touch." : "";
     $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     const mbrk=selectedBrick();                               // a grouped brick: offer its size controls too
     if(mode3D && mbrk){ $("editinfo").textContent="LEGO brick selected — adjust its size below."; }
@@ -1855,14 +1918,35 @@ $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
 // Group: bind the current multi-selection into one unit (shared .group id) so it moves/selects together.
+// In 3D the same binding means MORE: the group is one printed piece. Its members grow a hair (FUSE_GROW) so they
+// overlap, and the slicer welds them into a single solid - the same fusion that sticks a stud to a brick's roof.
+// No 3D boolean is involved: a slicer only ever ADDS volume, which is why Fuse can union but could never subtract.
+function fusedBodies(ids){   // the members that carry 3D volume (a brick's stud circles ride along but aren't bodies)
+  const set=new Set(ids);
+  return objects.filter(o=>set.has(o.id) && o.el && o.poly && !(o.el.getAttribute&&o.el.getAttribute("data-brickpart")) && (+o.el.getAttribute("data-z")||0)>0);
+}
+function fuseIslands(bs){   // how many separate clumps of touching bodies? 1 = they really will print as one piece
+  const seen=new Set(); let islands=0;
+  bs.forEach(b=>{ if(seen.has(b.id)) return;
+    islands++; const q=[b]; seen.add(b.id);
+    while(q.length){ const c=q.pop();
+      bs.forEach(x=>{ if(!seen.has(x.id) && bodiesTouch(c,x)){ seen.add(x.id); q.push(x); } }); } });
+  return islands;
+}
 function groupSel(){
-  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then Group."); return; }
+  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Fuse":"Group")+"."); return; }
   groupSeq++; const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.group=groupSeq; });
-  refreshEditPanel(); draw(); say("Grouped "+selMulti.length+" objects - they now select and move as one. Ungroup to separate them.");
+  refreshEditPanel(); draw(); pvRefresh();
+  if(!mode3D){ say("Grouped "+selMulti.length+" objects - they now select and move as one. Ungroup to separate them."); return; }
+  const bs=fusedBodies(selMulti), islands=bs.length?fuseIslands(bs):0;
+  say(bs.length<2 ? "Fused, but only "+bs.length+" of these has a Depth - give the others one and they will print as a single piece."
+    : islands>1   ? "Fused "+bs.length+" shapes, but they sit in "+islands+" separate clumps - they will still print as "+islands+" pieces. Move them until they touch or overlap."
+    : "Fused "+bs.length+" shapes into one printed piece - Export STL writes it as a single STL. Unfuse to separate them.");
 }
 function ungroupSel(){
   const set=new Set(selMulti); let n=0; objects.forEach(o=>{ if(set.has(o.id)&&o.group!=null){ o.group=null; n++; } });
-  refreshEditPanel(); draw(); say("Ungrouped "+n+" objects.");
+  refreshEditPanel(); draw(); pvRefresh();
+  say(mode3D ? "Unfused "+n+" shapes - each prints as its own piece again." : "Ungrouped "+n+" objects.");
 }
 $("eGroup").onclick=groupSel;
 $("eUngroup").onclick=ungroupSel;
