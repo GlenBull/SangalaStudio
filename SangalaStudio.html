@@ -589,6 +589,18 @@ function draw(){
   ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  if(mode3D){   // show where the studs will sit on an extruded shape (same grid the 3D mesh uses); a 3D annotation, not a cut line
+    const pp=placeParams();
+    ctx.save(); ctx.strokeStyle="#8a5a2b"; ctx.lineWidth=1;
+    objects.forEach(o=>{
+      if(!o.el||!o.el.getAttribute||o.el.getAttribute("data-studs")!=="1") return;
+      if((+o.el.getAttribute("data-z")||0)<=0 || !o.poly) return;
+      const fit=+o.el.getAttribute("data-fit")||0, r=studRadius(fit)*pp.s*k;
+      studCenters(o.poly,fit).forEach(c=>{
+        ctx.beginPath(); ctx.arc((c[0]*pp.s+pp.ox)*k,(c[1]*pp.s+pp.oy)*k,r,0,6.2832); ctx.stroke(); });
+    });
+    ctx.restore();
+  }
   if(showMarks){
     ctx.fillStyle="#111"; const I=INSET,S=SQUARE_SZ,L=MARK_LEN,T=MARK_TH,W=PAGE_LW,H=PAGE_LH,tt=Math.max(1.5,T*k);
     ctx.fillRect(I*k,I*k,S*k,S*k);
@@ -974,8 +986,9 @@ function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outlin
   for(let i=0;i+1<ring.length;i++) d=Math.min(d, segDist(x,y,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]));
   return d;
 }
-function studsFor(ring,z1,fit){   // LEGO studs on the top face of an extruded shape: the global 8 mm grid, only where a stud fully fits on the face
-  const U=8, studR=Math.max(1.5, 2.4-(fit||0)/2), studH=1.8, WELD=0.2, t=[];
+function studRadius(fit){ return Math.max(1.5, 2.4-(fit||0)/2); }
+function studCenters(ring,fit){   // grid points (global 8 mm LEGO grid, cell centres) where a stud fully fits on the face - shared by the 2D view and the 3D mesh
+  const U=8, studR=studRadius(fit), out=[];
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
   for(let i=Math.floor((mnx-U/2)/U); i<=Math.ceil((mxx-U/2)/U); i++)
@@ -983,8 +996,13 @@ function studsFor(ring,z1,fit){   // LEGO studs on the top face of an extruded s
       const cx=U/2+i*U, cy=U/2+j*U;                                   // stud centres sit at cell centres, as on a brick
       if(!ptInPoly(cx,cy,ring)) continue;
       if(edgeDist(cx,cy,ring) < studR+0.2) continue;                  // skip any stud that would hang off the edge
-      t.push(...cylTris(cx,cy,studR,z1-WELD,z1+studH));               // sinks into the top face so the slicer fuses it
+      out.push([cx,cy]);
     }
+  return out;
+}
+function studsFor(ring,z1,fit){   // the stud solids, sunk into the top face so the slicer fuses them
+  const studR=studRadius(fit), studH=1.8, WELD=0.2, t=[];
+  studCenters(ring,fit).forEach(c=>{ t.push(...cylTris(c[0],c[1],studR,z1-WELD,z1+studH)); });
   return t;
 }
 function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
@@ -1597,7 +1615,7 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
-  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }   // depth / base Z; no 2D change, but the 3D preview updates live
+  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }   // brick clutch clearance; no 2D change
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
@@ -1612,7 +1630,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   draw(); if(!live)showDims(o); pvRefresh();
 }
 function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // Studs on an extruded shape's top face
-  if(flag==="studs"){ o.el.setAttribute("data-studs", on?"1":"0"); showDims(o); pvRefresh(); } }
+  if(flag==="studs"){ o.el.setAttribute("data-studs", on?"1":"0"); showDims(o); draw(); pvRefresh(); } }   // draw(): the stud overlay on the mat
 const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
   if(el&&el.dataset&&el.dataset.dim!=null) applyDim(el.dataset.dim, +el.value||0, live);
   else if(el&&el.dataset&&el.dataset.dimflag!=null && !live) applyDimFlag(el.dataset.dimflag, el.checked); };   // checkbox: on change only
