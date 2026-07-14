@@ -913,14 +913,51 @@ function stlAscii(tris,name){
     s+=" endloop\nendfacet\n"; });
   return s+"endsolid "+name+"\n";
 }
+function earClip(pts){   // triangulate a simple polygon (any winding, convex or concave) -> index triples into pts
+  const n=pts.length; if(n<3) return [];
+  let area=0; for(let i=0;i<n;i++){ const a=pts[i],b=pts[(i+1)%n]; area+=a[0]*b[1]-b[0]*a[1]; }
+  const V=[]; for(let i=0;i<n;i++) V.push(i); if(area<0) V.reverse();   // walk CCW so a convex corner has cross>0
+  const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const inTri=(p,a,b,c)=>{ const d1=cross(p,a,b),d2=cross(p,b,c),d3=cross(p,c,a);
+    return !((( d1<0)||(d2<0)||(d3<0)) && ((d1>0)||(d2>0)||(d3>0))); };
+  const tris=[]; let guard=0;
+  while(V.length>3 && guard++<20000){ let clipped=false;
+    for(let i=0;i<V.length;i++){ const i0=V[(i+V.length-1)%V.length], i1=V[i], i2=V[(i+1)%V.length];
+      const a=pts[i0],b=pts[i1],c=pts[i2];
+      if(cross(a,b,c)<=0) continue;                                   // reflex / collinear corner - not an ear
+      let ok=true; for(let j=0;j<V.length;j++){ const vj=V[j]; if(vj===i0||vj===i1||vj===i2) continue; if(inTri(pts[vj],a,b,c)){ ok=false; break; } }
+      if(ok){ tris.push([i0,i1,i2]); V.splice(i,1); clipped=true; break; } }
+    if(!clipped) break; }
+  if(V.length===3) tris.push([V[0],V[1],V[2]]);
+  return tris;
+}
+function prismTris(ring,z0,z1){   // extrude a polygon ring (design mm) into a solid prism: triangulated top/bottom caps + side walls, outward normals
+  let pts=ring.map(p=>[p[0],p[1]]);
+  if(pts.length>1){ const f=pts[0], l=pts[pts.length-1]; if(Math.abs(f[0]-l[0])<1e-6 && Math.abs(f[1]-l[1])<1e-6) pts.pop(); }   // drop a closing duplicate
+  if(pts.length<3 || z1<=z0) return [];
+  const cap=earClip(pts), t=[];
+  const nz=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);   // z of the tri normal - caps are flat, so its sign orients them
+  const face=(tri,up)=>{ const s=nz(tri[0],tri[1],tri[2]); return ((up?s>=0:s<=0)?tri:[tri[0],tri[2],tri[1]]); };
+  for(const [i,j,k] of cap) t.push(face([[pts[i][0],pts[i][1],z1],[pts[j][0],pts[j][1],z1],[pts[k][0],pts[k][1],z1]], true));    // top cap +Z
+  for(const [i,j,k] of cap) t.push(face([[pts[i][0],pts[i][1],z0],[pts[j][0],pts[j][1],z0],[pts[k][0],pts[k][1],z0]], false));   // bottom cap -Z
+  let A=0; for(let i=0;i<pts.length;i++){ const a=pts[i],b=pts[(i+1)%pts.length]; A+=a[0]*b[1]-b[0]*a[1]; } const ccw=A>0;
+  const nrm=(a,b,c)=>{ const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2]; return [uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx]; };
+  for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
+    const a0=[a[0],a[1],z0], b0=[b[0],b[1],z0], a1=[a[0],a[1],z1], b1=[b[0],b[1],z1];
+    const dx=b[0]-a[0], dy=b[1]-a[1], ox=(ccw?dy:-dy), oy=(ccw?-dx:dx);                 // horizontal outward direction of this edge
+    for(let tri of [[a0,b0,b1],[a0,b1,a1]]){ const nn=nrm(tri[0],tri[1],tri[2]); if(nn[0]*ox+nn[1]*oy<0) tri=[tri[0],tri[2],tri[1]]; t.push(tri); } }
+  return t;
+}
 function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
-  const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
+  const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
   let tris=[];
   bricks.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0"; tris=tris.concat(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"))); });   // hollow brick: origin + Fit + cols/rows + height + studs/dock
   plain.forEach(o=>{ const g=s=>+o.el.getAttribute(s)||0, t=o.el.tagName.toLowerCase(), z0=g("data-z0"), z1=z0+g("data-z");
-    tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1) : cylTris(g("cx"),g("cy"),g("r"),z0,z1)); });
+    tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1)
+      : t==="circle" ? cylTris(g("cx"),g("cy"),g("r"),z0,z1)
+      : prismTris(o.poly,z0,z1)); });   // freeform polygon (Pen / Node) -> extruded prism
   return {tris, n:bricks.length+plain.length, bricks:bricks.length};
 }
 async function exportSTL(){
@@ -1414,6 +1451,7 @@ function dimText(o){
                 else rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } }
   else if(t==="circle"){ rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
+  else if(t==="polygon"){ if(!mode3D) return ""; rows=[[["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]]; }   // freeform shape: extrude with Depth/Base (drag to reposition)
   else return "";
   const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="0.1" data-dim="'+p[2]+'" value="'+p[1]+'"></td>'
