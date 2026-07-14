@@ -611,7 +611,7 @@ function draw(){
         ctx.restore();}
       if(activeTool==="select"){ const rh=rotHandle(o,k);   // rotate handle above the shape (rect / polygon)
         if(rh){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.fillStyle="#fff"; ctx.lineWidth=1.5;
-          ctx.beginPath(); ctx.moveTo(rh.tx*k,rh.ty*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(rh.ax*k,rh.ay*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
           ctx.beginPath(); ctx.arc(rh.x*k,rh.y*k,5,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); } }
       }}
   if(selMulti.length){   // marquee multi-selection: dashed outline around each selected object
@@ -1676,13 +1676,16 @@ cv.addEventListener("click",(e)=>{
 /* ---------- in-plane rotation: a handle above the shape spins it about its center ---------- */
 function rotatePts(pts,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // rotate points around (cx,cy) by ang radians
   return pts.map(p=>{ const dx=p[0]-cx,dy=p[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c]; }); }
-function rotHandle(o,k){   // placed-mm position of the rotate handle (26 px above top-center) + the top-center it links to; null when rotation N/A
+function rotHandle(o,k){   // handle anchored to the first-edge midpoint (which rotates WITH the shape), offset outward from center; null when N/A
   const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
   if(!(t==="rect"||t==="polygon")) return null;                                   // circles are symmetric
   if(o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"))) return null;   // bricks stay grid-aligned
-  const ring=placePoly(o.poly); let minx=1e9,maxx=-1e9,miny=1e9;
-  ring.forEach(q=>{ if(q[0]<minx)minx=q[0]; if(q[0]>maxx)maxx=q[0]; if(q[1]<miny)miny=q[1]; });
-  const tx=(minx+maxx)/2, ty=miny; return { x:tx, y:ty-26/k, tx:tx, ty:ty };
+  const ring=placePoly(o.poly); if(ring.length<2) return null;
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+  ring.forEach(q=>{ if(q[0]<minx)minx=q[0]; if(q[0]>maxx)maxx=q[0]; if(q[1]<miny)miny=q[1]; if(q[1]>maxy)maxy=q[1]; });
+  const cx=(minx+maxx)/2, cy=(miny+maxy)/2, ax=(ring[0][0]+ring[1][0])/2, ay=(ring[0][1]+ring[1][1])/2;   // center + first-edge midpoint (top edge of a rect)
+  let dx=ax-cx, dy=ay-cy, len=Math.hypot(dx,dy); if(len<1e-6){ dx=0; dy=-1; len=1; } dx/=len; dy/=len;    // outward from center through the edge
+  const off=22/k; return { ax:ax, ay:ay, x:ax+dx*off, y:ay+dy*off };            // stem base on the shape, handle 22 px beyond
 }
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
 // rect: corner handle resizes (opposite corner anchored), body moves.
