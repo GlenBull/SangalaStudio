@@ -589,17 +589,19 @@ function draw(){
   ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
-  if(mode3D){   // show where the studs will sit on an extruded shape (same grid the 3D mesh uses); a 3D annotation, not a cut line
-    const pp=placeParams();
-    ctx.save(); ctx.strokeStyle="#8a5a2b"; ctx.lineWidth=1;
+  if(mode3D){   // where the studs sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
+    const pp=placeParams();                                            // a removed stud is drawn as a dotted ghost; click it to put it back
+    ctx.save(); ctx.lineWidth=1;
     objects.forEach(o=>{
       if(!o.el||!o.el.getAttribute||o.el.getAttribute("data-studs")!=="1") return;
       if((+o.el.getAttribute("data-z")||0)<=0 || !o.poly) return;
-      const fit=+o.el.getAttribute("data-fit")||0, r=studRadius(fit)*pp.s*k;
-      studCenters(o.poly,fit).forEach(c=>{
-        ctx.beginPath(); ctx.arc((c[0]*pp.s+pp.ox)*k,(c[1]*pp.s+pp.oy)*k,r,0,6.2832); ctx.stroke(); });
+      const fit=+o.el.getAttribute("data-fit")||0, r=studRadius(fit)*pp.s*k, sk=studSkips(o.el);
+      studCells(o.poly,fit).forEach(c=>{
+        const gone=sk.has(c.i+","+c.j);
+        ctx.setLineDash(gone?[2,3]:[]); ctx.strokeStyle=gone?"#c3ab8c":"#8a5a2b";
+        ctx.beginPath(); ctx.arc((c.x*pp.s+pp.ox)*k,(c.y*pp.s+pp.oy)*k,r,0,6.2832); ctx.stroke(); });
     });
-    ctx.restore();
+    ctx.setLineDash([]); ctx.restore();
   }
   if(showMarks){
     ctx.fillStyle="#111"; const I=INSET,S=SQUARE_SZ,L=MARK_LEN,T=MARK_TH,W=PAGE_LW,H=PAGE_LH,tt=Math.max(1.5,T*k);
@@ -987,22 +989,28 @@ function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outlin
   return d;
 }
 function studRadius(fit){ return Math.max(1.5, 2.4-(fit||0)/2); }
-function studCenters(ring,fit){   // grid points (global 8 mm LEGO grid, cell centres) where a stud fully fits on the face - shared by the 2D view and the 3D mesh
+function studSkips(el){   // cells the user has switched off, as "i,j" keys
+  const s=new Set(), v=el&&el.getAttribute?el.getAttribute("data-nostuds"):"";
+  if(v) v.split(/\s+/).forEach(t=>{ if(t) s.add(t); });
+  return s;
+}
+function studCells(ring,fit){   // every 8 mm cell where a stud fully fits. Anchored to the shape's bbox (as on a brick), so studs travel WITH the shape and i,j stay stable
   const U=8, studR=studRadius(fit), out=[];
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
-  for(let i=Math.floor((mnx-U/2)/U); i<=Math.ceil((mxx-U/2)/U); i++)
-    for(let j=Math.floor((mny-U/2)/U); j<=Math.ceil((mxy-U/2)/U); j++){
-      const cx=U/2+i*U, cy=U/2+j*U;                                   // stud centres sit at cell centres, as on a brick
+  for(let i=0; mnx+U/2+i*U<=mxx; i++)
+    for(let j=0; mny+U/2+j*U<=mxy; j++){
+      const cx=mnx+U/2+i*U, cy=mny+U/2+j*U;                           // stud centres sit at cell centres
       if(!ptInPoly(cx,cy,ring)) continue;
       if(edgeDist(cx,cy,ring) < studR+0.2) continue;                  // skip any stud that would hang off the edge
-      out.push([cx,cy]);
+      out.push({i:i,j:j,x:cx,y:cy});
     }
   return out;
 }
-function studsFor(ring,z1,fit){   // the stud solids, sunk into the top face so the slicer fuses them
+function studsFor(ring,z1,fit,skips){   // the stud solids, sunk into the top face so the slicer fuses them
   const studR=studRadius(fit), studH=1.8, WELD=0.2, t=[];
-  studCenters(ring,fit).forEach(c=>{ t.push(...cylTris(c[0],c[1],studR,z1-WELD,z1+studH)); });
+  studCells(ring,fit).forEach(c=>{ if(skips&&skips.has(c.i+","+c.j)) return;   // a stud the user removed
+    t.push(...cylTris(c.x,c.y,studR,z1-WELD,z1+studH)); });
   return t;
 }
 function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
@@ -1015,7 +1023,7 @@ function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH th
     tris=tris.concat(t==="rect" ? boxTris(g("x"),g("y"),g("width"),g("height"),z0,z1)
       : t==="circle" ? cylTris(g("cx"),g("cy"),g("r"),z0,z1)
       : prismTris(o.poly,z0,z1));                                            // freeform polygon (Pen / Node) -> extruded prism
-    if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,g("data-fit")));   // LEGO studs on its top face
+    if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,g("data-fit"),studSkips(o.el)));   // LEGO studs on its top face, minus any removed
   });
   return {tris, n:bricks.length+plain.length, bricks:bricks.length};
 }
@@ -1447,7 +1455,7 @@ function ensurePolygon(o){
   if(o.el.tagName.toLowerCase()==="polygon") return;   // already editable
   const nodes=shapeNodes(o);                            // rect -> 4 corners, in order
   const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-  ["data-z","data-z0","data-studs"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and studs
+  ["data-z","data-z0","data-studs","data-nostuds"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and studs
   const poly=svgNode("polygon",attrs);
   if(o.el&&o.el.remove) o.el.remove();
   o.el=poly; o.poly=nodes.concat([nodes[0]]);           // closed ring for preview/cut
@@ -1855,6 +1863,21 @@ cv.addEventListener("mousedown",(e)=>{
         const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
         drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),a0:Math.atan2(py-cy,px-cx),moved:false};
         cv.style.cursor="grabbing"; e.preventDefault(); return; } }
+  }
+  if(mode3D && selId!=null && !selMulti.length){   // click a stud on the selected shape to remove it; click its dotted ghost to put it back
+    const so=objects.find(x=>x.id===selId);
+    if(so&&so.el&&so.el.getAttribute&&so.el.getAttribute("data-studs")==="1" && (+so.el.getAttribute("data-z")||0)>0 && so.poly){
+      const {mx,my}=evtMM(e), pp=placeParams(), fit=+so.el.getAttribute("data-fit")||0, r=studRadius(fit)*pp.s;
+      for(const c of studCells(so.poly,fit)){
+        if(Math.hypot(mx-(c.x*pp.s+pp.ox), my-(c.y*pp.s+pp.oy))<=r){
+          const sk=studSkips(so.el), key=c.i+","+c.j;
+          if(sk.has(key)) sk.delete(key); else sk.add(key);
+          so.el.setAttribute("data-nostuds", Array.from(sk).join(" "));
+          suppressClick=true; draw(); pvRefresh();
+          say(sk.has(key) ? "Removed a stud - click the dotted circle to put it back." : "Restored a stud.");
+          e.preventDefault(); return;
+        } }
+    }
   }
   if(refImg && refImg.sel){   // selected reference image: corner = resize (proportional), body = move
     const {mx,my,k}=evtMM(e);
