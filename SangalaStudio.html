@@ -788,12 +788,34 @@ $("tSnap").onclick=()=>{
   if(!snapWin){ say("The browser blocked the Snap! window - allow pop-ups for this page and press Snap! again."); return; }
   say("Opened Snap!. Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"send pen trails to Sangala\" will deliver the drawing straight to this mat.");
 };
+// Serialize the design (the selection if there is one, else the whole mat) as a small MONOCHROME SVG,
+// so Snap! can paint it onto its stage. Black outlines - a fold line stays dashed so its kind survives.
+// (No fill or color: Sangala does not author those yet. When it does, this is where they would ride along.)
+function designToMonoSvg(){
+  const sel = selMulti.length ? new Set(selMulti) : (selId!=null ? new Set([selId]) : null);
+  const items = objects.filter(o=>o.poly && o.poly.length>=2 && (!sel || sel.has(o.id)));
+  if(!items.length) return null;
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  items.forEach(o=>o.poly.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; }));
+  const M=3, x0=mnx-M, y0=mny-M, w=(mxx-mnx)+2*M, h=(mxy-mny)+2*M;   // small margin so strokes aren't clipped
+  const body=items.map(o=>{
+    const closed=isClosedRing(o.poly), pts=(closed?o.poly.slice(0,-1):o.poly).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ");
+    const dash=(o.kind==="score")?' stroke-dasharray="2,1.2"':'';   // a fold line reads as dashed
+    return '<'+(closed?"polygon":"polyline")+' points="'+pts+'" fill="none" stroke="#000" stroke-width="0.6"'+dash+'/>';
+  }).join("");
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+fmtn(w)+'" height="'+fmtn(h)+'" viewBox="'+fmtn(x0)+' '+fmtn(y0)+' '+fmtn(w)+' '+fmtn(h)+'">'+body+'</svg>';
+}
 window.addEventListener("message",e=>{
-  if(!/^https?:\/\/([a-z]+\.)?snap\.berkeley\.edu$/.test(e.origin)) return;   // only Snap! may hand us a design
-  const d=e.data;
-  if(!d || d.sangala!=="svg" || typeof d.svg!=="string" || d.svg.indexOf("<svg")<0) return;
-  tookFromSnap(d.svg);
-  if(e.source) e.source.postMessage({sangala:"ok"}, e.origin);                // let the block know it landed
+  if(!/^https?:\/\/([a-z]+\.)?snap\.berkeley\.edu$/.test(e.origin)) return;   // only Snap! may talk to us
+  const d=e.data; if(!d) return;
+  if(d.sangala==="svg" && typeof d.svg==="string" && d.svg.indexOf("<svg")>=0){   // Snap! -> Sangala: a turtle drawing arrives
+    tookFromSnap(d.svg);
+    if(e.source) e.source.postMessage({sangala:"ok"}, e.origin);
+  } else if(d.sangala==="get"){                                                   // Sangala -> Snap!: Snap! asks for the current design
+    const svg=designToMonoSvg();
+    if(e.source) e.source.postMessage(svg?{sangala:"design",svg:svg}:{sangala:"empty"}, e.origin);
+    if(svg) say("Sent the design to Snap!.");
+  }
 });
 // A locally-served Snap! (or any page the browser does allow through) can still POST to the helper instead.
 async function pollSnap(){
