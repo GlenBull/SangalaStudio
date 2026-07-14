@@ -282,7 +282,7 @@ let selId2=null;             // secondary selection (Shift+click) - the 2nd oper
 let selImg2=false;           // the reference photo picked (Shift+click) as Combine's 2nd operand: Intersect crops the photo to the shape
 let selMulti=[];             // marquee multi-selection (object ids); when non-empty, single-select (selId) is cleared
 let groupSeq=0;              // group ids: objects sharing a non-null .group select and move as one unit
-let hist=[], histBusy=false, histTimer=null;   // Undo (Ctrl-Z): debounced snapshots of the design
+let hist=[], redoStack=[], histBusy=false, histTimer=null;   // Undo (Ctrl-Z) / Redo: debounced snapshots of the design
 let penPts=[];               // Pen tool: in-progress polygon vertices (design mm)
 let penHover=null;           // Pen tool: current cursor (placed mm) for the rubber-band segment
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
@@ -1118,7 +1118,9 @@ function serializeState(){
       kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null, group:o.group })) };
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
-  if(hist.length && hist[hist.length-1]===s) return; hist.push(s); if(hist.length>60) hist.shift(); }
+  if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
+  hist.push(s); redoStack=[];                                                        // a genuinely new edit invalidates redo
+  if(hist.length>60) hist.shift(); }
 function scheduleCommit(){ if(histBusy) return; clearTimeout(histTimer); histTimer=setTimeout(commit,350); }   // snapshot once edits settle
 function restoreState(st){
   objects.forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });      // drop current elements from the retained doc
@@ -1133,16 +1135,24 @@ function restoreState(st){
 function undo(){
   if(histTimer){ clearTimeout(histTimer); histTimer=null; commit(); }   // flush a settling change so it is on the stack
   if(hist.length<2){ say("Nothing to undo."); return; }
-  hist.pop();                                                            // discard the current state
+  redoStack.push(hist.pop());                                            // the state we leave becomes redoable
   histBusy=true; restoreState(JSON.parse(hist[hist.length-1])); histBusy=false;   // restore the previous
-  say("Undid the last change.");
+  say("Undid the last change. Ctrl+Y redoes it.");
 }
-window.addEventListener("keydown",(e)=>{   // Ctrl-Z / Cmd-Z
-  if((e.ctrlKey||e.metaKey) && !e.shiftKey && !e.altKey && (e.key==="z"||e.key==="Z")){
-    const tg=(e.target&&e.target.tagName||"").toLowerCase();
-    if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo
-    e.preventDefault(); undo();
-  }
+function redo(){
+  if(histTimer){ clearTimeout(histTimer); histTimer=null; commit(); }   // a settling new edit commits first (and clears redo)
+  if(!redoStack.length){ say("Nothing to redo."); return; }
+  const s=redoStack.pop(); hist.push(s);                                 // step forward again
+  histBusy=true; restoreState(JSON.parse(s)); histBusy=false;
+  say("Redid the change.");
+}
+window.addEventListener("keydown",(e)=>{   // Ctrl-Z undo; Ctrl-Shift-Z or Ctrl-Y redo (Cmd on a Mac)
+  if(!(e.ctrlKey||e.metaKey) || e.altKey) return;
+  const tg=(e.target&&e.target.tagName||"").toLowerCase();
+  if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo
+  const k=(e.key||"").toLowerCase();
+  if(k==="z" && !e.shiftKey){ e.preventDefault(); undo(); }
+  else if((k==="z" && e.shiftKey) || k==="y"){ e.preventDefault(); redo(); }
 });
 commit();   // seed with the initial (empty) state
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
