@@ -608,7 +608,12 @@ function draw(){
         ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=many?1:1.5;
         nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
           ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
-        ctx.restore();}}}
+        ctx.restore();}
+      if(activeTool==="select"){ const rh=rotHandle(o,k);   // rotate handle above the shape (rect / polygon)
+        if(rh){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.fillStyle="#fff"; ctx.lineWidth=1.5;
+          ctx.beginPath(); ctx.moveTo(rh.tx*k,rh.ty*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
+          ctx.beginPath(); ctx.arc(rh.x*k,rh.y*k,5,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); } }
+      }}
   if(selMulti.length){   // marquee multi-selection: dashed outline around each selected object
     ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
     selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return; const ring=placePoly(o.poly);
@@ -1313,7 +1318,9 @@ function placeBrick(e){
 function ensurePolygon(o){
   if(o.el.tagName.toLowerCase()==="polygon") return;   // already editable
   const nodes=shapeNodes(o);                            // rect -> 4 corners, in order
-  const poly=svgNode("polygon",{points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")});
+  const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
+  ["data-z","data-z0"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base
+  const poly=svgNode("polygon",attrs);
   if(o.el&&o.el.remove) o.el.remove();
   o.el=poly; o.poly=nodes.concat([nodes[0]]);           // closed ring for preview/cut
 }
@@ -1666,6 +1673,17 @@ cv.addEventListener("click",(e)=>{
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
+/* ---------- in-plane rotation: a handle above the shape spins it about its center ---------- */
+function rotatePts(pts,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // rotate points around (cx,cy) by ang radians
+  return pts.map(p=>{ const dx=p[0]-cx,dy=p[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c]; }); }
+function rotHandle(o,k){   // placed-mm position of the rotate handle (26 px above top-center) + the top-center it links to; null when rotation N/A
+  const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
+  if(!(t==="rect"||t==="polygon")) return null;                                   // circles are symmetric
+  if(o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"))) return null;   // bricks stay grid-aligned
+  const ring=placePoly(o.poly); let minx=1e9,maxx=-1e9,miny=1e9;
+  ring.forEach(q=>{ if(q[0]<minx)minx=q[0]; if(q[0]>maxx)maxx=q[0]; if(q[1]<miny)miny=q[1]; });
+  const tx=(minx+maxx)/2, ty=miny; return { x:tx, y:ty-26/k, tx:tx, ty:ty };
+}
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
 // rect: corner handle resizes (opposite corner anchored), body moves.
 // circle: cardinal handle changes radius (center fixed), body moves the center.
@@ -1678,6 +1696,15 @@ cv.addEventListener("mousedown",(e)=>{
   if(activeTool==="node"){ startNodeDrag(e); return; }   // Node tool: drag a node to move it
   if(activeTool==="pen"){ penClick(e); return; }         // Pen tool: click to place a point
   if(activeTool!=="select"){ startDraw(e); return; }   // Rect/Circle tool: drag to draw
+  if(selId!=null && !selMulti.length){   // rotate handle sits in empty space above the shape, so check it before the marquee/move logic
+    const ro=objects.find(x=>x.id===selId);
+    if(ro&&ro.el){ const {mx,my,k}=evtMM(e), pp=placeParams(), rh=rotHandle(ro,k);
+      if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){ ensurePolygon(ro);
+        let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9; ro.poly.forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];});
+        const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
+        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),a0:Math.atan2(py-cy,px-cx),moved:false};
+        cv.style.cursor="grabbing"; e.preventDefault(); return; } }
+  }
   if(refImg && refImg.sel){   // selected reference image: corner = resize (proportional), body = move
     const {mx,my,k}=evtMM(e);
     const cs=[[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],[refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]];
@@ -1758,6 +1785,12 @@ window.addEventListener("mousemove",(e)=>{
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
+  if(drag.mode==="rotate"){ const o=drag.obj;
+    let delta=Math.atan2(dy-drag.cy,dx-drag.cx)-drag.a0;
+    if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }   // Shift snaps to 15 deg (45 / 90 for square fits)
+    o.poly=rotatePts(drag.startPoly,drag.cx,drag.cy,delta);
+    o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+    drag.moved=true; draw(); return; }
   if(drag.shape==="rect"){ let x,y,w,h;
     if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
@@ -1798,6 +1831,7 @@ window.addEventListener("mouseup",()=>{
   }
   if(drag.mode==="node"){ suppressClick=true; if(drag.moved) say("Moved a node."); drag=null; cv.style.cursor="default"; draw(); return; }   // keep the node selected (filled)
   if(drag.mode==="polymove"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; return; }
+  if(drag.mode==="rotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated the shape."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
     if(drag.mode==="move") msg = drag.shape==="rect"
         ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
