@@ -1576,15 +1576,26 @@ $("pInt").onclick=()=>{ applyBool("intersect"); closeCombine(); };
 const PX_MM=25.4/96;
 function unitMm(el){ const m=el&&el.getCTM&&el.getCTM(); return m ? (Math.hypot(m.a,m.b)||1)*PX_MM : 1; }   // mm per user unit
 function elShift(o){ return [ +(o.el.getAttribute("data-shx")||0), +(o.el.getAttribute("data-shy")||0) ]; }  // how far it has been moved, in mm
+function isClosedRing(p){ return p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<1e-9 && Math.abs(p[0][1]-p[p.length-1][1])<1e-9; }
+// Write o.poly (mm) into a points list in the ELEMENT's own coordinate system. Its CTM says how its units map
+// to the page, so the inverse says how mm map back into its units - exact whatever the file's scale, viewBox,
+// nesting or transform. For a shape the app drew that is the identity, so this is also just "the points".
+function elPoints(o){
+  const m=o.el.getCTM&&o.el.getCTM();
+  let toUnits=q=>q;
+  if(m && svgEl && svgEl.createSVGPoint){
+    const inv=m.inverse(), pt=svgEl.createSVGPoint();
+    toUnits=q=>{ pt.x=q[0]/PX_MM; pt.y=q[1]/PX_MM; const u=pt.matrixTransform(inv); return [u.x,u.y]; };
+  }
+  const p=o.poly, pts=isClosedRing(p)?p.slice(0,-1):p;        // an OPEN stroke (a turtle trail) keeps its last point
+  return pts.map(q=>{ const u=toUnits(q); return fmtn(u[0])+","+fmtn(u[1]); }).join(" ");
+}
 function placeEl(o){
   if(!o||!o.el||!o.poly) return;
   const t=o.el.tagName.toLowerCase();
   if(t==="rect"||t==="circle") return;                       // those carry their own position attributes
-  if(Math.abs(unitMm(o.el)-1)<0.01 && (t==="polygon"||t==="polyline")){   // the app's own document: 1 unit = 1 mm
-    const p=o.poly, closed = p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<1e-9 && Math.abs(p[0][1]-p[p.length-1][1])<1e-9;
-    o.el.setAttribute("points",(closed?p.slice(0,-1):p).map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" "));   // an OPEN stroke keeps its last point
-    return;
-  }
+  if(t==="polygon"||t==="polyline"){ o.el.setAttribute("points", elPoints(o)); return; }
+  // a <path> (an imported Silhouette design): its geometry cannot be rewritten as points, so shift it whole
   if(!o.el.hasAttribute("data-tr0")) o.el.setAttribute("data-tr0", o.el.getAttribute("transform")||"");   // remember the file's own transform
   const sh=elShift(o), u=unitMm(o.el.parentNode)||unitMm(o.el);   // the translate lands in the parent's units
   o.el.setAttribute("transform","translate("+fmtn(sh[0]/u)+","+fmtn(sh[1]/u)+") "+o.el.getAttribute("data-tr0"));
@@ -1715,22 +1726,35 @@ function placeBrick(e){
   makeBrick((mx-pp.ox)/pp.s, (my-pp.oy)/pp.s);
   suppressClick=true; setTool("select");
 }
-// Node tool: convert a parametric rect to an editable <polygon> the first time a node is moved
+// Node tool: make a shape editable point-by-point the first time a node is moved. A parametric rect becomes a
+// <polygon>; a stroke from an imported design (a <path>, or a turtle trail) becomes a <polyline> - it must NOT
+// become a polygon, which would close it, and the blade would then cut the closing edge that was never drawn.
 function ensurePolygon(o){
-  if(o.el.tagName.toLowerCase()==="polygon") return;   // already editable
-  const nodes=shapeNodes(o);                            // rect -> 4 corners, in order
-  const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-  ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and LEGO connectors
-  const poly=svgNode("polygon",attrs);
-  if(o.el&&o.el.remove) o.el.remove();
-  o.el=poly; o.poly=nodes.concat([nodes[0]]);           // closed ring for preview/cut
+  const t=o.el.tagName.toLowerCase();
+  if(t==="polygon"||t==="polyline") return;             // already editable
+  if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
+    const nodes=shapeNodes(o);
+    const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and LEGO connectors
+    const poly=svgNode("polygon",attrs);
+    if(o.el&&o.el.remove) o.el.remove();
+    o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
+    return;
+  }
+  const closed=isClosedRing(o.poly);                    // an imported shape: swap it for an editable one IN PLACE, so it
+  const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
+  ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+  o.el.parentNode.insertBefore(el,o.el);
+  o.el.remove(); o.el=el;
+  o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
 }
 // begin dragging an individual node of the selected rect/polygon
 function startNodeDrag(e){
   if(selId==null) return;
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
-  if((t!=="rect"&&t!=="polygon") || o.el.hasAttribute("data-brick")) return;   // rect/polygon only; bricks stay parametric
+  if(t==="circle" || o.el.hasAttribute("data-brick")) return;   // a circle stays parametric (drag its handles), and so does a brick
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
   let hit=-1,bd=8;
   disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8px of a node
@@ -1740,7 +1764,7 @@ function startNodeDrag(e){
     for(let i=0;i+1<ring.length;i++){ const d=segDist(mx,my,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]); if(d*k<sbd){sbd=d*k;seg=i;} }
     if(seg<0){ selNode=null; return; }                 // not on an edge either -> let the click select
     o.poly.splice(seg+1,0,[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s]);   // insert node at the pointer, after segment seg
-    o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+    placeEl(o);
     hit=seg+1;
   } else ensurePolygon(o);
   selNode=hit;                                         // mark the node selected (drawn filled)
@@ -1749,12 +1773,14 @@ function startNodeDrag(e){
 }
 // delete the selected node from a polygon (keeps >= 3 nodes)
 function deleteNode(){
-  const o=selObj(); if(!o||selNode==null||o.el.tagName.toLowerCase()!=="polygon") return false;
-  const nodes=o.poly.slice(0,-1);
-  if(nodes.length<=3){ say("A shape needs at least 3 nodes."); return true; }
+  const o=selObj(); if(!o||selNode==null) return false;
+  const t=o.el.tagName.toLowerCase(); if(t!=="polygon"&&t!=="polyline") return false;
+  const closed=isClosedRing(o.poly), nodes=closed?o.poly.slice(0,-1):o.poly.slice();
+  const least=closed?3:2;                                    // a closed shape needs 3 corners; an open stroke needs 2 ends
+  if(nodes.length<=least){ say("A "+(closed?"shape needs at least 3 nodes":"line needs at least 2 nodes")+"."); return true; }
   nodes.splice(selNode,1);
-  o.poly=nodes.concat([[nodes[0][0],nodes[0][1]]]);
-  o.el.setAttribute("points", nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+  o.poly = closed ? nodes.concat([[nodes[0][0],nodes[0][1]]]) : nodes;
+  placeEl(o);
   selNode=null; draw(); refreshEditPanel(); say("Deleted a node.");
   return true;
 }
@@ -2250,9 +2276,10 @@ window.addEventListener("mousemove",(e)=>{
     drag.moved=true; draw(); return; }
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
-  if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one polygon node
-    o.poly[i]=[dx,dy]; if(i===0) o.poly[o.poly.length-1]=[dx,dy];   // keep the ring closed
-    o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
+  if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
+    o.poly[i]=[dx,dy];
+    if(i===0 && isClosedRing(o.poly)) o.poly[o.poly.length-1]=[dx,dy];   // a closed ring keeps its ends together; an open stroke does not
+    placeEl(o);
     drag.moved=true; draw(); return; }
   if(drag.mode==="polymove"){ const o=drag.obj, ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
