@@ -1495,7 +1495,12 @@ $("brand").addEventListener("click",(e)=>{ if(!e.altKey) return; e.preventDefaul
   devMode=!devMode; try{ localStorage.setItem("sangalaDev", devMode?"1":"0"); }catch(err){}
   applyDevMode(); say(devMode ? "Developer mode ON - the Test button is shown." : "Developer mode OFF - the Test button is hidden."); });
 /* ---------- About: clicking the LEGO buffalo shows the project abstract ---------- */
-function showAbout(on){ $("about").style.display = on?"block":"none"; }
+function showAbout(on){ const a=$("about");
+  if(on){ const b=cv.parentElement.getBoundingClientRect();   // center on the workspace (the board holding the mat), not the window
+    a.style.left=(b.left+b.width/2)+"px"; a.style.top=(b.top+b.height/2)+"px";
+    a.style.maxWidth=Math.max(300,b.width-40)+"px"; a.style.maxHeight=Math.max(200,b.height-40)+"px"; }
+  a.style.display = on?"block":"none"; }
+window.addEventListener("resize",()=>{ if($("about").style.display!=="none") showAbout(true); });   // keep it centred on the board
 $("buffalo").addEventListener("click",(e)=>{ e.stopPropagation(); showAbout($("about").style.display==="none"); });
 $("aboutClose").onclick=()=>showAbout(false);
 document.addEventListener("click",(e)=>{ const a=$("about");   // click outside closes it
