@@ -94,6 +94,7 @@
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
     <button class="tbtn" id="bOpen" title="Open an SVG design or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
     <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
+    <button class="tbtn" id="bSnap" title="Open Snap! - a turtle drawing made there comes straight back to this mat"><span class="glyph">🐢</span><small>Snap!</small></button>
     <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
@@ -720,13 +721,35 @@ function snapSvgToSangala(text){
     return blue ? "stroke:#ff0000;stroke-dasharray:4 1.2" : "stroke:#ff0000";   // fold lines are perforated; everything else is a cut/draw line
   });
 }
+function tookFromSnap(text){
+  loadSVG(snapSvgToSangala(text));
+  say("Received a drawing from Snap! - "+objects.length+" stroke"+(objects.length!==1?"s":"")+" on the mat. Put a pen in the holder and press Make It to draw it.");
+}
+// The browser will NOT let a page on the public web (snap.berkeley.edu) call into a program on your own
+// machine - Chrome denies "the loopback address space", and no server header overrides it. But two WINDOWS
+// may talk to each other whatever their origins, provided one opened the other. So Sangala opens Snap!, and
+// Snap! hands the drawing back through that window. No CORS, no local-network permission, and the ordinary
+// Snap! - with fifteen years of turtle programs behind it - keeps working exactly as it is.
+let snapWin=null;
+$("bSnap").onclick=()=>{
+  snapWin=window.open("https://snap.berkeley.edu/snap/snap.html","sangala_snap");
+  if(!snapWin){ say("The browser blocked the Snap! window - allow pop-ups for this page and press Snap! again."); return; }
+  say("Opened Snap!. Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"send pen trails to Sangala\" will deliver the drawing straight to this mat.");
+};
+window.addEventListener("message",e=>{
+  if(!/^https?:\/\/([a-z]+\.)?snap\.berkeley\.edu$/.test(e.origin)) return;   // only Snap! may hand us a design
+  const d=e.data;
+  if(!d || d.sangala!=="svg" || typeof d.svg!=="string" || d.svg.indexOf("<svg")<0) return;
+  tookFromSnap(d.svg);
+  if(e.source) e.source.postMessage({sangala:"ok"}, e.origin);                // let the block know it landed
+});
+// A locally-served Snap! (or any page the browser does allow through) can still POST to the helper instead.
 async function pollSnap(){
   if(location.protocol==="file:") return;                       // no helper behind a file:// page
   try{
     const r=await fetch("/snap/svg",{cache:"no-store"}); if(!r.ok) return;
     const t=await r.text(); if(!t || t.indexOf("<svg")<0) return;
-    loadSVG(snapSvgToSangala(t));
-    say("Received a drawing from Snap! - "+objects.length+" stroke"+(objects.length!==1?"s":"")+" on the mat. Put a pen in the holder and press Make It to draw it.");
+    tookFromSnap(t);
   }catch(e){}                                                   // helper not up, or nothing waiting - stay quiet
 }
 setInterval(pollSnap,1500);
