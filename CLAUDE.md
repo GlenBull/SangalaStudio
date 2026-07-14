@@ -22,6 +22,10 @@ USB only, user-mode.** This constraint is absolute.
 - Body = **Times New Roman 11 pt**, black, never below 11 pt; code identifiers in Consolas.
 - Numbered lists for step sequences; **3 pt space after each list item**. A label leading a list
   item is **italic** (not bold). Labels: Title-Case every word EXCEPT words in parentheses (lowercase).
+- **PARAGRAPH SPACING — a heading or lead-in sits TIGHT to the list it introduces.** Word's defaults
+  are wrong here and I have had to be corrected: **Heading 3 = 0 pt before, 3 pt after**; a body
+  paragraph **immediately before a list = 0 pt before, 3 pt after** (not the usual 5/5). An ordinary
+  body paragraph keeps 5 pt. Set these explicitly — never inherit them from the style.
 - **FIGURE CAPTIONS — apply ALL FOUR, and VERIFY each before delivering.** Sit the caption
   directly beneath its figure ("Figure N. <sentence>", numbered sequentially through the document;
   renumber the later figures when inserting one):
