@@ -702,6 +702,11 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(d2[0],d2[1]); ctx.stroke();
     ctx.restore();
   }
+  if(snapHint){   // a snap just locked: mark the point the shapes now share
+    const pp=placeParams(), x=(pp.ox+snapHint[0]*pp.s)*k, y=(pp.oy+snapHint[1]*pp.s)*k;
+    ctx.save(); ctx.strokeStyle="#0a8f3c"; ctx.fillStyle="rgba(16,150,64,.22)"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(x,y,6,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
   if(penPts.length){   // Pen tool: the in-progress path (red = cut), points as squares, first point highlighted
     const pp=placeParams(), P=penPts.map(p=>[(pp.ox+p[0]*pp.s)*k,(pp.oy+p[1]*pp.s)*k]);
     ctx.save(); ctx.strokeStyle="#ff0000"; ctx.lineWidth=1.4; ctx.lineJoin="round";
@@ -1733,6 +1738,46 @@ function pasteClip(){
   clearTimeout(histTimer); histTimer=null; commit();   // snapshot now, not on the usual delay: rapid pastes must undo one at a time
   say("Pasted "+ids.length+" shape"+(ids.length!==1?"s":"")+" - drag it into place. Ctrl+V again for another.");
 }
+/* ---------- Snapping: dragging near another shape pulls corners (or a corner onto an edge) together ---------- */
+let snapHint=null;              // [x,y] design mm where a snap just locked - drawn as a green dot
+const SNAP_PX=7;                // feel: the same reach at any zoom (converted to mm per move)
+function snapTolMm(pp,k){       // SNAP_PX is meant as pixels ON SCREEN - the canvas is displayed scaled, so k (canvas px/mm) alone under-reaches
+  const r=cv.getBoundingClientRect(), css=(r.height/cv.height)||1;
+  return SNAP_PX/(pp.s*k*css);
+}
+function snapSample(p){         // the dragged shape's own snap points: its nodes, or just its bbox corners when it has hundreds
+  const nodes = isClosedRing(p)? p.slice(0,-1): p.slice();
+  if(nodes.length<=40) return nodes.map(q=>[q[0],q[1]]);
+  const bb=bbox([p]); return [[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]];
+}
+function snapTargets(excl){     // everything else on the mat, gathered once when the drag starts
+  const pts=[], segs=[];
+  objects.forEach(o=>{
+    if(excl.has(o.id)||!o.poly||o.poly.length<2) return;
+    const p=o.poly, nodes = objClosed(o)? p.slice(0,-1): p;
+    if(nodes.length<=60) nodes.forEach(q=>pts.push(q));
+    else { const bb=bbox([p]); pts.push([bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]); }
+    if(segs.length<800) for(let i=0;i+1<p.length && segs.length<800;i++) segs.push([p[i],p[i+1]]);
+  });
+  return {pts:pts, segs:segs};
+}
+function snapDelta(drpts, targets, tolMm){   // the offset that locks the nearest pair - corners first, then a corner onto an edge
+  let best=null;
+  for(const p of drpts) for(const q of targets.pts){
+    const d=Math.hypot(p[0]-q[0],p[1]-q[1]);
+    if(d<=tolMm && (!best||d<best.d)) best={d:d, ox:q[0]-p[0], oy:q[1]-p[1], hx:q[0], hy:q[1]};
+  }
+  if(!best) for(const p of drpts) for(const s of targets.segs){
+    const d=segDist(p[0],p[1],s[0][0],s[0][1],s[1][0],s[1][1]);
+    if(d<=tolMm && (!best||d<best.d)){
+      const ax=s[0][0],ay=s[0][1],dx2=s[1][0]-ax,dy2=s[1][1]-ay,l2=dx2*dx2+dy2*dy2||1e-9;
+      let t=((p[0]-ax)*dx2+(p[1]-ay)*dy2)/l2; t=Math.max(0,Math.min(1,t));
+      const qx=ax+dx2*t, qy=ay+dy2*t;
+      best={d:d, ox:qx-p[0], oy:qy-p[1], hx:qx, hy:qy};
+    }
+  }
+  return best;
+}
 // An "align item" carries a placed-mm bbox center + a way to move itself in placed mm.
 // Shapes live in design mm (move via translateObj, delta / placement scale); the reference
 // image already lives in placed mm. Both draw in the same placed-mm * k space, so aligning
@@ -1888,7 +1933,7 @@ function startNodeDrag(e){
     hit=seg+1;
   } else ensurePolygon(o);
   selNode=hit;                                         // mark the node selected (drawn filled)
-  drag={mode:"node", obj:o, idx:hit, moved:false};
+  drag={mode:"node", obj:o, idx:hit, moved:false, snap:snapTargets(new Set([o.id]))};
   cv.style.cursor="grabbing"; e.preventDefault(); draw(); refreshEditPanel();
 }
 // delete the selected node from a polygon (keeps >= 3 nodes)
@@ -2443,6 +2488,9 @@ cv.addEventListener("mousedown",(e)=>{
       if(!(selMulti.length===g.length && g.every(id=>selMulti.includes(id)))){ selMulti=g; selId=null; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; } }
     if(selMulti.length && selMulti.some(id=>{const o=objects.find(x=>x.id===id);return o&&onObjId(o);})){   // drag any member -> move the group
       drag={mode:"groupmove",start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],moved:false,
+        snap:snapTargets(new Set(selMulti)),
+        self:(()=>{ const pts=[]; selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id);
+          if(o&&o.poly&&pts.length<40) snapSample(o.poly).forEach(q=>{ if(pts.length<40) pts.push(q); }); }); return pts; })(),
         orig:selMulti.map(id=>{const o=objects.find(x=>x.id===id),N=s=>+o.el.getAttribute(s)||0,t=o.el.tagName.toLowerCase();
           return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy"),sh:elShift(o)};})};
       cv.style.cursor="move"; e.preventDefault(); return; }
@@ -2456,7 +2504,8 @@ cv.addEventListener("mousedown",(e)=>{
   if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, or any stroke from an imported design (a Snap! drawing arrives as
     const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);   // polylines, a Silhouette file as paths): no parametric resize, but drag the body to move it
     if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys))
-      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),sh0:elShift(o),moved:false},cv.style.cursor="move",e.preventDefault();
+      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),sh0:elShift(o),moved:false,
+            snap:snapTargets(new Set([o.id])),self:snapSample(o.poly)},cv.style.cursor="move",e.preventDefault();
     return; }
   const N=s=>+o.el.getAttribute(s)||0;
   let hit=-1,bd=8;
@@ -2470,7 +2519,7 @@ cv.addEventListener("mousedown",(e)=>{
   if(t==="rect"){ const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);
     inside=mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys); ref=shapeNodes(o)[0]; }
   else { ref=[N("cx"),N("cy")]; inside=Math.hypot(dx-ref[0],dy-ref[1])<=N("r"); }
-  if(inside){ drag={mode:"move",shape:t,obj:o,grab:[dx-ref[0],dy-ref[1]],moved:false};
+  if(inside){ drag={mode:"move",shape:t,obj:o,grab:[dx-ref[0],dy-ref[1]],moved:false,snap:snapTargets(new Set([o.id]))};
     cv.style.cursor="move"; e.preventDefault(); }
 });
 window.addEventListener("mousemove",(e)=>{
@@ -2478,7 +2527,10 @@ window.addEventListener("mousemove",(e)=>{
   if(marquee){ const {mx,my}=evtMM(e); marquee.x1=mx; marquee.y1=my; draw(); return; }
   if(activeTool==="pen" && penPts.length){ const {mx,my}=evtMM(e); penHover=[mx,my]; draw(); return; }   // rubber-band to the cursor
   if(!drag) return;
-  if(drag.mode==="groupmove"){ const {mx,my}=evtMM(e), pp=placeParams(), ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
+  if(drag.mode==="groupmove"){ const {mx,my,k}=evtMM(e), pp=placeParams(); let ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
+    snapHint=null;
+    if(!e.altKey && drag.snap && drag.self.length){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
+      if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     drag.orig.forEach(g=>{ const o=g.o; o.poly=g.poly.map(p=>[p[0]+ddx,p[1]+ddy]);
       if(g.t==="rect"){ o.el.setAttribute("x",fmtn(g.x+ddx)); o.el.setAttribute("y",fmtn(g.y+ddy)); }
       else if(g.t==="circle"){ o.el.setAttribute("cx",fmtn(g.cx+ddx)); o.el.setAttribute("cy",fmtn(g.cy+ddy)); }
@@ -2510,15 +2562,21 @@ window.addEventListener("mousemove",(e)=>{
       Q1:[P1[0]+uxn*inset+nx*depth, P1[1]+uyn*inset+ny*depth],
       Q2:[P2[0]-uxn*inset+nx*depth, P2[1]-uyn*inset+ny*depth]};
     drag.moved=true; draw(); return; }
-  const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
+  const {mx,my,k}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
     const closed=objClosed(o);                               // ask BEFORE moving it: once the first point has moved, the ring no longer LOOKS closed
-    o.poly[i]=[dx,dy];
-    if(i===0 && closed) o.poly[o.poly.length-1]=[dx,dy];     // a closed ring's two ends are one node and move together; an open stroke's do not
+    let ndx=dx, ndy=dy; snapHint=null;
+    if(!e.altKey && drag.snap){ const s=snapDelta([[ndx,ndy]], drag.snap, snapTolMm(pp,k));   // a node pulls onto another shape's corner or edge (Alt = free)
+      if(s){ ndx+=s.ox; ndy+=s.oy; snapHint=[s.hx,s.hy]; } }
+    o.poly[i]=[ndx,ndy];
+    if(i===0 && closed) o.poly[o.poly.length-1]=[ndx,ndy];   // a closed ring's two ends are one node and move together; an open stroke's do not
     placeEl(o);
     drag.moved=true; draw(); return; }
-  if(drag.mode==="polymove"){ const o=drag.obj, ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
+  if(drag.mode==="polymove"){ const o=drag.obj; let ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
+    snapHint=null;
+    if(!e.altKey && drag.snap){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
+      if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
     o.el.setAttribute("data-shx",fmtn(drag.sh0[0]+ddx)); o.el.setAttribute("data-shy",fmtn(drag.sh0[1]+ddy));
     placeEl(o);
@@ -2541,12 +2599,18 @@ window.addEventListener("mousemove",(e)=>{
   if(drag.shape==="rect"){ let x,y,w,h;
     if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
-    else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1]; }
+    else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1];
+      snapHint=null;
+      if(!e.altKey && drag.snap){ const s=snapDelta([[x,y],[x+w,y],[x+w,y+h],[x,y+h]], drag.snap, snapTolMm(pp,k));   // a corner pulls onto a neighbour's corner or edge (Alt = free)
+        if(s){ x+=s.ox; y+=s.oy; snapHint=[s.hx,s.hy]; } } }
     el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
     drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
   } else { let cx,cy,r;
     if(drag.mode==="resize"){ cx=drag.center[0]; cy=drag.center[1]; r=Math.max(0.25,Math.hypot(dx-cx,dy-cy)); }
-    else { r=+el.getAttribute("r")||0; cx=dx-drag.grab[0]; cy=dy-drag.grab[1]; }
+    else { r=+el.getAttribute("r")||0; cx=dx-drag.grab[0]; cy=dy-drag.grab[1];
+      snapHint=null;
+      if(!e.altKey && drag.snap){ const s=snapDelta([[cx,cy],[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]], drag.snap, snapTolMm(pp,k));
+        if(s){ cx+=s.ox; cy+=s.oy; snapHint=[s.hx,s.hy]; } } }
     el.setAttribute("cx",fmtn(cx)); el.setAttribute("cy",fmtn(cy)); el.setAttribute("r",fmtn(r));
     drag.obj.poly=circlePoly(cx,cy,r);
   }
@@ -2564,6 +2628,7 @@ window.addEventListener("mouseup",()=>{
     else draw();   // a click (no drag) -> let the click handler do single-select/deselect
     return; }
   if(!drag) return;
+  if(snapHint){ snapHint=null; draw(); }   // the drag is over - drop the green snap marker
   if(drag.mode==="tab"){ const d=drag; drag=null; suppressClick=true;
     if(!d.preview){ say("Tab: press on an edge and drag ALONG it - the stretch you cover becomes the fold hinge."); draw(); return; }
     makeTab(d); return; }
