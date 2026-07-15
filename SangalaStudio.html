@@ -64,6 +64,7 @@
   #pvhint{position:absolute;left:50%;top:22px;transform:translateX(-50%);background:rgba(30,44,62,.82);color:#eaf1f8;font-size:.8rem;padding:.3rem .7rem;border-radius:20px;user-select:none;pointer-events:none;white-space:nowrap}
   #zoomctl button{width:26px;height:24px;border:1px solid #c9b48c;border-radius:6px;background:linear-gradient(#fffdf7,#efe6d3);cursor:pointer;font-size:1rem;line-height:1;color:#7a3b12}
   #zoomctl button:hover{background:#fff}
+  #zoomctl button.on{background:#dbeafe;border-color:#1a5fb4}
   #zoomctl #zoomFit{width:auto;padding:0 7px;font-size:.78rem}
   #zoomctl #zoomPct{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums}
   canvas{display:block;margin:0 auto;max-width:100%;max-height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:#fff}
@@ -264,6 +265,7 @@
       <span id="zoomPct">100%</span>
       <button id="zoomIn" title="Zoom in">+</button>
       <button id="zoomFit" title="Fit the whole page">Fit</button>
+      <button id="bSnapTog" class="on" title="Snapping: dragging near another shape pulls the corners together. Click to turn it off. (While on, hold Alt to drag free.)">🧲</button>
     </div>
   </div>
 </div>
@@ -1740,6 +1742,7 @@ function pasteClip(){
 }
 /* ---------- Snapping: dragging near another shape pulls corners (or a corner onto an edge) together ---------- */
 let snapHint=null;              // [x,y] design mm where a snap just locked - drawn as a green dot
+let snapOn=true;                // the magnet button beside the zoom controls; Alt is the momentary version
 const SNAP_PX=7;                // feel: the same reach at any zoom (converted to mm per move)
 function snapTolMm(pp,k){       // SNAP_PX is meant as pixels ON SCREEN - the canvas is displayed scaled, so k (canvas px/mm) alone under-reaches
   const r=cv.getBoundingClientRect(), css=(r.height/cv.height)||1;
@@ -1762,6 +1765,7 @@ function snapTargets(excl){     // everything else on the mat, gathered once whe
   return {pts:pts, segs:segs};
 }
 function snapDelta(drpts, targets, tolMm){   // the offset that locks the nearest pair - corners first, then a corner onto an edge
+  if(!snapOn) return null;                   // the magnet is off - every drag is free
   let best=null;
   for(const p of drpts) for(const q of targets.pts){
     const d=Math.hypot(p[0]-q[0],p[1]-q[1]);
@@ -2388,6 +2392,9 @@ cv.addEventListener("wheel",(e)=>{ e.preventDefault(); const p=canvasPt(e); setZ
 $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
 $("zoomOut").onclick=()=>setZoom(view.zoom/1.3);
 $("zoomFit").onclick=()=>{ view.zoom=1; view.panX=0; view.panY=0; draw(); updateZoomUI(); };
+$("bSnapTog").onclick=()=>{ snapOn=!snapOn; $("bSnapTog").classList.toggle("on",snapOn);
+  say(snapOn ? "Snapping on - dragging near another shape pulls the corners together (hold Alt to drag free)."
+             : "Snapping off - shapes drag freely. Click the magnet to turn it back on."); };
 let spaceHeld=false, panDrag=null;
 window.addEventListener("keydown",(e)=>{ if(e.code!=="Space") return; const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
