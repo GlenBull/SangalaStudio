@@ -303,13 +303,15 @@ let refImg=null;             // imported .jpg/.png reference layer for tracing: 
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
-const WS_MARGIN=100;  // MINIMUM mm of corkboard workspace guaranteed around the page. The whole board is
-                      // usable surface, exactly as in Silhouette Studio - designers rely on it (Elaine
-                      // Wolfe's designs park pieces all over it). The canvas fills the entire board area,
-                      // so a wide window simply gives MORE cork; this floor is what a design may count on.
-function worldParams(){   // the world = the page centered in however much corkboard the window provides
+// Two separate margins, because they answer two different questions:
+const VIEW_MARGIN=20; // mm of cork shown around the page at the DEFAULT view (zoom 1 / Fit). Small, so the
+                      // page opens large and usable - no need to zoom in first.
+const WS_MARGIN=150;  // mm of corkboard you can PARK on and pan to reach. Large, because the whole board is
+                      // workspace, as in Silhouette Studio (Elaine Wolfe's designs place pieces all over it).
+                      // Decoupling these is the fix: the page is framed by VIEW_MARGIN, not shrunk to fit WS_MARGIN.
+function worldParams(){   // the page centered in the board; VIEW_MARGIN sets the default scale, the window sets the rest
   const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
-  const baseK=Math.min(cv.width/(dw+2*WS_MARGIN), cv.height/(dh+2*WS_MARGIN));
+  const baseK=Math.min(cv.width/(dw+2*VIEW_MARGIN), cv.height/(dh+2*VIEW_MARGIN));
   return { dw:dw, dh:dh, baseK:baseK, MX:(cv.width/baseK-dw)/2, MY:(cv.height/baseK-dh)/2 };
 }
 let selNode=null;            // index of the selected node within the selected object (node tool)
@@ -2407,9 +2409,14 @@ function evtMM(e){ const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingC
   return { mx:(cx-view.panX)/k-w.MX, my:(cy-view.panY)/k-w.MY, k }; }   // invert pan+zoom+cork margin -> page mm; k = px/mm at this zoom
 /* ---------- magnify: wheel zoom (toward cursor), buttons, pan (middle-mouse / Space+drag) ---------- */
 function canvasPt(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]; }
-function clampPan(){   // the world always exactly fills the canvas at zoom 1, so the pan bound is just the zoom factor
-  view.panX=Math.max(cv.width*(1-view.zoom), Math.min(0, view.panX));
-  view.panY=Math.max(cv.height*(1-view.zoom), Math.min(0, view.panY)); }
+function clampPan(){   // keep the view within the park-able world (page + WS_MARGIN cork); if that world is smaller
+  const w=worldParams(), k=w.baseK*view.zoom;   // than the viewport on an axis, centre on that axis instead
+  const bound=(vp,startPx,sizePx)=>{ if(sizePx<=vp){ const c=(vp-sizePx)/2-startPx; return [c,c]; }
+    return [vp-(startPx+sizePx), -startPx]; };
+  const bx=bound(cv.width,  (w.MX-WS_MARGIN)*k, (w.dw+2*WS_MARGIN)*k);
+  const by=bound(cv.height, (w.MY-WS_MARGIN)*k, (w.dh+2*WS_MARGIN)*k);
+  view.panX=Math.max(bx[0], Math.min(bx[1], view.panX));
+  view.panY=Math.max(by[0], Math.min(by[1], view.panY)); }
 function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
 function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: centre)
   nz=Math.min(20, Math.max(1, nz)); if(cx==null){ cx=cv.width/2; cy=cv.height/2; }
