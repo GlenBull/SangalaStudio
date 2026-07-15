@@ -250,6 +250,7 @@
         <button class="ebtn" id="eGroup" style="width:100%">▦ Group</button>
         <button class="ebtn" id="eUngroup" style="width:100%;display:none">▤ Ungroup</button>
       </div>
+      <button class="ebtn" id="eBreak" style="width:100%;margin-top:.4rem;display:none" title="Break the outline apart at the selected node, so one side can become a Fold (or be deleted) on its own">⋔ Break at Node</button>
       <div id="esimprow" style="margin-top:.4rem;display:none;align-items:center;gap:.5rem">
         <button class="ebtn" id="eSimplify" style="flex:1">〰️ Simplify Nodes</button>
         <span class="hint" id="eNodeCount" style="white-space:nowrap"></span>
@@ -486,6 +487,9 @@ function placePoly(poly){ const pp=placeParams(); return poly.map(q=>[q[0]*pp.s+
 // below anything the blade or the eye can tell apart), and closeRing() snaps the two together on import.
 const RING_TOL=0.02;
 function isClosedRing(p){ return p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<RING_TOL && Math.abs(p[0][1]-p[p.length-1][1])<RING_TOL; }
+// Whether an OBJECT is a closed shape. Geometry alone cannot answer this: a ring broken open at a node
+// still has both ends at the SAME spot, and would read as closed forever. data-open="1" says otherwise.
+function objClosed(o){ return !(o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-open")==="1") && isClosedRing(o.poly); }
 // A closed shape in a file usually repeats its first point to shut the ring - and re-sampling then adds a
 // closing point of its own on TOP of it, so the corner ends up in the list three times running. Two of them
 // showed as nodes stacked on each other, and dragging one left the others behind: the shape came apart.
@@ -502,7 +506,7 @@ function shapeNodes(o){
   if(t==="rect"){const x=N("x"),y=N("y"),w=N("width"),h=N("height"); return [[x,y],[x+w,y],[x+w,y+h],[x,y+h]];}
   if(t==="circle"){const cx=N("cx"),cy=N("cy"),r=N("r"); return [[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]];}
   const p=o.poly.slice();                        // fallback: poly vertices, minus the duplicated closing point
-  if(isClosedRing(p)) p.pop();
+  if(objClosed(o)) p.pop();                      // a broken-open ring keeps BOTH coincident ends - they are two separate nodes now
   return p;
 }
 function segDist(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
@@ -800,7 +804,7 @@ function designToMonoSvg(){
   items.forEach(o=>o.poly.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; }));
   const M=3, x0=mnx-M, y0=mny-M, w=(mxx-mnx)+2*M, h=(mxy-mny)+2*M;   // small margin so strokes aren't clipped
   const body=items.map(o=>{
-    const closed=isClosedRing(o.poly), pts=(closed?o.poly.slice(0,-1):o.poly).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ");
+    const closed=objClosed(o), pts=(closed?o.poly.slice(0,-1):o.poly).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ");
     const dash=(o.kind==="score")?' stroke-dasharray="2,1.2"':'';   // a fold line reads as dashed
     return '<'+(closed?"polygon":"polyline")+' points="'+pts+'" fill="none" stroke="#000" stroke-width="0.6"'+dash+'/>';
   }).join("");
@@ -1663,7 +1667,7 @@ function elPoints(o){
     const inv=m.inverse(), pt=svgEl.createSVGPoint();
     toUnits=q=>{ pt.x=q[0]/PX_MM; pt.y=q[1]/PX_MM; const u=pt.matrixTransform(inv); return [u.x,u.y]; };
   }
-  const p=o.poly, pts=isClosedRing(p)?p.slice(0,-1):p;        // an OPEN stroke (a turtle trail) keeps its last point
+  const p=o.poly, pts=objClosed(o)?p.slice(0,-1):p;           // an OPEN stroke (a turtle trail, or a broken-open ring) keeps its last point
   return pts.map(q=>{ const u=toUnits(q); return fmtn(u[0])+","+fmtn(u[1]); }).join(" ");
 }
 function placeEl(o){
@@ -1819,10 +1823,10 @@ function ensurePolygon(o){
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
     return;
   }
-  const closed=isClosedRing(o.poly);                    // an imported shape: swap it for an editable one IN PLACE, so it
+  const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -1853,7 +1857,7 @@ function startNodeDrag(e){
 function deleteNode(){
   const o=selObj(); if(!o||selNode==null) return false;
   const t=o.el.tagName.toLowerCase(); if(t!=="polygon"&&t!=="polyline") return false;
-  const closed=isClosedRing(o.poly), nodes=closed?o.poly.slice(0,-1):o.poly.slice();
+  const closed=objClosed(o), nodes=closed?o.poly.slice(0,-1):o.poly.slice();
   const least=closed?3:2;                                    // a closed shape needs 3 corners; an open stroke needs 2 ends
   if(nodes.length<=least){ say("A "+(closed?"shape needs at least 3 nodes":"line needs at least 2 nodes")+"."); return true; }
   nodes.splice(selNode,1);
@@ -1862,6 +1866,46 @@ function deleteNode(){
   selNode=null; draw(); refreshEditPanel(); say("Deleted a node.");
   return true;
 }
+// Break the shape apart at the selected node - the fold-tab enabler. A CLOSED shape opens there: the
+// outline is unchanged, but that corner becomes two coincident ends. An OPEN line splits there into two
+// separate objects, and line type is per-object, so each piece can then be Cut, Fold, or deleted alone.
+// (Three sides Cut + one side Fold = a glue tab. No per-edge line-type model is needed - splitting is enough.)
+const BREAK_ATTRS=["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy","data-open"];
+function breakAtNode(){
+  const o=selObj(); if(!o||selNode==null||!o.el) return false;
+  const t=o.el.tagName.toLowerCase();
+  if((t!=="polygon"&&t!=="polyline") || o.el.hasAttribute("data-brick")) return false;
+  if(objClosed(o)){
+    const nodes=o.poly.slice(0,-1), i=selNode;
+    if(t==="polygon"){                                    // a polygon element closes itself; the open shape must be a polyline
+      const el=document.createElementNS(SVGNS,"polyline");
+      BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+      o.el.parentNode.insertBefore(el,o.el); o.el.remove(); o.el=el;
+    }
+    o.el.setAttribute("data-open","1");
+    o.poly = nodes.slice(i).concat(nodes.slice(0,i), [[nodes[i][0],nodes[i][1]]]);   // same outline, now walked from the broken node round to it again
+    placeEl(o); selNode=0;
+    draw(); refreshEditPanel();
+    say("Opened the shape at that node - the outline is unchanged, but it now has two ends there. Break a second node to cut it into two pieces, or drag an end away.");
+    return true;
+  }
+  const n=o.poly.length, i=selNode;
+  if(i<=0 || i>=n-1){ say("That is already an end of the line - pick a node in the middle to split there."); return true; }
+  const B=o.poly.slice(i).map(p=>[p[0],p[1]]);            // the piece after the node (the node itself belongs to both)
+  o.poly=o.poly.slice(0,i+1);
+  o.el.setAttribute("data-open","1"); placeEl(o);
+  const el2=document.createElementNS(SVGNS,"polyline");
+  BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el2.setAttribute(a,o.el.getAttribute(a)); });
+  if(!el2.getAttribute("stroke")&&!el2.getAttribute("style")){ el2.setAttribute("fill","none"); el2.setAttribute("stroke","#ff0000"); el2.setAttribute("stroke-width","0.2"); }
+  o.el.parentNode.insertBefore(el2, o.el.nextSibling);
+  const o2={id:++objSeq, el:el2, kind:o.kind, orig:o.orig, poly:B, group:o.group};
+  objects.push(o2); placeEl(o2);
+  selNode=null;
+  renderBg(); draw(); refreshEditPanel();
+  say("Split into two pieces at that node. This piece stays selected - set it to Fold for a hinge, or Delete it; click the other piece to work on that one.");
+  return true;
+}
+$("eBreak").onclick=breakAtNode;
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
@@ -2076,7 +2120,7 @@ function refreshEditPanel(){
                                        : (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
-    $("editdims").style.display="none"; $("esimprow").style.display="none";
+    $("editdims").style.display="none"; $("esimprow").style.display="none"; $("eBreak").style.display="none";
     $("groupsrow").style.display="block";
     $("eGroup").textContent   = mode3D ? "⛓ Fuse into one piece" : "▦ Group";       // in 3D a group IS the printed piece
     $("eUngroup").textContent = mode3D ? "⛓ Unfuse" : "▤ Ungroup";
@@ -2098,9 +2142,12 @@ function refreshEditPanel(){
   $("eCut").classList.toggle("on",   o.kind==="cut");
   $("eScore").classList.toggle("on", o.kind==="score");
   $("ePrint").classList.toggle("on", o.kind==="print");
-  const isPoly = o.el && o.el.tagName && o.el.tagName.toLowerCase()==="polygon";   // Simplify only applies to node-built paths
+  const tag = o.el && o.el.tagName ? o.el.tagName.toLowerCase() : "";
+  const isPoly = tag==="polygon";   // Simplify only applies to node-built paths
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = (o.poly.length-1)+" nodes";
+  $("eBreak").style.display = (activeTool==="node" && selNode!=null && (tag==="polygon"||tag==="polyline")
+    && !o.el.hasAttribute("data-brick") && !mode3D) ? "" : "none";   // breaking apart is a 2D cut/fold idea; an open path cannot extrude
   const sbrk = (o.el&&o.el.getAttribute&&o.el.getAttribute("data-brick"))?o:null;   // a brick uses the Brick-size controls, not W/H
   showBrickCtl(mode3D?sbrk:null);
   if(mode3D&&sbrk) $("editdims").style.display="none";
@@ -2355,7 +2402,7 @@ window.addEventListener("mousemove",(e)=>{
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
-    const closed=isClosedRing(o.poly);                       // ask BEFORE moving it: once the first point has moved, the ring no longer LOOKS closed
+    const closed=objClosed(o);                               // ask BEFORE moving it: once the first point has moved, the ring no longer LOOKS closed
     o.poly[i]=[dx,dy];
     if(i===0 && closed) o.poly[o.poly.length-1]=[dx,dy];     // a closed ring's two ends are one node and move together; an open stroke's do not
     placeEl(o);
