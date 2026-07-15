@@ -303,6 +303,9 @@ let refImg=null;             // imported .jpg/.png reference layer for tracing: 
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
+const WS_MARGIN=25;   // mm of workspace apron around the page - a holding area, as in Silhouette Studio.
+                      // Shapes slid off the page stay visible ON it instead of vanishing under the border
+                      // (the canvas used to END at the page edge, so off-page meant clipped).
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -599,11 +602,13 @@ function renderBg(){
 function draw(){
   scheduleCommit();   // Undo: snapshot the design after edits settle (deduped; skipped during a restore)
   const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
-  cv.height=900; cv.width=Math.round(900*dw/dh);
-  const baseK=cv.height/dh, k=baseK*view.zoom;   // zoom folds into k; strokes/handles stay screen-px (no ctx.scale)
+  const dwF=dw+2*WS_MARGIN, dhF=dh+2*WS_MARGIN;   // the world = the page plus the workspace apron
+  cv.height=900; cv.width=Math.round(900*dwF/dhF);
+  const baseK=cv.height/dhF, k=baseK*view.zoom;   // zoom folds into k; strokes/handles stay screen-px (no ctx.scale)
   ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.save(); ctx.translate(view.panX,view.panY);   // pan the magnified view
+  ctx.fillStyle="#e9e2d2";ctx.fillRect(0,0,cv.width,cv.height);   // the apron; shapes parked here stay visible and editable
+  ctx.save(); ctx.translate(view.panX+WS_MARGIN*k, view.panY+WS_MARGIN*k);   // pan the magnified view; page origin sits inside the apron
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,dw*k,dh*k);               // the page itself
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,dw*k,dh*k);
   // reference image (beneath the vectors so you can trace over it). After Remove BG,
@@ -726,8 +731,8 @@ function draw(){
     const x0=Math.min(marquee.x0,marquee.x1)*k, y0=Math.min(marquee.y0,marquee.y1)*k, x1=Math.max(marquee.x0,marquee.x1)*k, y1=Math.max(marquee.y0,marquee.y1)*k;
     ctx.save(); ctx.fillStyle="rgba(26,95,180,.08)"; ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
     ctx.fillRect(x0,y0,x1-x0,y1-y0); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.restore(); }
+  ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);   // label belongs to the page, so it pans with it
   ctx.restore();   // end magnify (pan/zoom) transform
-  ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
 }
@@ -2379,13 +2384,13 @@ document.addEventListener("keydown",(e)=>{
   e.preventDefault(); deleteSel();
 });
 // pointer -> display mm (same math the selection uses), plus k = px per mm
-function evtMM(e){ const dh=printFile?PAGE_LH:MAT_H, k=(cv.height/dh)*view.zoom, r=cv.getBoundingClientRect();
+function evtMM(e){ const dh=(printFile?PAGE_LH:MAT_H)+2*WS_MARGIN, k=(cv.height/dh)*view.zoom, r=cv.getBoundingClientRect();
   const cx=(e.clientX-r.left)*(cv.width/r.width), cy=(e.clientY-r.top)*(cv.height/r.height);   // canvas px
-  return { mx:(cx-view.panX)/k, my:(cy-view.panY)/k, k }; }   // invert pan+zoom -> mm; k = screen px/mm at this zoom
+  return { mx:(cx-view.panX)/k-WS_MARGIN, my:(cy-view.panY)/k-WS_MARGIN, k }; }   // invert pan+zoom+apron -> page mm; k = screen px/mm at this zoom
 /* ---------- magnify: wheel zoom (toward cursor), buttons, pan (middle-mouse / Space+drag) ---------- */
 function canvasPt(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]; }
-function clampPan(){ const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H, k=(cv.height/dh)*view.zoom;
-  view.panX=Math.max(cv.width-dw*k, Math.min(0, view.panX));   // keep the view inside the page (no white gaps)
+function clampPan(){ const dw=(printFile?PAGE_LW:MAT_W)+2*WS_MARGIN, dh=(printFile?PAGE_LH:MAT_H)+2*WS_MARGIN, k=(cv.height/dh)*view.zoom;
+  view.panX=Math.max(cv.width-dw*k, Math.min(0, view.panX));   // keep the view inside the world (the page plus its apron)
   view.panY=Math.max(cv.height-dh*k, Math.min(0, view.panY)); }
 function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
 function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: centre)
