@@ -68,7 +68,7 @@
   #zoomctl #bSnapTog{display:flex;align-items:center;justify-content:center;padding:0;font-size:.82rem}
   #zoomctl #zoomFit{width:auto;padding:0 7px;font-size:.78rem}
   #zoomctl #zoomPct{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums}
-  canvas{display:block;margin:0 auto;max-width:100%;max-height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:#fff}
+  canvas{display:block;width:100%;height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:transparent}
   .go{width:100%;font-size:1.5rem;font-weight:800;color:#fff;background:linear-gradient(#1fa85a,#178047);
       border:1px solid #0f6e34;border-radius:14px;padding:1rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 6px rgba(0,0,0,.3)}
   .go:disabled{opacity:.5;cursor:default}
@@ -303,9 +303,15 @@ let refImg=null;             // imported .jpg/.png reference layer for tracing: 
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
-const WS_MARGIN=25;   // mm of workspace apron around the page - a holding area, as in Silhouette Studio.
-                      // Shapes slid off the page stay visible ON it instead of vanishing under the border
-                      // (the canvas used to END at the page edge, so off-page meant clipped).
+const WS_MARGIN=100;  // MINIMUM mm of corkboard workspace guaranteed around the page. The whole board is
+                      // usable surface, exactly as in Silhouette Studio - designers rely on it (Elaine
+                      // Wolfe's designs park pieces all over it). The canvas fills the entire board area,
+                      // so a wide window simply gives MORE cork; this floor is what a design may count on.
+function worldParams(){   // the world = the page centered in however much corkboard the window provides
+  const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
+  const baseK=Math.min(cv.width/(dw+2*WS_MARGIN), cv.height/(dh+2*WS_MARGIN));
+  return { dw:dw, dh:dh, baseK:baseK, MX:(cv.width/baseK-dw)/2, MY:(cv.height/baseK-dh)/2 };
+}
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -599,16 +605,28 @@ function renderBg(){
   img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(machineHiddenSVG());
 }
 
+let corkPat=null;
+function corkPattern(){   // the same cork the page's CSS paints, as a canvas tile - the whole board IS workspace, so it must look like the board
+  if(corkPat) return corkPat;
+  const t=document.createElement("canvas"); t.width=77; t.height=77;   // 7 and 11 both divide 77, so the two dot grids tile seamlessly
+  const g=t.getContext("2d");
+  g.fillStyle="#c7a06a"; g.fillRect(0,0,77,77);
+  g.fillStyle="rgba(120,80,40,.30)";
+  for(let y=0;y<77;y+=7) for(let x=0;x<77;x+=7){ g.beginPath(); g.arc(x,y,1,0,6.2832); g.fill(); }
+  g.fillStyle="rgba(90,60,30,.22)";
+  for(let y=5;y<88;y+=11) for(let x=3;x<88;x+=11){ g.beginPath(); g.arc(x%77,y%77,1,0,6.2832); g.fill(); }
+  corkPat=ctx.createPattern(t,"repeat"); return corkPat;
+}
 function draw(){
   scheduleCommit();   // Undo: snapshot the design after edits settle (deduped; skipped during a restore)
-  const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
-  const dwF=dw+2*WS_MARGIN, dhF=dh+2*WS_MARGIN;   // the world = the page plus the workspace apron
-  cv.height=900; cv.width=Math.round(900*dwF/dhF);
-  const baseK=cv.height/dhF, k=baseK*view.zoom;   // zoom folds into k; strokes/handles stay screen-px (no ctx.scale)
+  const rct=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;   // the canvas fills the whole board - ALL of it is workspace
+  if(rct.width>2){ const bw=Math.round(rct.width*dpr), bh=Math.round(rct.height*dpr);
+    if(cv.width!==bw) cv.width=bw; if(cv.height!==bh) cv.height=bh; }
+  const {dw,dh,baseK,MX,MY}=worldParams(), k=baseK*view.zoom;   // zoom folds into k; strokes/handles stay screen-px (no ctx.scale)
   ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle="#e9e2d2";ctx.fillRect(0,0,cv.width,cv.height);   // the apron; shapes parked here stay visible and editable
-  ctx.save(); ctx.translate(view.panX+WS_MARGIN*k, view.panY+WS_MARGIN*k);   // pan the magnified view; page origin sits inside the apron
-  ctx.fillStyle="#fff";ctx.fillRect(0,0,dw*k,dh*k);               // the page itself
+  ctx.fillStyle=corkPattern();ctx.fillRect(0,0,cv.width,cv.height);   // corkboard everywhere; shapes parked on it stay visible and editable
+  ctx.save(); ctx.translate(view.panX+MX*k, view.panY+MY*k);   // pan the magnified view; the page sits centered in the cork
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,dw*k,dh*k);            // the page itself
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,dw*k,dh*k);
   // reference image (beneath the vectors so you can trace over it). After Remove BG,
@@ -1469,7 +1487,7 @@ $("showPlate").onchange=e=>{ pvPlate=e.target.checked; if(pvPlate && pvPitch<0.0
     pvPitch=Math.max(pvPlate?0.05:-1.45,Math.min(1.45,pvDrag[3]+(e.clientY-pvDrag[1])*0.01)); renderPreview(); });   // plate shown: stay at/above it; hidden: orbit under to see the underside
   window.addEventListener("mouseup",()=>{ pvDrag=null; });
   pv.addEventListener("wheel",e=>{ e.preventDefault(); pvZoom=Math.max(0.25,Math.min(6,pvZoom*Math.exp(-e.deltaY*0.0012))); renderPreview(); },{passive:false});
-  window.addEventListener("resize",()=>{ if(pvOn){ sizePvToCv(); pvBounds(); renderPreview(); } });   // keep the overlay glued to the canvas
+  window.addEventListener("resize",()=>{ draw(); if(pvOn){ sizePvToCv(); pvBounds(); renderPreview(); } });   // re-fit the board canvas; keep the overlay glued to it
 })();
 function setMode3D(on){   // single source of truth for 2D<->3D; driven by the header toggle AND the Setup checkbox
   mode3D=on;
@@ -2384,14 +2402,14 @@ document.addEventListener("keydown",(e)=>{
   e.preventDefault(); deleteSel();
 });
 // pointer -> display mm (same math the selection uses), plus k = px per mm
-function evtMM(e){ const dh=(printFile?PAGE_LH:MAT_H)+2*WS_MARGIN, k=(cv.height/dh)*view.zoom, r=cv.getBoundingClientRect();
+function evtMM(e){ const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingClientRect();
   const cx=(e.clientX-r.left)*(cv.width/r.width), cy=(e.clientY-r.top)*(cv.height/r.height);   // canvas px
-  return { mx:(cx-view.panX)/k-WS_MARGIN, my:(cy-view.panY)/k-WS_MARGIN, k }; }   // invert pan+zoom+apron -> page mm; k = screen px/mm at this zoom
+  return { mx:(cx-view.panX)/k-w.MX, my:(cy-view.panY)/k-w.MY, k }; }   // invert pan+zoom+cork margin -> page mm; k = px/mm at this zoom
 /* ---------- magnify: wheel zoom (toward cursor), buttons, pan (middle-mouse / Space+drag) ---------- */
 function canvasPt(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]; }
-function clampPan(){ const dw=(printFile?PAGE_LW:MAT_W)+2*WS_MARGIN, dh=(printFile?PAGE_LH:MAT_H)+2*WS_MARGIN, k=(cv.height/dh)*view.zoom;
-  view.panX=Math.max(cv.width-dw*k, Math.min(0, view.panX));   // keep the view inside the world (the page plus its apron)
-  view.panY=Math.max(cv.height-dh*k, Math.min(0, view.panY)); }
+function clampPan(){   // the world always exactly fills the canvas at zoom 1, so the pan bound is just the zoom factor
+  view.panX=Math.max(cv.width*(1-view.zoom), Math.min(0, view.panX));
+  view.panY=Math.max(cv.height*(1-view.zoom), Math.min(0, view.panY)); }
 function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
 function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: centre)
   nz=Math.min(20, Math.max(1, nz)); if(cx==null){ cx=cv.width/2; cy=cv.height/2; }
