@@ -139,6 +139,7 @@
   <button id="mLine" title="Draw a straight line - drag from one end to the other (set it to Fold for a crease)">╱ Line</button>
   <button id="mRect" title="Draw a rectangle">▭ Rectangle</button>
   <button id="mCircle" title="Draw a circle">◯ Circle</button>
+  <button id="mTab" title="Add a glue tab: drag ALONG the edge of a shape - the fold hinge lies on the edge, the three cut sides stick out, and the edge under the hinge is removed for you">⏢ Tab</button>
 </div>
 <div id="combinemenu" class="menu" style="position:fixed;z-index:31;display:none">
   <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes, or a shape + the photo (click one, Shift+click the other).</div>
@@ -692,6 +693,15 @@ function draw(){
     selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return; const ring=placePoly(o.poly);
       ctx.beginPath(); ring.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
     ctx.restore(); }
+  if(drag&&drag.mode==="tab"&&drag.preview){   // Tab tool: live preview - red cut sides, blue dashed hinge
+    const pp=placeParams(), pv=drag.preview, P=q=>[(pp.ox+q[0]*pp.s)*k,(pp.oy+q[1]*pp.s)*k];
+    const a=P(pv.P1), b=P(pv.Q1), c=P(pv.Q2), d2=P(pv.P2);
+    ctx.save(); ctx.strokeStyle="#dc2626"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.lineTo(c[0],c[1]); ctx.lineTo(d2[0],d2[1]); ctx.stroke();
+    ctx.strokeStyle="#2a6bd0"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(d2[0],d2[1]); ctx.stroke();
+    ctx.restore();
+  }
   if(penPts.length){   // Pen tool: the in-progress path (red = cut), points as squares, first point highlighted
     const pp=placeParams(), P=penPts.map(p=>[(pp.ox+p[0]*pp.s)*k,(pp.oy+p[1]*pp.s)*k]);
     ctx.save(); ctx.strokeStyle="#ff0000"; ctx.lineWidth=1.4; ctx.lineJoin="round";
@@ -1538,9 +1548,9 @@ let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = dra
 function setTool(t){ activeTool=t;
   if(t!=="pen" && penPts.length){ penPts=[]; penHover=null; }   // leaving the Pen tool discards an unfinished path
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
-  const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
-  cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="brick"||t==="pen") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="line"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
+  cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? "crosshair" : "default";
+  if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -1548,7 +1558,7 @@ $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to
 function closeShapes(){ $("shapesmenu").style.display="none"; }
 $("tShapes").onclick=(e)=>{ e.stopPropagation(); const t=$("shapesmenu"), r=$("tShapes").getBoundingClientRect();
   const open=t.style.display!=="flex";
-  if(open){ $("mRect").classList.toggle("on",activeTool==="rect"); $("mCircle").classList.toggle("on",activeTool==="circle"); $("mLine").classList.toggle("on",activeTool==="line");
+  if(open){ $("mRect").classList.toggle("on",activeTool==="rect"); $("mCircle").classList.toggle("on",activeTool==="circle"); $("mLine").classList.toggle("on",activeTool==="line"); $("mTab").classList.toggle("on",activeTool==="tab");
     t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }   // fly out to the right of the palette
   t.style.display=open?"flex":"none"; };
 document.addEventListener("click",(e)=>{ const t=$("shapesmenu");
@@ -1556,6 +1566,7 @@ document.addEventListener("click",(e)=>{ const t=$("shapesmenu");
 $("mRect").onclick=()=>{ setTool(activeTool==="rect"?"select":"rect"); closeShapes(); };
 $("mCircle").onclick=()=>{ setTool(activeTool==="circle"?"select":"circle"); closeShapes(); };
 $("mLine").onclick=()=>{ setTool(activeTool==="line"?"select":"line"); closeShapes(); if(activeTool==="line") say("Line: drag from one end to the other. Then set it to Fold for a crease, or leave it Cut to slit."); };
+$("mTab").onclick=()=>{ setTool(activeTool==="tab"?"select":"tab"); closeShapes(); if(activeTool==="tab") say("Tab: press on the edge of a shape and drag ALONG it - the stretch you cover becomes the fold hinge, and the tab sticks out from it."); };
 $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 /* ---------- Pen tool: click to place points -> an editable cut polygon ---------- */
@@ -1761,8 +1772,35 @@ $("aVert").onclick=()=>{ alignSelection("v"); closeAlign(); };
 $("aHorz").onclick=()=>{ alignSelection("h"); closeAlign(); };
 $("aBoth").onclick=()=>{ alignSelection("both"); closeAlign(); };
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
+// Tab tool, step 1: the drag must START on the edge of a shape. Find the nearest edge under the
+// pointer; the fold hinge will lie along that edge, between where the drag starts and ends.
+function startTab(e){
+  const {mx,my,k}=evtMM(e), pp=placeParams();
+  let best=null;
+  objects.forEach(o=>{
+    if(!o.el||!o.poly||o.poly.length<2) return;
+    const t=o.el.tagName.toLowerCase();
+    if(t==="circle") return;                                  // a hinge needs a straight edge
+    if(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")) return;
+    const p=placePoly(o.poly);
+    for(let i=0;i+1<p.length;i++){
+      const dd=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]);
+      if(!best||dd<best.d) best={d:dd,o:o,si:i};
+    }
+  });
+  if(!best || best.d*k>8){ say("Tab: start the drag ON the edge of a shape - the stretch you drag along becomes the fold hinge."); return; }
+  const o=best.o;
+  if(o.el.tagName.toLowerCase()==="rect") ensurePolygon(o);   // a rect must become an editable outline before its edge can be opened
+  const A=o.poly[best.si], B=o.poly[best.si+1];
+  const ux=B[0]-A[0], uy=B[1]-A[1], L2=ux*ux+uy*uy; if(L2<1e-9) return;
+  const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;
+  const t0=Math.max(0,Math.min(1,((dx-A[0])*ux+(dy-A[1])*uy)/L2));
+  drag={mode:"tab", obj:o, si:best.si, t0:t0, t1:t0, nx:0, ny:0, preview:null, moved:false};
+  e.preventDefault();
+}
 function startDraw(e){
   ensureDoc();
+  if(activeTool==="tab"){ startTab(e); return; }
   const {mx,my}=evtMM(e), pp=placeParams();
   const sx=(mx-pp.ox)/pp.s, sy=(my-pp.oy)/pp.s;   // start point in design mm
   let el,poly,d;
@@ -1871,18 +1909,21 @@ function deleteNode(){
 // separate objects, and line type is per-object, so each piece can then be Cut, Fold, or deleted alone.
 // (Three sides Cut + one side Fold = a glue tab. No per-edge line-type model is needed - splitting is enough.)
 const BREAK_ATTRS=["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy","data-open"];
+function makeElOpen(o){   // an open outline must live in a <polyline> - a <polygon> element closes itself
+  if(o.el.tagName.toLowerCase()==="polygon"){
+    const el=document.createElementNS(SVGNS,"polyline");
+    BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+    o.el.parentNode.insertBefore(el,o.el); o.el.remove(); o.el=el;
+  }
+  o.el.setAttribute("data-open","1");
+}
 function breakAtNode(){
   const o=selObj(); if(!o||selNode==null||!o.el) return false;
   const t=o.el.tagName.toLowerCase();
   if((t!=="polygon"&&t!=="polyline") || o.el.hasAttribute("data-brick")) return false;
   if(objClosed(o)){
     const nodes=o.poly.slice(0,-1), i=selNode;
-    if(t==="polygon"){                                    // a polygon element closes itself; the open shape must be a polyline
-      const el=document.createElementNS(SVGNS,"polyline");
-      BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
-      o.el.parentNode.insertBefore(el,o.el); o.el.remove(); o.el=el;
-    }
-    o.el.setAttribute("data-open","1");
+    makeElOpen(o);
     o.poly = nodes.slice(i).concat(nodes.slice(0,i), [[nodes[i][0],nodes[i][1]]]);   // same outline, now walked from the broken node round to it again
     placeEl(o); selNode=0;
     draw(); refreshEditPanel();
@@ -1906,6 +1947,53 @@ function breakAtNode(){
   return true;
 }
 $("eBreak").onclick=breakAtNode;
+// Tab tool, step 2: build what the drag described. The hinge (a fold line) lies on the host's edge
+// between the drag's two ends; three cut sides stick outward; and the host's OWN edge under the hinge
+// is removed - the step that is easy to forget by hand, and forgetting it cuts the tab clean off.
+function makeTab(d){
+  const o=d.obj, si=d.si, A=o.poly[si], B=o.poly[si+1];
+  const ux=B[0]-A[0], uy=B[1]-A[1], L=Math.hypot(ux,uy)||1e-9;
+  const lo=Math.min(d.t0,d.t1), hi=Math.max(d.t0,d.t1), Lt=(hi-lo)*L;
+  if(Lt<3){ say("Tab: too short - drag further along the edge (a hinge needs at least 3 mm)."); draw(); return; }
+  const P1=[A[0]+ux*lo, A[1]+uy*lo], P2=[A[0]+ux*hi, A[1]+uy*hi];
+  const depth=Math.min(10,Math.max(2,Lt*0.4)), inset=Math.min(depth*0.8,Lt/3), uxn=ux/L, uyn=uy/L;
+  const Q1=[P1[0]+uxn*inset+d.nx*depth, P1[1]+uyn*inset+d.ny*depth];
+  const Q2=[P2[0]-uxn*inset+d.nx*depth, P2[1]-uyn*inset+d.ny*depth];
+  // 1) take the hinge stretch out of the host's own outline
+  if(objClosed(o)){
+    const nodes=o.poly.slice(0,-1), n=nodes.length, order=[];
+    for(let j=1;j<=n;j++) order.push(nodes[(si+j)%n]);        // from the edge's far node right round to its near node
+    makeElOpen(o);
+    o.poly=dedupePoly([[P2[0],P2[1]]].concat(order,[[P1[0],P1[1]]]));
+    placeEl(o);
+  } else {
+    const before=dedupePoly(o.poly.slice(0,si+1).concat([[P1[0],P1[1]]]));
+    const after =dedupePoly([[P2[0],P2[1]]].concat(o.poly.slice(si+1)));
+    if(before.length>=2){
+      o.poly=before; makeElOpen(o); placeEl(o);
+      if(after.length>=2){                                    // the far side of the hinge becomes its own piece
+        const el2=document.createElementNS(SVGNS,"polyline");
+        BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el2.setAttribute(a,o.el.getAttribute(a)); });
+        o.el.parentNode.insertBefore(el2,o.el.nextSibling);
+        const o2={id:++objSeq, el:el2, kind:o.kind, orig:o.orig, poly:after, group:o.group};
+        objects.push(o2); placeEl(o2);
+      }
+    } else { o.poly=after; makeElOpen(o); placeEl(o); }
+  }
+  // 2) the hinge and the three cut sides, grouped so the tab moves as one
+  ensureDoc();
+  const gid=++groupSeq;
+  const foldEl=svgNode("polyline",{points:fmtn(P1[0])+","+fmtn(P1[1])+" "+fmtn(P2[0])+","+fmtn(P2[1]), "stroke-dasharray":"4 1.2"});
+  const fold={id:++objSeq, el:foldEl, kind:"score", orig:"score", poly:[[P1[0],P1[1]],[P2[0],P2[1]]], group:gid};
+  objects.push(fold);
+  const cutEl=svgNode("polyline",{points:[P1,Q1,Q2,P2].map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")});
+  const cut={id:++objSeq, el:cutEl, kind:"cut", orig:"cut", poly:[P1,Q1,Q2,P2].map(p=>[p[0],p[1]]), group:gid};
+  objects.push(cut);
+  selMulti=[fold.id,cut.id]; selId=null; selId2=null; selNode=null;
+  setTool("select");
+  renderBg(); draw(); refreshEditPanel();
+  say("Made a "+fmtn(Lt)+" mm tab: a fold hinge on the edge, three cut sides, and the edge under the hinge removed so the tab stays attached.");
+}
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
   for(let i=0;i<=n;i++){const a=2*Math.PI*i/n; poly.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);}
@@ -2152,10 +2240,15 @@ function refreshEditPanel(){
   showBrickCtl(mode3D?sbrk:null);
   if(mode3D&&sbrk) $("editdims").style.display="none";
 }
+function syncKindEl(o){   // keep the element's line style true to its kind, so Save -> reopen keeps folds as folds
+  if(!o.el||!o.el.setAttribute) return;
+  if(o.kind==="score"){ o.el.setAttribute("stroke-dasharray","4 1.2"); if(o.el.style) o.el.style.strokeDasharray="4,1.2"; }
+  else if(o.kind==="cut"){ o.el.removeAttribute("stroke-dasharray"); if(o.el.style) o.el.style.strokeDasharray=""; }
+}
 function setKind(k){
-  if(selMulti.length){ const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.kind=k; });
+  if(selMulti.length){ const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)){ o.kind=k; syncKindEl(o); } });
     renderBg(); draw(); refreshEditPanel(); say("Changed "+selMulti.length+" objects to "+KIND_LABEL[k]+"."); return; }
-  const o=selObj(); if(!o||o.kind===k) return; o.kind=k;
+  const o=selObj(); if(!o||o.kind===k) return; o.kind=k; syncKindEl(o);
   renderBg(); draw(); refreshEditPanel(); say("Changed to "+KIND_LABEL[k]+"."); }
 function deleteSel(){
   if(selMulti.length){ const set=new Set(selMulti), n=selMulti.length;
@@ -2399,6 +2492,24 @@ window.addEventListener("mousemove",(e)=>{
       const dirX=(drag.corner===1||drag.corner===2)?1:-1, dirY=(drag.corner===2||drag.corner===3)?1:-1;
       refImg.w=w; refImg.h=h; refImg.x=dirX>0?drag.ax:drag.ax-w; refImg.y=dirY>0?drag.ay:drag.ay-h; }
     drag.moved=true; draw(); return; }
+  if(drag.mode==="tab"){ const {mx,my}=evtMM(e), pp=placeParams(), o=drag.obj;   // slide the hinge along the grabbed edge
+    const A=o.poly[drag.si], B=o.poly[drag.si+1];
+    const ux=B[0]-A[0], uy=B[1]-A[1], L2=ux*ux+uy*uy||1e-9, L=Math.sqrt(L2);
+    const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;
+    drag.t1=Math.max(0,Math.min(1,((dx-A[0])*ux+(dy-A[1])*uy)/L2));
+    let nx=uy/L, ny=-ux/L;                                    // which way does the tab stick out?
+    if(objClosed(o)){ const mxm=A[0]+ux*(drag.t0+drag.t1)/2, mym=A[1]+uy*(drag.t0+drag.t1)/2;
+      if(ptInPoly(mxm+nx*0.5, mym+ny*0.5, o.poly)){ nx=-nx; ny=-ny; } }             // a closed shape: away from its inside
+    else if(ux*(dy-A[1])-uy*(dx-A[0]) > 0){ nx=-nx; ny=-ny; }                        // an open line: toward the cursor
+    drag.nx=nx; drag.ny=ny;
+    const lo=Math.min(drag.t0,drag.t1), hi=Math.max(drag.t0,drag.t1), Lt=(hi-lo)*L;
+    if(Lt<0.5){ drag.preview=null; draw(); return; }
+    const depth=Math.min(10,Math.max(2,Lt*0.4)), inset=Math.min(depth*0.8,Lt/3), uxn=ux/L, uyn=uy/L;
+    const P1=[A[0]+ux*lo,A[1]+uy*lo], P2=[A[0]+ux*hi,A[1]+uy*hi];
+    drag.preview={P1:P1, P2:P2,
+      Q1:[P1[0]+uxn*inset+nx*depth, P1[1]+uyn*inset+ny*depth],
+      Q2:[P2[0]-uxn*inset+nx*depth, P2[1]-uyn*inset+ny*depth]};
+    drag.moved=true; draw(); return; }
   const {mx,my}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
@@ -2453,6 +2564,9 @@ window.addEventListener("mouseup",()=>{
     else draw();   // a click (no drag) -> let the click handler do single-select/deselect
     return; }
   if(!drag) return;
+  if(drag.mode==="tab"){ const d=drag; drag=null; suppressClick=true;
+    if(!d.preview){ say("Tab: press on an edge and drag ALONG it - the stretch you cover becomes the fold hinge."); draw(); return; }
+    makeTab(d); return; }
   if(drag.mode==="groupmove"){ const moved=drag.moved; drag=null; cv.style.cursor="default"; if(moved){ suppressClick=true; say(selMulti.length+" object"+(selMulti.length!==1?"s":"")+" moved."); } draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
