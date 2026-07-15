@@ -35,6 +35,20 @@ REM A good copy ends with the closing </html> tag; a truncated download will not
 find "</html>" "%TMP%" >nul 2>&1
 if errorlevel 1 goto :badfile
 
+REM Compare version markers so a re-run with nothing new doesn't touch anything.
+set "REMOTEVER="
+set "LOCALVER="
+for /f "delims=" %%V in ('findstr /c:"SANGALA_VERSION" "%TMP%"') do if not defined REMOTEVER set "REMOTEVER=%%V"
+if exist "%TARGET%" for /f "delims=" %%V in ('findstr /c:"SANGALA_VERSION" "%TARGET%"') do if not defined LOCALVER set "LOCALVER=%%V"
+
+if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" (
+  del "%TMP%" >nul 2>&1
+  echo Already up to date - nothing downloaded.
+  echo.
+  pause
+  exit /b 0
+)
+
 REM Keep the working copy as a backup, then swap in the new page.
 if exist "%TARGET%" copy /y "%TARGET%" "%TARGET%.bak" >nul
 move /y "%TMP%" "%TARGET%" >nul

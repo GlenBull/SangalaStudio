@@ -84,6 +84,11 @@ USB only, user-mode.** This constraint is absolute.
 3. It opens the page in the browser and drives the machine over USB.
 The HTML is served fresh from disk each request, so UI-only changes need just a
 browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
+- **Beta testers update via `Update SangalaStudio.cmd`**, which checks a
+  `SANGALA_VERSION` marker (an HTML comment on line 2 of SangalaStudio.html) against
+  GitHub before downloading, and skips the download/backup entirely when they
+  match. **Any commit that changes SangalaStudio.html must bump that version
+  string**, or the checker calls a real change "already up to date."
 
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:
