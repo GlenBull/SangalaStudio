@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-15.2 -->
+<!-- SANGALA_VERSION: 2026-07-15.3 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -676,7 +676,11 @@ function draw(){
       ctx.beginPath();
       if(ctx.roundRect) ctx.roundRect(x,y,w,h,4); else ctx.rect(x,y,w,h);
       ctx.fill(); });
-    ctx.restore(); }
+    ctx.restore();
+    if(activeTool==="select"){ const rh=rotHandleGroup(selMulti,k);   // rotate handle above the whole group
+      if(rh){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.fillStyle="#fff"; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(rh.ax*k,rh.ay*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
+        ctx.beginPath(); ctx.arc(rh.x*k,rh.y*k,5,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); } } }
   const sl=placedScore();
   ctx.strokeStyle="#2a6bd0";ctx.lineWidth=1;ctx.setLineDash([4,3]);
   sl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
@@ -2510,6 +2514,14 @@ function rotHandle(o,k){   // handle anchored to the first-edge midpoint (which 
   let dx=ax-cx, dy=ay-cy, len=Math.hypot(dx,dy); if(len<1e-6){ dx=0; dy=-1; len=1; } dx/=len; dy/=len;    // outward from center through the edge
   const off=22/k; return { ax:ax, ay:ay, x:ax+dx*off, y:ay+dy*off };            // stem base on the shape, handle 22 px beyond
 }
+function rotHandleGroup(ids,k){   // same idea for a multi-object selection: top-center of the UNION bbox (no single edge to anchor to)
+  if(ids.some(id=>{ const o=objects.find(x=>x.id===id); return o&&o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")); })) return null;
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9,any=false;
+  ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.poly) return; any=true;
+    placePoly(o.poly).forEach(q=>{ if(q[0]<minx)minx=q[0]; if(q[0]>maxx)maxx=q[0]; if(q[1]<miny)miny=q[1]; if(q[1]>maxy)maxy=q[1]; }); });
+  if(!any) return null;
+  const ax=(minx+maxx)/2, ay=miny, off=22/k; return { ax:ax, ay:ay, x:ax, y:ay-off };
+}
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
 // rect: corner handle resizes (opposite corner anchored), body moves.
 // circle: cardinal handle changes radius (center fixed), body moves the center.
@@ -2530,6 +2542,23 @@ cv.addEventListener("mousedown",(e)=>{
         const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
         drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),a0:Math.atan2(py-cy,px-cx),moved:false};
         cv.style.cursor="grabbing"; e.preventDefault(); return; } }
+  }
+  if(selMulti.length){   // group rotate handle - same idea, spins every member around the shared bounding-box center
+    const {mx,my,k}=evtMM(e), pp=placeParams(), rh=rotHandleGroup(selMulti,k);
+    if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){
+      let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+      selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.poly) return;
+        placePoly(o.poly).forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];}); });
+      const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
+      const members=selMulti.map(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.el) return null;
+        if(o.el.tagName.toLowerCase()!=="circle") ensurePolygon(o);   // rect/path -> polygon or polyline; circle stays a circle
+        const tag=o.el.tagName.toLowerCase();
+        return { o:o, tag:tag, startPoly:o.poly?o.poly.map(p=>[p[0],p[1]]):null,
+                 cx0: tag==="circle"?(+o.el.getAttribute("cx")||0):null, cy0: tag==="circle"?(+o.el.getAttribute("cy")||0):null };
+      }).filter(Boolean);
+      drag={mode:"grouprotate",members:members,cx:cx,cy:cy,a0:Math.atan2(py-cy,px-cx),moved:false};
+      cv.style.cursor="grabbing"; e.preventDefault(); return;
+    }
   }
   if(mode3D && selId!=null && !selMulti.length){   // click a LEGO cell on the selected shape to clear it; click its dotted ghost to put it back
     const co=objects.find(x=>x.id===selId), ga=s=>co&&co.el&&co.el.getAttribute?co.el.getAttribute(s):null;
@@ -2644,6 +2673,16 @@ window.addEventListener("mousemove",(e)=>{
       Q1:[P1[0]+uxn*inset+nx*depth, P1[1]+uyn*inset+ny*depth],
       Q2:[P2[0]-uxn*inset+nx*depth, P2[1]-uyn*inset+ny*depth]};
     drag.moved=true; draw(); return; }
+  if(drag.mode==="grouprotate"){ const {mx,my}=evtMM(e), pp=placeParams();   // no single drag.obj, so this runs before the shared preamble below
+    const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;
+    let delta=Math.atan2(dy-drag.cy,dx-drag.cx)-drag.a0;
+    if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }
+    drag.members.forEach(m=>{ const o=m.o; if(!m.startPoly) return;
+      o.poly=rotatePts(m.startPoly,drag.cx,drag.cy,delta);
+      if(m.tag==="circle"){ const c=rotatePts([[m.cx0,m.cy0]],drag.cx,drag.cy,delta)[0];
+        o.el.setAttribute("cx",fmtn(c[0])); o.el.setAttribute("cy",fmtn(c[1])); }
+      else placeEl(o); });
+    drag.moved=true; draw(); return; }
   const {mx,my,k}=evtMM(e), pp=placeParams(), el=drag.obj.el;
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx;      // move one node
@@ -2733,6 +2772,7 @@ window.addEventListener("mouseup",()=>{
   if(drag.mode==="node"){ suppressClick=true; if(drag.moved) say("Moved a node."); drag=null; cv.style.cursor="default"; draw(); return; }   // keep the node selected (filled)
   if(drag.mode==="polymove"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; return; }
   if(drag.mode==="rotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated the shape."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
+  if(drag.mode==="grouprotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated "+drag.members.length+" objects."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
     if(drag.mode==="move") msg = drag.shape==="rect"
         ? "Moved to ("+el.getAttribute("x")+", "+el.getAttribute("y")+") mm."
