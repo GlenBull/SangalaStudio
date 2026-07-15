@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-15.3 -->
+<!-- SANGALA_VERSION: 2026-07-15.4 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2546,9 +2546,9 @@ cv.addEventListener("mousedown",(e)=>{
   if(selMulti.length){   // group rotate handle - same idea, spins every member around the shared bounding-box center
     const {mx,my,k}=evtMM(e), pp=placeParams(), rh=rotHandleGroup(selMulti,k);
     if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){
-      let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+      let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;   // the pivot must be in the SAME (raw, unplaced) frame as o.poly - not placePoly's
       selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.poly) return;
-        placePoly(o.poly).forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];}); });
+        o.poly.forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];}); });
       const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
       const members=selMulti.map(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.el) return null;
         if(o.el.tagName.toLowerCase()!=="circle") ensurePolygon(o);   // rect/path -> polygon or polyline; circle stays a circle
