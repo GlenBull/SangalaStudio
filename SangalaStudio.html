@@ -138,6 +138,7 @@
 <div id="shapesmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mRect" title="Draw a rectangle">▭ Rectangle</button>
   <button id="mCircle" title="Draw a circle">◯ Circle</button>
+  <button id="mLine" title="Draw a straight line - drag from one end to the other (set it to Fold for a crease)">╱ Line</button>
 </div>
 <div id="combinemenu" class="menu" style="position:fixed;z-index:31;display:none">
   <div class="hint" id="combinehint" style="padding:.25rem .6rem;white-space:nowrap">Select two shapes, or a shape + the photo (click one, Shift+click the other).</div>
@@ -204,7 +205,7 @@
     <button class="ltbtn on" id="tSelect" title="Select / move (normal mode)"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M5.5 3.2 L5.5 20.5 L9.8 16.5 L12.5 22.5 L15 21.3 L12.3 15.5 L18.2 15.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.7" stroke-linejoin="round"/></svg><small>Select</small></button>
     <button class="ltbtn" id="tPen" title="Pen: click to place points, click the first point (or press Enter) to finish, Esc to cancel"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M12 2.5 C 13.5 6.5 16 9.5 16.2 13 C 16.3 15.5 15.8 17.5 15 18.8 L 9 18.8 C 8.2 17.5 7.7 15.5 7.8 13 C 8 9.5 10.5 6.5 12 2.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.5" stroke-linejoin="round"/><line x1="12" y1="3.8" x2="12" y2="10.7" stroke="#5a2f10" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="#5a2f10" stroke-width="1.2"/></svg><small>Pen</small></button>
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
-    <button class="ltbtn" id="tShapes" title="Draw a shape: Rectangle or Circle"><svg width="22" height="20" viewBox="0 0 26 22" style="display:block" aria-hidden="true"><rect x="2" y="5" width="12" height="12" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.9"/><circle cx="18" cy="14" r="6.2" fill="none" stroke="#7a3b12" stroke-width="1.9"/></svg><small>Shapes</small></button>
+    <button class="ltbtn" id="tShapes" title="Draw a shape: Rectangle, Circle, or Line"><svg width="22" height="20" viewBox="0 0 26 22" style="display:block" aria-hidden="true"><rect x="2" y="5" width="12" height="12" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.9"/><circle cx="18" cy="14" r="6.2" fill="none" stroke="#7a3b12" stroke-width="1.9"/></svg><small>Shapes</small></button>
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
     <button class="ltbtn" id="tAlign" title="Align shapes: Vertical / Horizontal / Center"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><rect x="4.5" y="5" width="15" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/><rect x="7.5" y="14.4" width="9" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/></svg><small>Align</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick" style="display:none">🧱<small>Brick</small></button>
@@ -1533,9 +1534,9 @@ let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = dra
 function setTool(t){ activeTool=t;
   if(t!=="pen" && penPts.length){ penPts=[]; penHover=null; }   // leaving the Pen tool discards an unfinished path
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
-  const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
-  cv.style.cursor = (t==="rect"||t==="circle"||t==="brick"||t==="pen") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
+  cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="brick"||t==="pen") ? "crosshair" : "default";
+  if(t==="rect"||t==="circle"||t==="line"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -1543,13 +1544,14 @@ $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to
 function closeShapes(){ $("shapesmenu").style.display="none"; }
 $("tShapes").onclick=(e)=>{ e.stopPropagation(); const t=$("shapesmenu"), r=$("tShapes").getBoundingClientRect();
   const open=t.style.display!=="flex";
-  if(open){ $("mRect").classList.toggle("on",activeTool==="rect"); $("mCircle").classList.toggle("on",activeTool==="circle");
+  if(open){ $("mRect").classList.toggle("on",activeTool==="rect"); $("mCircle").classList.toggle("on",activeTool==="circle"); $("mLine").classList.toggle("on",activeTool==="line");
     t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }   // fly out to the right of the palette
   t.style.display=open?"flex":"none"; };
 document.addEventListener("click",(e)=>{ const t=$("shapesmenu");
   if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tShapes").contains(e.target)) t.style.display="none"; });
 $("mRect").onclick=()=>{ setTool(activeTool==="rect"?"select":"rect"); closeShapes(); };
 $("mCircle").onclick=()=>{ setTool(activeTool==="circle"?"select":"circle"); closeShapes(); };
+$("mLine").onclick=()=>{ setTool(activeTool==="line"?"select":"line"); closeShapes(); if(activeTool==="line") say("Line: drag from one end to the other. Then set it to Fold for a crease, or leave it Cut to slit."); };
 $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 /* ---------- Pen tool: click to place points -> an editable cut polygon ---------- */
@@ -1762,6 +1764,8 @@ function startDraw(e){
   let el,poly,d;
   if(activeTool==="rect"){ el=svgNode("rect",{x:sx,y:sy,width:0,height:0});
     poly=[[sx,sy],[sx,sy],[sx,sy],[sx,sy],[sx,sy]]; d={mode:"resize",shape:"rect",anchor:[sx,sy]}; }
+  else if(activeTool==="line"){ el=svgNode("polyline",{points:fmtn(sx)+","+fmtn(sy)+" "+fmtn(sx)+","+fmtn(sy)});
+    poly=[[sx,sy],[sx,sy]]; d={mode:"resize",shape:"line",anchor:[sx,sy]}; }   // an OPEN 2-point line (not a closed ring); the far end follows the drag
   else { el=svgNode("circle",{cx:sx,cy:sy,r:0}); poly=circlePoly(sx,sy,0); d={mode:"resize",shape:"circle",center:[sx,sy]}; }
   const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:poly}; objects.push(o); selId=o.id; selId2=null; selMulti=[];
   d.obj=o; d.moved=false; d.draw=true; drag=d;
@@ -2367,6 +2371,15 @@ window.addEventListener("mousemove",(e)=>{
     o.poly=rotatePts(drag.startPoly,drag.cx,drag.cy,delta);
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
+  if(drag.shape==="line"){ const a=drag.anchor;                       // the fixed end; the other end tracks the cursor
+    let ex=dx, ey=dy;
+    if(e.shiftKey){ const adx=dx-a[0], ady=dy-a[1];                    // Shift constrains to horizontal / vertical / 45 deg
+      const ang=Math.round(Math.atan2(ady,adx)/(Math.PI/4))*(Math.PI/4), L=Math.hypot(adx,ady);
+      ex=a[0]+L*Math.cos(ang); ey=a[1]+L*Math.sin(ang); }
+    drag.obj.poly=[[a[0],a[1]],[ex,ey]];
+    el.setAttribute("points",fmtn(a[0])+","+fmtn(a[1])+" "+fmtn(ex)+","+fmtn(ey));
+    drag.moved=true; draw(); showDims(drag.obj); return;
+  }
   if(drag.shape==="rect"){ let x,y,w,h;
     if(drag.mode==="resize"){ const ax=drag.anchor[0], ay=drag.anchor[1];
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
@@ -2397,11 +2410,15 @@ window.addEventListener("mouseup",()=>{
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
     const o=drag.obj, el=o.el, t=el.tagName.toLowerCase();
-    const tiny = t==="rect" ? (+el.getAttribute("width")<1||+el.getAttribute("height")<1) : (+el.getAttribute("r")<0.5);
+    const lineLen = t==="polyline" ? Math.hypot(o.poly[1][0]-o.poly[0][0], o.poly[1][1]-o.poly[0][1]) : 0;
+    const tiny = t==="rect" ? (+el.getAttribute("width")<1||+el.getAttribute("height")<1)
+               : t==="polyline" ? (lineLen<1)
+               : (+el.getAttribute("r")<0.5);
     drag=null; suppressClick=true;
     if(tiny){ if(el.remove)el.remove(); objects=objects.filter(x=>x.id!==o.id); selId=null; say(""); cv.style.cursor="crosshair"; }   // nothing made: stay in the tool
     else { say(t==="rect" ? "Drew a "+fmtn(+el.getAttribute("width"))+" x "+fmtn(+el.getAttribute("height"))+" mm rectangle. Refine it in the readout."
-                          : "Drew a "+fmtn(2*(+el.getAttribute("r")))+" mm circle. Refine it in the readout.");
+             : t==="polyline" ? "Drew a "+fmtn(lineLen)+" mm line. Set it to Fold for a crease, or leave it Cut to slit. Drag its ends with the Nodes tool."
+             : "Drew a "+fmtn(2*(+el.getAttribute("r")))+" mm circle. Refine it in the readout.");
       setTool("select"); }   // part made: auto-release to select, with it selected for editing
     draw(); refreshEditPanel(); return;
   }
