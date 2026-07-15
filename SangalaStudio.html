@@ -266,6 +266,7 @@
       <span id="zoomPct">100%</span>
       <button id="zoomIn" title="Zoom in">+</button>
       <button id="zoomFit" title="Fit the whole page">Fit</button>
+      <button id="bOrient" title="Mat orientation. The mat and the cut are the same 8 x 12 either way - landscape just turns the workspace for designs that sit better wide."><svg id="orientIcon" width="15" height="15" viewBox="0 0 20 20" style="display:block"><rect x="6.5" y="2.5" width="7" height="15" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
       <button id="bSnapTog" class="on" title="Snap to Fit: dragging near another shape pulls the corners together. Click to turn it off. (While on, hold Alt to drag free.)">🧲</button>
     </div>
   </div>
@@ -309,10 +310,14 @@ const VIEW_MARGIN=20; // mm of cork shown around the page at the DEFAULT view (z
 const WS_MARGIN=150;  // mm of corkboard you can PARK on and pan to reach. Large, because the whole board is
                       // workspace, as in Silhouette Studio (Elaine Wolfe's designs place pieces all over it).
                       // Decoupling these is the fix: the page is framed by VIEW_MARGIN, not shrunk to fit WS_MARGIN.
-function worldParams(){   // the page centered in the board; VIEW_MARGIN sets the default scale, the window sets the rest
+let matLandscape=false;   // the mat/cut are the same 8x12 either way; landscape only TURNS the workspace 90 deg for
+                          // designs that sit better wide. The design's stored + cut coords stay portrait, so the
+                          // machine never knows - landscape is purely a rotation of the view (see draw() / evtMM).
+function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; vw/vh = how it is DISPLAYED (turned in landscape)
   const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
-  const baseK=Math.min(cv.width/(dw+2*VIEW_MARGIN), cv.height/(dh+2*VIEW_MARGIN));
-  return { dw:dw, dh:dh, baseK:baseK, MX:(cv.width/baseK-dw)/2, MY:(cv.height/baseK-dh)/2 };
+  const vw=matLandscape?dh:dw, vh=matLandscape?dw:dh;
+  const baseK=Math.min(cv.width/(vw+2*VIEW_MARGIN), cv.height/(vh+2*VIEW_MARGIN));   // fit the DISPLAYED page + a small margin
+  return { dw:dw, dh:dh, vw:vw, vh:vh, baseK:baseK, MX:(cv.width/baseK-vw)/2, MY:(cv.height/baseK-vh)/2 };
 }
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
@@ -332,7 +337,8 @@ function say(t){$("status").innerHTML=t;}
 let units="in";
 function offMM(v){return units==="in"?v*25.4:v;}
 function fmtn(v){return Math.round(v*100)/100;}
-function matLabel(){return units==="in"?("Mat "+Math.round(MAT_W/25.4)+" x "+Math.round(MAT_H/25.4)+" inches"):("Mat "+Math.round(MAT_W)+" x "+Math.round(MAT_H)+" mm");}
+function matLabel(){ const a=matLandscape?MAT_H:MAT_W, b=matLandscape?MAT_W:MAT_H;   // show the DISPLAYED orientation (12 x 8 in landscape)
+  return units==="in"?("Mat "+Math.round(a/25.4)+" x "+Math.round(b/25.4)+" inches"):("Mat "+Math.round(a)+" x "+Math.round(b)+" mm");}
 function applyRanges(){const ox=$("offx"),oy=$("offy");
   if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(MAT_W/25.4);oy.max=fmtn(MAT_H/25.4);}
   else{ox.step=oy.step=1;ox.max=Math.round(MAT_W);oy.max=Math.round(MAT_H);}}
@@ -628,6 +634,7 @@ function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.fillStyle=corkPattern();ctx.fillRect(0,0,cv.width,cv.height);   // corkboard everywhere; shapes parked on it stay visible and editable
   ctx.save(); ctx.translate(view.panX+MX*k, view.panY+MY*k);   // pan the magnified view; the page sits centered in the cork
+  if(matLandscape) ctx.transform(0,-1,1,0,0,dw*k);   // turn the portrait mat 90 deg into the landscape frame; everything below draws in stored (portrait) coords unchanged
   ctx.fillStyle="#fff";ctx.fillRect(0,0,dw*k,dh*k);            // the page itself
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,dw*k,dh*k);
@@ -751,8 +758,9 @@ function draw(){
     const x0=Math.min(marquee.x0,marquee.x1)*k, y0=Math.min(marquee.y0,marquee.y1)*k, x1=Math.max(marquee.x0,marquee.x1)*k, y1=Math.max(marquee.y0,marquee.y1)*k;
     ctx.save(); ctx.fillStyle="rgba(26,95,180,.08)"; ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
     ctx.fillRect(x0,y0,x1-x0,y1-y0); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.restore(); }
-  ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(),8,17);   // label belongs to the page, so it pans with it
   ctx.restore();   // end magnify (pan/zoom) transform
+  ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";   // label upright at the displayed page's top-left (drawn after restore so it never rotates with a landscape mat)
+  ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(), view.panX+MX*k+8, view.panY+MY*k+17);
   const chk=pl.concat(sl);
   if(chk.length){const bb=bbox(chk);if(bb[2]>dw||bb[3]>dh)say("Design runs off the page - lower Scale or move it.");}
 }
@@ -2408,15 +2416,17 @@ document.addEventListener("keydown",(e)=>{
 // pointer -> display mm (same math the selection uses), plus k = px per mm
 function evtMM(e){ const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingClientRect();
   const cx=(e.clientX-r.left)*(cv.width/r.width), cy=(e.clientY-r.top)*(cv.height/r.height);   // canvas px
-  return { mx:(cx-view.panX)/k-w.MX, my:(cy-view.panY)/k-w.MY, k }; }   // invert pan+zoom+cork margin -> page mm; k = px/mm at this zoom
+  const X=(cx-view.panX)/k-w.MX, Y=(cy-view.panY)/k-w.MY;   // mm from the displayed page's top-left
+  if(matLandscape) return { mx:w.dw-Y, my:X, k };           // un-turn the landscape view back to stored portrait coords
+  return { mx:X, my:Y, k }; }                               // k = px/mm at this zoom
 /* ---------- magnify: wheel zoom (toward cursor), buttons, pan (middle-mouse / Space+drag) ---------- */
 function canvasPt(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]; }
 function clampPan(){   // keep the view within the park-able world (page + WS_MARGIN cork); if that world is smaller
   const w=worldParams(), k=w.baseK*view.zoom;   // than the viewport on an axis, centre on that axis instead
   const bound=(vp,startPx,sizePx)=>{ if(sizePx<=vp){ const c=(vp-sizePx)/2-startPx; return [c,c]; }
     return [vp-(startPx+sizePx), -startPx]; };
-  const bx=bound(cv.width,  (w.MX-WS_MARGIN)*k, (w.dw+2*WS_MARGIN)*k);
-  const by=bound(cv.height, (w.MY-WS_MARGIN)*k, (w.dh+2*WS_MARGIN)*k);
+  const bx=bound(cv.width,  (w.MX-WS_MARGIN)*k, (w.vw+2*WS_MARGIN)*k);   // the DISPLAYED page (turned in landscape) sets the world extent
+  const by=bound(cv.height, (w.MY-WS_MARGIN)*k, (w.vh+2*WS_MARGIN)*k);
   view.panX=Math.max(bx[0], Math.min(bx[1], view.panX));
   view.panY=Math.max(by[0], Math.min(by[1], view.panY)); }
 function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
@@ -2429,6 +2439,14 @@ cv.addEventListener("wheel",(e)=>{ e.preventDefault(); const p=canvasPt(e); setZ
 $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
 $("zoomOut").onclick=()=>setZoom(view.zoom/1.3);
 $("zoomFit").onclick=()=>{ view.zoom=1; view.panX=0; view.panY=0; draw(); updateZoomUI(); };
+$("bOrient").onclick=()=>{ matLandscape=!matLandscape;
+  $("orientIcon").innerHTML = matLandscape
+    ? '<rect x="2.5" y="6.5" width="15" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>'   // wide = landscape
+    : '<rect x="6.5" y="2.5" width="7" height="15" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>';  // tall = portrait
+  view.zoom=1; view.panX=0; view.panY=0;   // reframe the turned mat
+  draw(); updateZoomUI();
+  say(matLandscape ? "Mat turned to landscape - the workspace is wider now. The mat and the cut are unchanged."
+                   : "Mat back to portrait."); };
 $("bSnapTog").onclick=()=>{ snapOn=!snapOn; $("bSnapTog").classList.toggle("on",snapOn);
   say(snapOn ? "<i>Snap to Fit</i> is on - dragging near another shape pulls the corners together (hold Alt to drag free)."
              : "<i>Snap to Fit</i> is off - shapes drag freely. Click the magnet to turn it back on."); };
