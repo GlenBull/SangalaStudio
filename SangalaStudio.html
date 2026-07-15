@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-15.1 -->
+<!-- SANGALA_VERSION: 2026-07-15.2 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2414,6 +2414,26 @@ document.addEventListener("keydown",(e)=>{
     renderBg(); draw(); refreshEditPanel(); say("Deleted "+n+" objects."); return; }
   if(selId==null) return;
   e.preventDefault(); deleteSel();
+});
+// Arrow keys: micro-jog the selection - get close with the mouse, then nudge into position.
+// 0.1 mm per press, 1 mm with Shift. Directions are screen-relative (un-turned for landscape view)
+// so "up" always means up on screen, even though stored coordinates stay in portrait space.
+window.addEventListener("keydown",(e)=>{
+  if(e.key!=="ArrowUp"&&e.key!=="ArrowDown"&&e.key!=="ArrowLeft"&&e.key!=="ArrowRight") return;
+  const tag=(e.target&&e.target.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select"||(e.target&&e.target.isContentEditable)) return;
+  const ids=selectedIds();
+  if(!ids.length && !(refImg&&refImg.sel)) return;
+  if(drag) return;
+  e.preventDefault();
+  const step=e.shiftKey?1:0.1;
+  let ddx=0,ddy=0;   // on-screen delta
+  if(e.key==="ArrowLeft") ddx=-step; else if(e.key==="ArrowRight") ddx=step;
+  else if(e.key==="ArrowUp") ddy=-step; else ddy=step;
+  const dx = matLandscape ? -ddy : ddx, dy = matLandscape ? ddx : ddy;   // un-turn landscape back to stored coords
+  if(refImg && refImg.sel){ refImg.x+=dx; refImg.y+=dy; }
+  else ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(o) translateObj(o,dx,dy); });
+  draw(); refreshEditPanel();
 });
 // pointer -> display mm (same math the selection uses), plus k = px per mm
 function evtMM(e){ const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingClientRect();
