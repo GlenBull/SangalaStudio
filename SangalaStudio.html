@@ -634,6 +634,15 @@ function draw(){
       ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.restore();
     }
   }
+  if(selMulti.length){   // multi-selection: a faint translucent plate BENEATH each member (drawn before the machine
+    ctx.save(); ctx.fillStyle="rgba(0,0,0,0.07)";   // lines, so red stays red and blue stays blue). Fills cannot be mistaken for a cut or fold, which are strokes;
+    selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the grey deepens - stacking stays visible
+      const bb=bbox([placePoly(o.poly)]), p=7;
+      const x=bb[0]*k-p, y=bb[1]*k-p, w=(bb[2]-bb[0])*k+2*p, h=(bb[3]-bb[1])*k+2*p;
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x,y,w,h,4); else ctx.rect(x,y,w,h);
+      ctx.fill(); });
+    ctx.restore(); }
   const sl=placedScore();
   ctx.strokeStyle="#2a6bd0";ctx.lineWidth=1;ctx.setLineDash([4,3]);
   sl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
@@ -691,11 +700,6 @@ function draw(){
           ctx.beginPath(); ctx.moveTo(rh.ax*k,rh.ay*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
           ctx.beginPath(); ctx.arc(rh.x*k,rh.y*k,5,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); } }
       }}
-  if(selMulti.length){   // marquee multi-selection: dashed outline around each selected object
-    ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
-    selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return; const ring=placePoly(o.poly);
-      ctx.beginPath(); ring.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
-    ctx.restore(); }
   if(drag&&drag.mode==="tab"&&drag.preview){   // Tab tool: live preview - red cut sides, blue dashed hinge
     const pp=placeParams(), pv=drag.preview, P=q=>[(pp.ox+q[0]*pp.s)*k,(pp.oy+q[1]*pp.s)*k];
     const a=P(pv.P1), b=P(pv.Q1), c=P(pv.Q2), d2=P(pv.P2);
