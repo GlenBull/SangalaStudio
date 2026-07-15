@@ -1646,12 +1646,14 @@ function updateCombine(){
   const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
   const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
   const twoShapes = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
-  const imgOperand = o1 && !isBrick(o1) && selImg2 && refImg && refImg.img;   // shape + photo -> Intersect crops the photo to the shape
+  // shape + photo -> Intersect crops the photo to the shape. No Shift+click needed: a single shape over a
+  // photo is unambiguous (only a 2nd shape, not the photo, is armed by Shift+click). This is the vignette.
+  const imgOperand = o1 && !isBrick(o1) && !twoShapes && refImg && refImg.img;
   if($("pUnion")) $("pUnion").disabled = !twoShapes;
   if($("pDiff"))  $("pDiff").disabled  = !twoShapes;
   if($("pInt"))   $("pInt").disabled   = !(twoShapes || imgOperand);
   const hint=$("combinehint"); if(hint){ hint.style.display=(twoShapes||imgOperand)?"none":"block";
-    hint.textContent = imgOperand ? "Intersect crops the photo to the shape." : "Select two shapes, or a shape + the photo (click one, Shift+click the other)."; }
+    hint.textContent = imgOperand ? "Intersect crops the photo to the shape." : "Select two shapes (click one, Shift+click the other), or a shape over the photo."; }
 }
 // create a node-editable <polygon> object from a result ring (design mm, open ring).
 // Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
@@ -1666,8 +1668,8 @@ function makePolyObj(ring, kind){
 }
 function applyBool(op){
   const o1=selId!=null?objects.find(o=>o.id===selId):null;
-  if(op==="intersect" && selImg2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape + photo: Intersect = crop photo to shape
   const o2=selId2!=null?objects.find(o=>o.id===selId2):null;
+  if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
   if(!o1||!o2||o1===o2){ say("Pick two shapes: click one, then Shift+click another."); return; }
   ensureDoc();
   const rings=polyBool(op, o1.poly, o2.poly);
