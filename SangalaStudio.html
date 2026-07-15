@@ -67,6 +67,7 @@
   #zoomctl button.on{background:#dbeafe;border-color:#1a5fb4}
   #zoomctl #bSnapTog{display:flex;align-items:center;justify-content:center;padding:0;font-size:.82rem}
   #zoomctl #zoomFit{width:auto;padding:0 7px;font-size:.78rem}
+  #zoomctl #bOrient{display:flex;align-items:center;justify-content:center;padding:0}
   #zoomctl #zoomPct{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums}
   canvas{display:block;width:100%;height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:transparent}
   .go{width:100%;font-size:1.5rem;font-weight:800;color:#fff;background:linear-gradient(#1fa85a,#178047);
@@ -266,7 +267,7 @@
       <span id="zoomPct">100%</span>
       <button id="zoomIn" title="Zoom in">+</button>
       <button id="zoomFit" title="Fit the whole page">Fit</button>
-      <button id="bOrient" title="Mat orientation. The mat and the cut are the same 8 x 12 either way - landscape just turns the workspace for designs that sit better wide."><svg id="orientIcon" width="15" height="15" viewBox="0 0 20 20" style="display:block"><rect x="6.5" y="2.5" width="7" height="15" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+      <button id="bOrient" title="Rotate the mat between portrait and landscape. The mat and the cut are the same 8 x 12 either way - landscape just turns the workspace for designs that sit better wide."><svg width="17" height="17" viewBox="0 0 24 24" style="display:block"><rect x="9" y="1" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="2" y="10" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 1.5A6 6 0 0 0 2 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M0.3 3.2L2 6l3-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="bSnapTog" class="on" title="Snap to Fit: dragging near another shape pulls the corners together. Click to turn it off. (While on, hold Alt to drag free.)">🧲</button>
     </div>
   </div>
@@ -2440,9 +2441,7 @@ $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
 $("zoomOut").onclick=()=>setZoom(view.zoom/1.3);
 $("zoomFit").onclick=()=>{ view.zoom=1; view.panX=0; view.panY=0; draw(); updateZoomUI(); };
 $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
-  $("orientIcon").innerHTML = matLandscape
-    ? '<rect x="2.5" y="6.5" width="15" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>'   // wide = landscape
-    : '<rect x="6.5" y="2.5" width="7" height="15" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>';  // tall = portrait
+  $("bOrient").classList.toggle("on",matLandscape);
   view.zoom=1; view.panX=0; view.panY=0;   // reframe the turned mat
   draw(); updateZoomUI();
   say(matLandscape ? "Mat turned to landscape - the workspace is wider now. The mat and the cut are unchanged."
