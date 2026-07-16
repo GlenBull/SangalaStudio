@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.5 -->
+<!-- SANGALA_VERSION: 2026-07-16.6 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1124,33 +1124,42 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
   // gripping instead (gripWall). A brick that HAS tubes keeps the 1.2 mm wall: its clutch comes from the tubes
   // touching the studs diagonally, and its wall never reaches them - so thickening it there would change nothing
   // but the plastic used, on parts that already fit.
-  const hasTubes = cols>1 && rows>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
+  // A slope eats the front rows, so the open underside is only (rows - slope) deep - and a tube needs an
+  // interior grid point inside THAT. A 2x2 slope therefore has no tube (its open part is a 2x1), exactly like
+  // a 1xN brick, so the wall does the gripping instead. This is why the real 2x2 slope clutches at all.
+  const hasTubes = cols>1 && (rows-slope)>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
-  const run=slope*U, yb=y0+run;                              // the slope climbs from the front edge (y0) up to full height at yb
-  const topZ=y=>Math.max(0,Math.min(Zt, Zt*(y-y0)/run));     // the sloped roof's upper surface at depth y
-  const underZ=y=>y>=yb ? Zc+WELD : Math.max(0, topZ(y)-roof);   // and its underside; over the flat rows nothing limits a tube
+  const run=slope*U, yb=y0+run;                              // the slope climbs from the front edge up to full height at yb
+  // A real LEGO slope does NOT run to a knife edge: it stops at a small VERTICAL LIP at the front. The lip is
+  // not decoration - it is what makes the angle 45 deg. A 9.6 mm brick over one 8 mm stud drops 8 and leaves
+  // 9.6-8 = 1.6 mm of lip. Take the lip as the remainder and the slope comes out at exactly 45, matching the
+  // real part; where the run is longer than the brick is tall there is no lip and the slope is shallower.
+  const lip=Math.max(0, Zt-run);
   if(!slope){
     t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
            ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
     t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab (overlaps wall tops)
   } else {
-    // No front wall: the slope itself comes down to the base, so there is nothing left to wall off.
     t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
+    if(lip>0) t.push(...boxTris(gx,gy,gW,wall+G,0,lip));                           // the vertical lip: a short front wall where the slope stops
     const fy=yb, fh=(y1+G)-yb;                                                     // the flat rows behind the slope
     t.push(...boxTris(gx,fy,wall+G,fh,0,Zt), ...boxTris(x1-wall,fy,wall+G,fh,0,Zt));   // their side walls
     t.push(...boxTris(gx,fy,gW,fh,Zc,Zt));                                         // and their roof slab
-    const tri=[[y0,0],[yb,0],[yb,Zt]];                                             // under the slope, each side wall is a triangle
-    t.push(...yzPrism(tri,gx,x0+wall), ...yzPrism(tri,x1-wall,x1+G));
-    const yf=y0+roof*run/Zt;                                                       // where the roof's underside meets the base
-    t.push(...yzPrism([[y0,0],[yb,Zt],[yb,Zc],[yf,0]],gx,x1+G));                   // the tilted roof slab itself
+    const side=[[y0,0],[yb,0],[yb,Zt],[y0,lip]];                                   // under the slope each side wall is a trapezoid, its top edge ON the slope
+    t.push(...yzPrism(side,gx,x0+wall), ...yzPrism(side,x1-wall,x1+G));
+    const ub=lip-roof;                                                             // the slab's underside where it meets the lip
+    t.push(...yzPrism(ub>=0 ? [[y0,lip],[yb,Zt],[yb,Zc],[y0,ub]]                   // the tilted roof slab itself
+                            : [[y0,lip],[yb,Zt],[yb,Zc],[y0+run*(roof-lip)/(Zt-lip),0],[y0,0]], gx, x1+G));
   }
   if(studs) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs only where the top is flat (off = smooth top, e.g. a wing)
-  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++){                         // anti-stud tubes to clip onto studs below (interior grid only)
-    const yj=y0+j*U, top=slope?Math.min(Zc+WELD,underZ(yj-tubeRo)):Zc+WELD;        // stop a tube short of the sloping roof, measured at its front edge
-    if(top>=2.5) t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,top));                // any shorter and it could not grip a stud anyway
-  }
+  // Anti-stud tubes, on interior grid points that lie wholly under the FLAT roof (j > slope). A tube must reach
+  // the roof and fuse to it: an earlier version shortened tubes that ran under the slope, which left them
+  // touching nothing but the build plate - they printed as loose cylinders and fell out of Moses's first part.
+  // Where the slope leaves no room for one, the brick has no tube at all, and hasTubes above hands the gripping
+  // to the wall instead - the same way a 1xN brick grips, and a real 2x2 slope does too.
+  if(dock)  for(let i=1;i<cols;i++)for(let j=slope+1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));
   else      t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
