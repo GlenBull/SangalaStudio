@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.4 -->
+<!-- SANGALA_VERSION: 2026-07-16.5 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1111,8 +1111,12 @@ function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + in
 }
 // A hollow 2x3 LEGO brick from primitive closed solids (slicer fuses the overlaps):
 // 4 wall boxes + roof slab + 6 stud cylinders + 2 tubes. Standard dims, origin (x0,y0).
-function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow){
+// slope > 0 makes it a SLOPE BRICK: the roof falls away over the front `slope` rows, from full height at the
+// boundary down to the base at the front edge - the classic roof/wedge brick. slope 0 is an ordinary brick and
+// takes the original path below, unchanged.
+function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
   cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
+  slope=Math.max(0, Math.min(rows-1, Math.round(slope||0)));   // at least one flat row must survive, to carry the studs
   const U=8, W=cols*U, H=rows*U, roof=1.0, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
   // Tubes only land on INTERIOR grid points, so anything less than 2x2 (a 1xN leg, a 1x1 post) gets none, and
   // its wall's inner face is the only thing left that can grip the stud below. At a fixed 1.2 mm that cavity was
@@ -1124,11 +1128,29 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow){
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
-  t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
-         ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
-  t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab (overlaps wall tops)
-  if(studs) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs on top (off = smooth top, e.g. a wing)
-  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));                  // anti-stud tubes to clip onto studs below (interior grid only)
+  const run=slope*U, yb=y0+run;                              // the slope climbs from the front edge (y0) up to full height at yb
+  const topZ=y=>Math.max(0,Math.min(Zt, Zt*(y-y0)/run));     // the sloped roof's upper surface at depth y
+  const underZ=y=>y>=yb ? Zc+WELD : Math.max(0, topZ(y)-roof);   // and its underside; over the flat rows nothing limits a tube
+  if(!slope){
+    t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
+           ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
+    t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab (overlaps wall tops)
+  } else {
+    // No front wall: the slope itself comes down to the base, so there is nothing left to wall off.
+    t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
+    const fy=yb, fh=(y1+G)-yb;                                                     // the flat rows behind the slope
+    t.push(...boxTris(gx,fy,wall+G,fh,0,Zt), ...boxTris(x1-wall,fy,wall+G,fh,0,Zt));   // their side walls
+    t.push(...boxTris(gx,fy,gW,fh,Zc,Zt));                                         // and their roof slab
+    const tri=[[y0,0],[yb,0],[yb,Zt]];                                             // under the slope, each side wall is a triangle
+    t.push(...yzPrism(tri,gx,x0+wall), ...yzPrism(tri,x1-wall,x1+G));
+    const yf=y0+roof*run/Zt;                                                       // where the roof's underside meets the base
+    t.push(...yzPrism([[y0,0],[yb,Zt],[yb,Zc],[yf,0]],gx,x1+G));                   // the tilted roof slab itself
+  }
+  if(studs) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs only where the top is flat (off = smooth top, e.g. a wing)
+  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++){                         // anti-stud tubes to clip onto studs below (interior grid only)
+    const yj=y0+j*U, top=slope?Math.min(Zc+WELD,underZ(yj-tubeRo)):Zc+WELD;        // stop a tube short of the sloping roof, measured at its front edge
+    if(top>=2.5) t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,top));                // any shorter and it could not grip a stud anyway
+  }
   else      t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
@@ -1238,6 +1260,15 @@ function prismTris(ring,z0,z1,holes){   // extrude a polygon ring (design mm) in
       t.push(facing([a0,b0,b1],ix,iy,0), facing([a0,b1,a1],ix,iy,0));                    // wall
       t.push(facing([[h.x,h.y,zt],a1,b1],0,0,-1)); } });                                 // ceiling, facing down into the hole
   return t;
+}
+// Extrude a SIDE-VIEW (Y-Z) profile along X - the one thing prismTris cannot do, since it only pushes a plan
+// outline straight up. Build the solid in a frame where the profile is the plan and X is "up", then cycle the
+// axes back: (a,b,c) -> (c,a,b) is a rotation (determinant +1), so the outward normals prismTris computed stay
+// outward. This is what lets a roof be tilted: every other 3D face in Sangala is flat because Z is the only
+// extrusion axis.
+function yzPrism(profile,xa,xb){
+  if(!(xb>xa)) return [];
+  return prismTris(profile,xa,xb).map(tri=>tri.map(p=>[p[2],p[0],p[1]]));
 }
 function ptInPoly(x,y,ring){   // ray-cast point-in-polygon; ring may be closed (last == first)
   let p=ring; const n=p.length;
@@ -1363,7 +1394,7 @@ function bodiesTouch(a,b){   // do two 3D bodies actually meet? (overlapping in 
 function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
   if(o.el.hasAttribute("data-brick"))
-    return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G);   // hollow brick: origin + Fit + cols/rows + height + studs/sockets
+    return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"));   // hollow brick: origin + Fit + cols/rows + height + studs/sockets + slope rows
   const t=o.el.tagName.toLowerCase(), fit=g("data-fit"), skips=studSkips(o.el);
   const z1=g("data-z0")+g("data-z"), z0=(fuse && g("data-z0")>0) ? g("data-z0")-G : g("data-z0");   // a fused body stacked on another reaches down into it
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
@@ -1938,7 +1969,7 @@ function makeBrick(x0,y0){
   ensureDoc();
   const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
   const gid=++groupSeq, ids=[];   // the brick's body + studs are auto-grouped so it moves as one
-  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1"});
+  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1","data-slope":0});
   objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]],group:gid}); ids.push(objSeq);
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
@@ -1954,7 +1985,8 @@ function rebuildBrick(o){   // regenerate a brick's body size + stud grid from i
   const old=objects.filter(x=>x.group===gid && x.el&&x.el.getAttribute&&x.el.getAttribute("data-brickpart"));   // drop old studs
   old.forEach(s=>{ if(s.el&&s.el.remove) s.el.remove(); }); const oset=new Set(old.map(s=>s.id)); objects=objects.filter(x=>!oset.has(x.id));
   const ids=[o.id], studsOn=o.el.getAttribute("data-studs")!=="0";
-  if(studsOn) for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;   // 2D stud circles only when studs are on (smooth top = none)
+  const slope=Math.max(0,Math.min(rows-1,Math.round(+o.el.getAttribute("data-slope")||0)));   // a sloped row has no flat top, so it carries no studs - the 2D view must agree with what prints
+  if(studsOn) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;   // 2D stud circles only when studs are on (smooth top = none)
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":1.8,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r),group:gid}); ids.push(objSeq); }
   selMulti=ids; selId=null; selId2=null;   // keep the whole brick group selected
@@ -2278,6 +2310,7 @@ function selectedBrick(){   // the brick body object if the current selection is
 function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const cols=Math.max(1,Math.round(g("data-cols")||3)), rows=Math.max(1,Math.round(g("data-rows")||2)),
         depth=Math.round((g("data-z")||9.6)*10)/10, fit=Math.round(g("data-fit")*10)/10,
+        slope=Math.max(0,Math.min(rows-1,Math.round(g("data-slope")))),
         studsOn=o.el.getAttribute("data-studs")!=="0", dockOn=o.el.getAttribute("data-dock")!=="0";
   const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left">'+label+':</td>'
      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'"></td>'
@@ -2285,7 +2318,9 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const flag=(f,label,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
   return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
     +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
-    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr></table>'
+    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr>'
+    +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td style="width:1rem"></td><td></td><td></td><td></td></tr></table>'
+    +'<div class="hint" style="margin-top:.2rem">Slope 0 = a flat top. Slope 1 makes the front row fall away to the base - a roof brick.</div>'
     +'<div class="hint" style="margin-top:.2rem">Fit 0 = standard LEGO. Minus tightens the clutch (fatter studs), plus loosens it.</div>'
     +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>';
 }
@@ -2295,9 +2330,14 @@ function showBrickCtl(o){ const el=$("brickctl");
 }
 function applyBrickDim(dim,v,live){ const o=selectedBrick(); if(!o) return;
   if(dim==="cols"||dim==="rows"){ o.el.setAttribute(dim==="cols"?"data-cols":"data-rows", Math.max(1,Math.min(12,Math.round(v))));
+    const rws=Math.max(1,Math.round(+o.el.getAttribute("data-rows")||2));
+    if((+o.el.getAttribute("data-slope")||0) > rws-1) o.el.setAttribute("data-slope", rws-1);   // fewer rows than the slope covers: pull it back so a flat row survives
     rebuildBrick(o); draw(); pvRefresh(); if(!live) refreshEditPanel(); return; }   // stud count changed -> rebuild the brick group
   if(dim==="z"){ o.el.setAttribute("data-z", fmtn(Math.max(3.2,v))); pvRefresh(); if(!live) showBrickCtl(o); return; }   // extrude height; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit", fmtn(clampFit(v))); pvRefresh(); if(!live) showBrickCtl(o); return; }   // may be negative = tighter clutch
+  if(dim==="slope"){ const rws=Math.max(1,Math.round(+o.el.getAttribute("data-rows")||2));
+    o.el.setAttribute("data-slope", Math.max(0,Math.min(rws-1,Math.round(v))));
+    rebuildBrick(o); draw(); pvRefresh(); if(!live) refreshEditPanel(); return; }   // the sloped rows lose their studs, so the 2D grid is rebuilt too
 }
 function applyBrickFlag(flag,on){ const o=selectedBrick(); if(!o) return;
   o.el.setAttribute(flag==="studs"?"data-studs":"data-dock", on?"1":"0");
