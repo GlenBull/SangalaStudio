@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.6 -->
+<!-- SANGALA_VERSION: 2026-07-16.7 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1096,12 +1096,16 @@ function cylTris(cx,cy,r,z0,z1){   // triangle-fan caps + wall quads; outward wi
   }
   return tris;
 }
-function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + inner walls, top + bottom rings
+// Hollow cylinder (annulus): outer + inner walls, top + bottom rings.
+// topFn(x,y) is optional and gives the top z per point, so a tube can be CUT BY a sloping roof and still meet
+// it all the way along - which is how a real moulded slope keeps its tube. Omit it for a flat top at z1.
+function tubeTris(cx,cy,ro,ri,z0,z1,topFn){
   const n=Math.max(28,Math.ceil(Math.PI*2*ro*2)), O=[],I=[], t=[];
+  const TZ=p=>topFn?topFn(p[0],p[1]):z1;
   for(let i=0;i<n;i++){const a=2*Math.PI*i/n,c=Math.cos(a),s=Math.sin(a); O.push([cx+ro*c,cy+ro*s]); I.push([cx+ri*c,cy+ri*s]);}
   for(let i=0;i<n;i++){ const j=(i+1)%n;
-    const Ob=[O[i][0],O[i][1],z0],Obn=[O[j][0],O[j][1],z0],Ot=[O[i][0],O[i][1],z1],Otn=[O[j][0],O[j][1],z1];
-    const Ib=[I[i][0],I[i][1],z0],Ibn=[I[j][0],I[j][1],z0],It=[I[i][0],I[i][1],z1],Itn=[I[j][0],I[j][1],z1];
+    const Ob=[O[i][0],O[i][1],z0],Obn=[O[j][0],O[j][1],z0],Ot=[O[i][0],O[i][1],TZ(O[i])],Otn=[O[j][0],O[j][1],TZ(O[j])];
+    const Ib=[I[i][0],I[i][1],z0],Ibn=[I[j][0],I[j][1],z0],It=[I[i][0],I[i][1],TZ(I[i])],Itn=[I[j][0],I[j][1],TZ(I[j])];
     t.push([Ob,Obn,Otn],[Ob,Otn,Ot]);   // outer wall
     t.push([Ib,It,Itn],[Ib,Itn,Ibn]);   // inner wall (faces the hole)
     t.push([Ot,Otn,Itn],[Ot,Itn,It]);   // top ring +Z
@@ -1124,10 +1128,9 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
   // gripping instead (gripWall). A brick that HAS tubes keeps the 1.2 mm wall: its clutch comes from the tubes
   // touching the studs diagonally, and its wall never reaches them - so thickening it there would change nothing
   // but the plastic used, on parts that already fit.
-  // A slope eats the front rows, so the open underside is only (rows - slope) deep - and a tube needs an
-  // interior grid point inside THAT. A 2x2 slope therefore has no tube (its open part is a 2x1), exactly like
-  // a 1xN brick, so the wall does the gripping instead. This is why the real 2x2 slope clutches at all.
-  const hasTubes = cols>1 && (rows-slope)>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
+  // A slope only takes the TOP. The base is untouched - a 2x2 slope still has a full 2x2 underside and keeps
+  // its tube - so the slope must not enter this decision at all.
+  const hasTubes = cols>1 && rows>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
@@ -1137,6 +1140,8 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
   // 9.6-8 = 1.6 mm of lip. Take the lip as the remainder and the slope comes out at exactly 45, matching the
   // real part; where the run is longer than the brick is tall there is no lip and the slope is shallower.
   const lip=Math.max(0, Zt-run);
+  const ztop=y=>lip+(Zt-lip)*(y-y0)/run;                     // the sloped roof's upper surface at depth y
+  const underZ=y=>y>=yb ? Zc : Math.max(0, ztop(y)-roof);    // and its underside - the ceiling of the cavity
   if(!slope){
     t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
            ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
@@ -1154,12 +1159,18 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
                             : [[y0,lip],[yb,Zt],[yb,Zc],[y0+run*(roof-lip)/(Zt-lip),0],[y0,0]], gx, x1+G));
   }
   if(studs) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs only where the top is flat (off = smooth top, e.g. a wing)
-  // Anti-stud tubes, on interior grid points that lie wholly under the FLAT roof (j > slope). A tube must reach
-  // the roof and fuse to it: an earlier version shortened tubes that ran under the slope, which left them
-  // touching nothing but the build plate - they printed as loose cylinders and fell out of Moses's first part.
-  // Where the slope leaves no room for one, the brick has no tube at all, and hasTubes above hands the gripping
-  // to the wall instead - the same way a 1xN brick grips, and a real 2x2 slope does too.
-  if(dock)  for(let i=1;i<cols;i++)for(let j=slope+1;j<rows;j++) t.push(...tubeTris(x0+i*U,y0+j*U,tubeRo,tubeRi,0,Zc+WELD));
+  // Anti-stud tubes on every interior grid point: a slope takes only the top, so the base is still a full
+  // 2x2 and must clutch like one. Under the slope a tube is CUT BY the roof rather than stopped below it -
+  // its top follows the ceiling (+WELD, so it bites into the slab and fuses). An earlier version capped the
+  // tube at a flat height instead, leaving it touching nothing but the build plate: it printed as a loose
+  // cylinder and fell out of Moses's first part. WELD < roof, so the top always lands inside the slab and
+  // can never break out through the sloped face.
+  if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++){
+    const yj=y0+j*U;
+    if(slope && underZ(yj-tubeRo)<1.0) continue;                                    // no usable cavity left this far forward
+    t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,Zc+WELD,
+      slope?((x,y)=>Math.min(Zc+WELD, underZ(y)+WELD)):null));
+  }
   else      t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
