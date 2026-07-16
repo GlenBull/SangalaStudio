@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.7 -->
+<!-- SANGALA_VERSION: 2026-07-16.8 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -85,6 +85,9 @@
   .ebtn:hover{background:linear-gradient(#fff,#dbe6f3)}
   .ebtn:disabled{opacity:.45;cursor:default;box-shadow:none}
   .ebtn.on{background:linear-gradient(#bfe3ff,#8fcaf5);border-color:#3f8fd0;box-shadow:inset 0 1px 0 #fff,0 0 0 2px rgba(63,143,208,.4)}
+  .swatch{width:21px;height:21px;padding:0;border:1px solid #b9a67f;border-radius:4px;cursor:pointer;font-size:.7rem;line-height:1;color:#7a3b12}
+  .swatch:hover{border-color:#7a3b12}
+  .swatch.on{outline:2px solid #1a5fb4;outline-offset:1px;border-color:#1a5fb4}
   .ebtn.danger{color:#8a1c1c}
   .ebtn.danger:hover:not(:disabled){background:linear-gradient(#fff,#f3dbdb)}
   #bar{height:12px;background:#e3d6bd;border-radius:6px;overflow:hidden;margin:.6rem 0}
@@ -255,6 +258,10 @@
       <div class="two" style="margin-top:.4rem">
         <button class="ebtn" id="ePrint" disabled>🖨️ Print Only</button>
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
+      </div>
+      <div id="fillrow" style="margin-top:.5rem;display:none">
+        <div class="hint" style="margin-bottom:.25rem">Paper color — a preview of the card it will be cut from. It is never cut or printed.</div>
+        <div id="swatches" style="display:flex;flex-wrap:wrap;gap:3px"></div>
       </div>
       <div id="groupsrow" style="margin-top:.4rem;display:none">
         <button class="ebtn" id="eGroup" style="width:100%">▦ Group</button>
@@ -674,6 +681,15 @@ function draw(){
       ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.restore();
     }
   }
+  // Paper colour: fill each shape that carries one, BEFORE the machine lines and the selection plate, so the
+  // red and blue stay crisp on top and the mat reads as the finished collage rather than a tangle of outlines.
+  // Drawn in object order, so a shape added later sits over an earlier one - the collage's layers.
+  objects.forEach(o=>{ const f=fillOf(o);
+    if(!f || !o.poly || o.poly.length<3 || !objClosed(o)) return;   // an open stroke (a fold, a turtle trail) encloses nothing
+    const p=placePoly(o.poly);
+    ctx.save(); ctx.fillStyle=f; ctx.beginPath();
+    p.forEach((q,i)=>{ const x=q[0]*k, y=q[1]*k; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    ctx.closePath(); ctx.fill(); ctx.restore(); });
   if(selMulti.length){   // multi-selection: a faint translucent plate BENEATH each member (drawn before the machine
     ctx.save(); ctx.fillStyle="rgba(0,0,0,0.07)";   // lines, so red stays red and blue stays blue). Fills cannot be mistaken for a cut or fold, which are strokes;
     selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the grey deepens - stacking stays visible
@@ -2026,7 +2042,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base and LEGO connectors
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper colour
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -2035,7 +2051,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -2079,7 +2095,7 @@ function deleteNode(){
 // outline is unchanged, but that corner becomes two coincident ends. An OPEN line splits there into two
 // separate objects, and line type is per-object, so each piece can then be Cut, Fold, or deleted alone.
 // (Three sides Cut + one side Fold = a glue tab. No per-edge line-type model is needed - splitting is enough.)
-const BREAK_ATTRS=["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy","data-open"];
+const BREAK_ATTRS=["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy","data-open","data-fill"];
 function makeElOpen(o){   // an open outline must live in a <polyline> - a <polygon> element closes itself
   if(o.el.tagName.toLowerCase()==="polygon"){
     const el=document.createElementNS(SVGNS,"polyline");
@@ -2373,11 +2389,46 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
   $("kindrow1").style.display = mode3D?"none":"";
   $("ePrint").style.display   = mode3D?"none":"";
   $("eDelete").style.gridColumn = mode3D?"1/-1":"";
+  $("fillrow").style.display  = mode3D?"none":"";   // paper colour is a collage idea; a 3D part has no card
+}
+/* ---------- Paper colour: fill a shape to preview the finished collage ----------
+   The fill stands for the CARD the shape will be cut from, so it is a design aid and nothing else: it never
+   cuts, never prints, and never changes what the machine does - the blade follows the outline either way.
+   It is therefore held in data-fill, NOT in the SVG's own fill attribute. That matters: classifyKind() reads
+   a red shape WITH a fill as "print" (the window-pane rule), so writing a real fill would make a cut outline
+   silently stop cutting the next time the file was opened. data-fill rides along in the saved SVG untouched
+   and the classifier never sees it. */
+const FILL_COLORS=["#ffffff","#1a1a1a","#9e9e9e","#d32f2f","#f57c00","#fbc02d","#8bc34a","#2e7d32","#4fc3f7","#1976d2","#6d4c41","#f06292"];
+function fillOf(o){ const f=o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-fill"); return f&&f!=="none"?f:null; }
+function buildSwatches(){
+  const box=$("swatches"); if(box.childElementCount) return;
+  const mk=(c,tip)=>{ const b=document.createElement("button");
+    b.className="swatch"; b.title=tip; b.dataset.fill=c||"none";
+    if(c) b.style.background=c; else { b.style.background="#fff"; b.textContent="✕"; }
+    box.appendChild(b); };
+  mk("", "No paper colour - just the outline");
+  FILL_COLORS.forEach(c=>mk(c,"Preview this shape cut from "+c+" card"));
+}
+function markSwatches(){
+  const ids=selectedIds(), o=ids.length?objects.find(x=>x.id===ids[0]):null;
+  const cur=fillOf(o)||"none";
+  Array.from($("swatches").children).forEach(b=>b.classList.toggle("on", b.dataset.fill===cur));
+}
+function setFill(c){
+  const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then pick a paper colour."); return; }
+  ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.el||!o.el.setAttribute) return;
+    if(c==="none") o.el.removeAttribute("data-fill"); else o.el.setAttribute("data-fill",c); });
+  draw(); refreshEditPanel();
+  say(c==="none" ? "Paper colour removed."
+                 : "Filled "+ids.length+" shape"+(ids.length!==1?"s":"")+" - a preview of the card. The die cutter still just follows the outline.");
 }
 function updateImageTools(){ $("bRemoveBg").style.display = (refImg && refImg.sel) ? "" : "none"; }   // Remove BG is a palette button now; show it only while the photo is selected
+buildSwatches();
+$("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(b) setFill(b.dataset.fill); });
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   updateImageTools();
+  markSwatches();    // show which paper colour the selection already carries
   const panel=$("editpanel");
   if(selMulti.length){   // marquee multi-selection: reclassify / delete apply to all; no per-object dims
     panel.style.display="block";
