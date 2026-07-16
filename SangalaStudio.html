@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-15.4 -->
+<!-- SANGALA_VERSION: 2026-07-16.1 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1108,8 +1108,8 @@ function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + in
 function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow){
   cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
   const U=8, W=cols*U, H=rows*U, roof=1.0, wall=1.2, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
-  // Fit = clutch clearance (mm): trim the stud diameter so mating printed bricks aren't over-tight. 0 = nominal.
-  const studR=Math.max(1.5, 2.4 - (fit||0)/2), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
+  // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
+  const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
   t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
          ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
@@ -1238,8 +1238,14 @@ function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outlin
   for(let i=0;i+1<ring.length;i++) d=Math.min(d, segDist(x,y,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]));
   return d;
 }
-function studRadius(fit){ return Math.max(1.5, 2.4-(fit||0)/2); }        // the stud; Fit shaves it so mating printed parts aren't over-tight
-function socketRadius(fit){ return 2.5+(fit||0)/2; }                     // the hole that receives one (nominal 5 mm dia); Fit opens it further
+// Fit = clutch clearance (mm). 0 = nominal LEGO (2.4 mm stud radius). POSITIVE loosens (shaves the stud, opens
+// the socket); NEGATIVE tightens (fattens the stud, closes the socket) - printers that lay small round posts
+// slightly undersized need this to get real clutch power. The range is bounded because a stud sits 4 mm from
+// both the cell edge and its neighbour, and a socket that shrinks too far can no longer take a stud at all.
+const FIT_MIN=-1.0, FIT_MAX=2.0;
+function clampFit(v){ return Math.max(FIT_MIN, Math.min(FIT_MAX, +v||0)); }
+function studRadius(fit){ return Math.min(3.0, Math.max(1.5, 2.4-clampFit(fit)/2)); }   // the stud; Fit shaves (or fattens) it so mating printed parts clutch properly
+function socketRadius(fit){ return Math.max(2.0, 2.5+clampFit(fit)/2); }                // the hole that receives one (nominal 5 mm dia); Fit opens (or closes) it
 const SOCK_DEPTH=4.0, SOCK_WALL=1.2;                                     // 4 mm deep, and keep at least 1.2 mm of material around and above it
 function studSkips(el){   // cells the user has switched off, as "i,j" keys. A cell is one 8 mm LEGO square: switching it off drops BOTH its stud and its socket
   const s=new Set(), v=el&&el.getAttribute?el.getAttribute("data-nostuds"):"";
@@ -2225,7 +2231,7 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
   if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
-  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance; draw(): the connector circles change size with it
+  if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
@@ -2261,7 +2267,8 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const flag=(f,label,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
   return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
     +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
-    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,0,"mm")+'</tr></table>'
+    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr></table>'
+    +'<div class="hint" style="margin-top:.2rem">Fit 0 = standard LEGO. Minus tightens the clutch (fatter studs), plus loosens it.</div>'
     +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>';
 }
 function showBrickCtl(o){ const el=$("brickctl");
@@ -2272,7 +2279,7 @@ function applyBrickDim(dim,v,live){ const o=selectedBrick(); if(!o) return;
   if(dim==="cols"||dim==="rows"){ o.el.setAttribute(dim==="cols"?"data-cols":"data-rows", Math.max(1,Math.min(12,Math.round(v))));
     rebuildBrick(o); draw(); pvRefresh(); if(!live) refreshEditPanel(); return; }   // stud count changed -> rebuild the brick group
   if(dim==="z"){ o.el.setAttribute("data-z", fmtn(Math.max(3.2,v))); pvRefresh(); if(!live) showBrickCtl(o); return; }   // extrude height; preview updates live
-  if(dim==="fit"){ o.el.setAttribute("data-fit", fmtn(Math.max(0,v))); pvRefresh(); if(!live) showBrickCtl(o); return; }
+  if(dim==="fit"){ o.el.setAttribute("data-fit", fmtn(clampFit(v))); pvRefresh(); if(!live) showBrickCtl(o); return; }   // may be negative = tighter clutch
 }
 function applyBrickFlag(flag,on){ const o=selectedBrick(); if(!o) return;
   o.el.setAttribute(flag==="studs"?"data-studs":"data-dock", on?"1":"0");
