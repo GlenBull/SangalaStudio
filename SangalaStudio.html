@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.1 -->
+<!-- SANGALA_VERSION: 2026-07-16.2 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1107,7 +1107,14 @@ function tubeTris(cx,cy,ro,ri,z0,z1){   // hollow cylinder (annulus): outer + in
 // 4 wall boxes + roof slab + 6 stud cylinders + 2 tubes. Standard dims, origin (x0,y0).
 function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow){
   cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
-  const U=8, W=cols*U, H=rows*U, roof=1.0, wall=1.2, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
+  const U=8, W=cols*U, H=rows*U, roof=1.0, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
+  // Tubes only land on INTERIOR grid points, so anything less than 2x2 (a 1xN leg, a 1x1 post) gets none, and
+  // its wall's inner face is the only thing left that can grip the stud below. At a fixed 1.2 mm that cavity was
+  // 5.6 mm around a 4.8 mm stud - 0.8 mm of slop, no clutch. Where there are no tubes, the wall does the
+  // gripping instead (gripWall). A brick that HAS tubes keeps the 1.2 mm wall: its clutch comes from the tubes
+  // touching the studs diagonally, and its wall never reaches them - so thickening it there would change nothing
+  // but the plastic used, on parts that already fit.
+  const hasTubes = cols>1 && rows>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
@@ -1242,10 +1249,15 @@ function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outlin
 // the socket); NEGATIVE tightens (fattens the stud, closes the socket) - printers that lay small round posts
 // slightly undersized need this to get real clutch power. The range is bounded because a stud sits 4 mm from
 // both the cell edge and its neighbour, and a socket that shrinks too far can no longer take a stud at all.
-const FIT_MIN=-1.0, FIT_MAX=2.0;
+const FIT_MIN=-1.0, FIT_MAX=2.0, STUD_NOM=4.8;   // STUD_NOM = the LEGO stud a brick must receive, whoever printed it
 function clampFit(v){ return Math.max(FIT_MIN, Math.min(FIT_MAX, +v||0)); }
 function studRadius(fit){ return Math.min(3.0, Math.max(1.5, 2.4-clampFit(fit)/2)); }   // the stud; Fit shaves (or fattens) it so mating printed parts clutch properly
 function socketRadius(fit){ return Math.max(2.0, 2.5+clampFit(fit)/2); }                // the hole that receives one (nominal 5 mm dia); Fit opens (or closes) it
+// Wall thickness for a brick with NO anti-stud tubes (see brickTris): the wall's inner face is then the only
+// thing that can grip the stud below, so size it to leave a cavity exactly one nominal stud wide, plus Fit.
+// A real LEGO 1xN grips this way - one stud of cavity, walls flexing onto it. Bounded so the wall stays
+// printable at one end and cannot swallow the cavity at the other.
+function gripWall(fit){ return Math.max(0.8, Math.min(2.4, (8-(STUD_NOM+clampFit(fit)))/2)); }
 const SOCK_DEPTH=4.0, SOCK_WALL=1.2;                                     // 4 mm deep, and keep at least 1.2 mm of material around and above it
 function studSkips(el){   // cells the user has switched off, as "i,j" keys. A cell is one 8 mm LEGO square: switching it off drops BOTH its stud and its socket
   const s=new Set(), v=el&&el.getAttribute?el.getAttribute("data-nostuds"):"";
