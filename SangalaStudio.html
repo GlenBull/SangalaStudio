@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.8 -->
+<!-- SANGALA_VERSION: 2026-07-16.9 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -442,7 +442,7 @@ function loadSVG(text){
   const scale=svgScaleMm(svg);
   const els=[...svg.querySelectorAll("path,rect,circle,ellipse,line,polygon,polyline")];
   // Silhouette print-and-cut files mark cut lines in red. If none are red, treat
-  // it as a plain design and cut every shape (old behaviour).
+  // it as a plain design and cut every shape (old behavior).
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
   objects=[]; selId=null; selId2=null; selImg2=false; selMulti=[];
@@ -490,7 +490,7 @@ function loadSVG(text){
   }
   const gmap={};   // remap saved data-group ids to fresh session group ids (avoid collisions with groupSeq)
   els.forEach(el=>{
-    // silo files classify by line style; a plain (no-red) design cuts every shape (old behaviour).
+    // silo files classify by line style; a plain (no-red) design cuts every shape (old behavior).
     const kind = silo ? classifyKind(el) : "cut";
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
     const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
@@ -606,7 +606,7 @@ function machineHiddenSVG(){
     const o=byEl.get(el); if(!o) return;
     if(o.kind==="cut"||o.kind==="score"){                 // machine lines don't print
       touch(el); el.style.setProperty("stroke","none","important");
-    } else if(o.kind==="print" && o.orig!=="print"){      // a cut/fold reassigned to Print -> draw it as a solid grey line
+    } else if(o.kind==="print" && o.orig!=="print"){      // a cut/fold reassigned to Print -> draw it as a solid gray line
       touch(el);
       el.style.setProperty("stroke",PRINT_LINE_COLOR,"important");
       el.style.setProperty("stroke-dasharray","none","important");
@@ -681,7 +681,7 @@ function draw(){
       ctx.strokeRect(refImg.x*k,refImg.y*k,refImg.w*k,refImg.h*k); ctx.restore();
     }
   }
-  // Paper colour: fill each shape that carries one, BEFORE the machine lines and the selection plate, so the
+  // Paper color: fill each shape that carries one, BEFORE the machine lines and the selection plate, so the
   // red and blue stay crisp on top and the mat reads as the finished collage rather than a tangle of outlines.
   // Drawn in object order, so a shape added later sits over an earlier one - the collage's layers.
   objects.forEach(o=>{ const f=fillOf(o);
@@ -692,7 +692,7 @@ function draw(){
     ctx.closePath(); ctx.fill(); ctx.restore(); });
   if(selMulti.length){   // multi-selection: a faint translucent plate BENEATH each member (drawn before the machine
     ctx.save(); ctx.fillStyle="rgba(0,0,0,0.07)";   // lines, so red stays red and blue stays blue). Fills cannot be mistaken for a cut or fold, which are strokes;
-    selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the grey deepens - stacking stays visible
+    selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the gray deepens - stacking stays visible
       const bb=bbox([placePoly(o.poly)]), p=7;
       const x=bb[0]*k-p, y=bb[1]*k-p, w=(bb[2]-bb[0])*k+2*p, h=(bb[3]-bb[1])*k+2*p;
       ctx.beginPath();
@@ -711,7 +711,7 @@ function draw(){
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
-    const pp=placeParams();                                            // brown = stud on top, blue-grey = socket underneath; a removed one is a dotted ghost you can click to put back
+    const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
     objects.forEach(o=>{
       if(!o.el||!o.el.getAttribute||!o.poly) return;
@@ -841,10 +841,10 @@ $("units").onchange=e=>setUnits(e.target.value);
 $("bConnect").onclick=connect;
 /* ---------- Snap! bridge: a turtle drawing made in Snap! lands on the mat ----------
    Snap! logs its pen strokes as vectors (its "Log pen vectors" setting) and can hand them over as
-   an SVG of <polyline>s - one per unbroken stroke of a single pen colour. Our helper takes that
+   an SVG of <polyline>s - one per unbroken stroke of a single pen color. Our helper takes that
    SVG on /snap/svg and holds it; this page collects it. From there it is an ordinary design.
-   The PEN COLOUR is the instruction: blue = fold, any other colour = cut (or draw, with a pen in
-   the holder). So an existing Snap! turtle program needs no new blocks - only recolouring. */
+   The PEN COLOR is the instruction: blue = fold, any other color = cut (or draw, with a pen in
+   the holder). So an existing Snap! turtle program needs no new blocks - only recoloring. */
 function snapSvgToSangala(text){
   return text.replace(/stroke:rgb\((\d+),\s*(\d+),\s*(\d+)\)/g, (m,rs,gs,bs)=>{
     const r=+rs, g=+gs, b=+bs, blue = b>120 && b>r+40 && b>g+40;
@@ -978,7 +978,7 @@ function integrateTrace(){
   for(let i=0;i<im.data.length;i+=4) im.data[i+3]=(mm.data[i]>=traceThreshold)?255:0;
   tcx.putImageData(im,0,0); dcx.drawImage(tmp,0,0);
   const dataURL=disp.toDataURL("image/png");
-  // place the subject on the Letter page, centred and clamped inside the registration marks
+  // place the subject on the Letter page, centered and clamped inside the registration marks
   const maxW=PAGE_LW-2*INSET-10, maxH=PAGE_LH-2*INSET-10;
   const fit=Math.min(1, maxW/refImg.w, maxH/refImg.h), iw=refImg.w*fit, ih=refImg.h*fit;
   const PX=(PAGE_LW-iw)/2, PY=(PAGE_LH-ih)/2, sx=iw/W, sy=ih/H;
@@ -1321,7 +1321,7 @@ function edgeDist(x,y,ring){ let d=1e9;   // distance from a point to the outlin
 // Fit = clutch clearance (mm). 0 = nominal LEGO (2.4 mm stud radius). POSITIVE loosens (shaves the stud, opens
 // the socket); NEGATIVE tightens (fattens the stud, closes the socket) - printers that lay small round posts
 // slightly undersized need this to get real clutch power. The range is bounded because a stud sits 4 mm from
-// both the cell edge and its neighbour, and a socket that shrinks too far can no longer take a stud at all.
+// both the cell edge and its neighbor, and a socket that shrinks too far can no longer take a stud at all.
 const FIT_MIN=-1.0, FIT_MAX=2.0, STUD_NOM=4.8;   // STUD_NOM = the LEGO stud a brick must receive, whoever printed it
 function clampFit(v){ return Math.max(FIT_MIN, Math.min(FIT_MAX, +v||0)); }
 function studRadius(fit){ return Math.min(3.0, Math.max(1.5, 2.4-clampFit(fit)/2)); }   // the stud; Fit shaves (or fattens) it so mating printed parts clutch properly
@@ -1337,13 +1337,13 @@ function studSkips(el){   // cells the user has switched off, as "i,j" keys. A c
   if(v) v.split(/\s+/).forEach(t=>{ if(t) s.add(t); });
   return s;
 }
-function gridCells(ring,clear){   // the 8 mm cells whose centre sits at least `clear` inside the outline. Anchored to the shape's bbox (as on a brick), so cells travel WITH the shape and i,j stay stable
+function gridCells(ring,clear){   // the 8 mm cells whose center sits at least `clear` inside the outline. Anchored to the shape's bbox (as on a brick), so cells travel WITH the shape and i,j stay stable
   const U=8, out=[];
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
   for(let i=0; mnx+U/2+i*U<=mxx; i++)
     for(let j=0; mny+U/2+j*U<=mxy; j++){
-      const cx=mnx+U/2+i*U, cy=mny+U/2+j*U;                             // connectors sit at cell centres
+      const cx=mnx+U/2+i*U, cy=mny+U/2+j*U;                             // connectors sit at cell centers
       if(!ptInPoly(cx,cy,ring)) continue;
       if(edgeDist(cx,cy,ring) < clear) continue;                        // skip any that would hang off (or break through) the edge
       out.push({i:i,j:j,x:cx,y:cy});
@@ -1466,11 +1466,11 @@ async function exportSTL(){
   let saved=0;
   for(let i=0;i<parts.length;i++){
     const nm=await saveBlob(new Blob([stlAscii(parts[i],"sangala_part"+(i+1))],{type:"model/stl"}),"sangala-part"+(i+1)+".stl","STL model",".stl");
-    if(!nm) break;                                                     // cancelled - stop asking
+    if(!nm) break;                                                     // canceled - stop asking
     saved++;
   }
   say(saved ? "Exported "+saved+" of "+parts.length+" pieces, "+tris.length+" triangles in all."
-            : "Export cancelled - nothing written.");
+            : "Export canceled - nothing written.");
 }
 $("bStl").onclick=exportSTL;
 
@@ -1536,7 +1536,7 @@ function renderPreview(){
     const inv=1/den;
     for(let y=y0;y<=y1;y++){ const fy=y+0.5;
       for(let x=x0;x<=x1;x++){ const fx=x+0.5;
-        const w0=((b[1]-c[1])*(fx-c[0])+(c[0]-b[0])*(fy-c[1]))*inv; if(w0<-1e-6) continue;   // barycentric inside-test, with a hair of slack: a pixel centre landing exactly ON a shared edge must not fall through BOTH triangles and leave a seam
+        const w0=((b[1]-c[1])*(fx-c[0])+(c[0]-b[0])*(fy-c[1]))*inv; if(w0<-1e-6) continue;   // barycentric inside-test, with a hair of slack: a pixel center landing exactly ON a shared edge must not fall through BOTH triangles and leave a seam
         const w1=((c[1]-a[1])*(fx-c[0])+(a[0]-c[0])*(fy-c[1]))*inv; if(w1<-1e-6) continue;
         const w2=1-w0-w1; if(w2<-1e-6) continue;
         const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
@@ -1736,7 +1736,7 @@ function finishPen(){
   draw(); refreshEditPanel();
   say("Made a "+npts+"-point shape. Use the Nodes tool to fine-tune its points.");
 }
-function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; draw(); if(had) say("Pen cancelled."); }
+function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; draw(); if(had) say("Pen canceled."); }
 cv.addEventListener("dblclick",(e)=>{ if(activeTool==="pen" && penPts.length>=3){ e.preventDefault(); finishPen(); } });
 window.addEventListener("keydown",(e)=>{ if(activeTool!=="pen") return;
   const t=e.target,tag=t&&t.tagName&&t.tagName.toLowerCase();
@@ -1922,7 +1922,7 @@ function snapDelta(drpts, targets, tolMm){   // the offset that locks the neares
 // An "align item" carries a placed-mm bbox center + a way to move itself in placed mm.
 // Shapes live in design mm (move via translateObj, delta / placement scale); the reference
 // image already lives in placed mm. Both draw in the same placed-mm * k space, so aligning
-// their centers there lines them up on screen - a shape can be centred on the photo.
+// their centers there lines them up on screen - a shape can be centered on the photo.
 function alignItems(){
   const pp=placeParams(), items=[];
   const centerArea=pl=>{ let a=1e9,b=1e9,c=-1e9,d=-1e9; pl.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);}); return {cx:(a+c)/2,cy:(b+d)/2,area:(c-a)*(d-b)}; };
@@ -2042,7 +2042,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper colour
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -2268,7 +2268,7 @@ function showAbout(on){ const a=$("about");
     a.style.left=(b.left+b.width/2)+"px"; a.style.top=(b.top+b.height/2)+"px";
     a.style.maxWidth=Math.max(300,b.width-40)+"px"; a.style.maxHeight=Math.max(200,b.height-40)+"px"; }
   a.style.display = on?"block":"none"; }
-window.addEventListener("resize",()=>{ if($("about").style.display!=="none") showAbout(true); });   // keep it centred on the board
+window.addEventListener("resize",()=>{ if($("about").style.display!=="none") showAbout(true); });   // keep it centered on the board
 $("buffalo").addEventListener("click",(e)=>{ e.stopPropagation(); showAbout($("about").style.display==="none"); });
 $("aboutClose").onclick=()=>showAbout(false);
 document.addEventListener("click",(e)=>{ const a=$("about");   // click outside closes it
@@ -2389,9 +2389,9 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
   $("kindrow1").style.display = mode3D?"none":"";
   $("ePrint").style.display   = mode3D?"none":"";
   $("eDelete").style.gridColumn = mode3D?"1/-1":"";
-  $("fillrow").style.display  = mode3D?"none":"";   // paper colour is a collage idea; a 3D part has no card
+  $("fillrow").style.display  = mode3D?"none":"";   // paper color is a collage idea; a 3D part has no card
 }
-/* ---------- Paper colour: fill a shape to preview the finished collage ----------
+/* ---------- Paper color: fill a shape to preview the finished collage ----------
    The fill stands for the CARD the shape will be cut from, so it is a design aid and nothing else: it never
    cuts, never prints, and never changes what the machine does - the blade follows the outline either way.
    It is therefore held in data-fill, NOT in the SVG's own fill attribute. That matters: classifyKind() reads
@@ -2406,7 +2406,7 @@ function buildSwatches(){
     b.className="swatch"; b.title=tip; b.dataset.fill=c||"none";
     if(c) b.style.background=c; else { b.style.background="#fff"; b.textContent="✕"; }
     box.appendChild(b); };
-  mk("", "No paper colour - just the outline");
+  mk("", "No paper color - just the outline");
   FILL_COLORS.forEach(c=>mk(c,"Preview this shape cut from "+c+" card"));
 }
 function markSwatches(){
@@ -2415,11 +2415,11 @@ function markSwatches(){
   Array.from($("swatches").children).forEach(b=>b.classList.toggle("on", b.dataset.fill===cur));
 }
 function setFill(c){
-  const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then pick a paper colour."); return; }
+  const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then pick a paper color."); return; }
   ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.el||!o.el.setAttribute) return;
     if(c==="none") o.el.removeAttribute("data-fill"); else o.el.setAttribute("data-fill",c); });
   draw(); refreshEditPanel();
-  say(c==="none" ? "Paper colour removed."
+  say(c==="none" ? "Paper color removed."
                  : "Filled "+ids.length+" shape"+(ids.length!==1?"s":"")+" - a preview of the card. The die cutter still just follows the outline.");
 }
 function updateImageTools(){ $("bRemoveBg").style.display = (refImg && refImg.sel) ? "" : "none"; }   // Remove BG is a palette button now; show it only while the photo is selected
@@ -2428,7 +2428,7 @@ $("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   updateImageTools();
-  markSwatches();    // show which paper colour the selection already carries
+  markSwatches();    // show which paper color the selection already carries
   const panel=$("editpanel");
   if(selMulti.length){   // marquee multi-selection: reclassify / delete apply to all; no per-object dims
     panel.style.display="block";
@@ -2584,7 +2584,7 @@ function evtMM(e){ const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingC
 /* ---------- magnify: wheel zoom (toward cursor), buttons, pan (middle-mouse / Space+drag) ---------- */
 function canvasPt(e){ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)]; }
 function clampPan(){   // keep the view within the park-able world (page + WS_MARGIN cork); if that world is smaller
-  const w=worldParams(), k=w.baseK*view.zoom;   // than the viewport on an axis, centre on that axis instead
+  const w=worldParams(), k=w.baseK*view.zoom;   // than the viewport on an axis, center on that axis instead
   const bound=(vp,startPx,sizePx)=>{ if(sizePx<=vp){ const c=(vp-sizePx)/2-startPx; return [c,c]; }
     return [vp-(startPx+sizePx), -startPx]; };
   const bx=bound(cv.width,  (w.MX-WS_MARGIN)*k, (w.vw+2*WS_MARGIN)*k);   // the DISPLAYED page (turned in landscape) sets the world extent
@@ -2592,7 +2592,7 @@ function clampPan(){   // keep the view within the park-able world (page + WS_MA
   view.panX=Math.max(bx[0], Math.min(bx[1], view.panX));
   view.panY=Math.max(by[0], Math.min(by[1], view.panY)); }
 function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
-function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: centre)
+function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: center)
   nz=Math.min(20, Math.max(1, nz)); if(cx==null){ cx=cv.width/2; cy=cv.height/2; }
   view.panX = cx-(cx-view.panX)*(nz/view.zoom); view.panY = cy-(cy-view.panY)*(nz/view.zoom); view.zoom = nz;
   if(view.zoom<=1.0001){ view.zoom=1; view.panX=0; view.panY=0; }
@@ -2858,7 +2858,7 @@ window.addEventListener("mousemove",(e)=>{
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
     else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1];
       snapHint=null;
-      if(!e.altKey && drag.snap){ const s=snapDelta([[x,y],[x+w,y],[x+w,y+h],[x,y+h]], drag.snap, snapTolMm(pp,k));   // a corner pulls onto a neighbour's corner or edge (Alt = free)
+      if(!e.altKey && drag.snap){ const s=snapDelta([[x,y],[x+w,y],[x+w,y+h],[x,y+h]], drag.snap, snapTolMm(pp,k));   // a corner pulls onto a neighbor's corner or edge (Alt = free)
         if(s){ x+=s.ox; y+=s.oy; snapHint=[s.hx,s.hy]; } } }
     el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
     drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
