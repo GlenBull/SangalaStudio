@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.12 -->
+<!-- SANGALA_VERSION: 2026-07-17.13 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -226,7 +226,7 @@
   <div class="ltools">
     <div class="ltitle marker">Tools</div>
     <button class="ltbtn on" id="tSelect" title="Select / move (normal mode)"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M5.5 3.2 L5.5 20.5 L9.8 16.5 L12.5 22.5 L15 21.3 L12.3 15.5 L18.2 15.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.7" stroke-linejoin="round"/></svg><small>Select</small></button>
-    <button class="ltbtn" id="tPen" title="Pen: click to place points, click the first point (or press Enter) to finish, Esc to cancel"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M12 2.5 C 13.5 6.5 16 9.5 16.2 13 C 16.3 15.5 15.8 17.5 15 18.8 L 9 18.8 C 8.2 17.5 7.7 15.5 7.8 13 C 8 9.5 10.5 6.5 12 2.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.5" stroke-linejoin="round"/><line x1="12" y1="3.8" x2="12" y2="10.7" stroke="#5a2f10" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="#5a2f10" stroke-width="1.2"/></svg><small>Pen</small></button>
+    <button class="ltbtn" id="tPen" title="Pen: click to place points, click the first point (or press Enter) to finish. Ctrl+Z takes back a point; Esc keeps the path and leaves the tool"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><path d="M12 2.5 C 13.5 6.5 16 9.5 16.2 13 C 16.3 15.5 15.8 17.5 15 18.8 L 9 18.8 C 8.2 17.5 7.7 15.5 7.8 13 C 8 9.5 10.5 6.5 12 2.5 Z" fill="#fff" stroke="#5a2f10" stroke-width="1.5" stroke-linejoin="round"/><line x1="12" y1="3.8" x2="12" y2="10.7" stroke="#5a2f10" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="#5a2f10" stroke-width="1.2"/></svg><small>Pen</small></button>
     <button class="ltbtn" id="tNode" title="Edit nodes">⬥<small>Nodes</small></button>
     <button class="ltbtn" id="tShapes" title="Draw a shape: Rectangle, Circle, or Line"><svg width="22" height="20" viewBox="0 0 26 22" style="display:block" aria-hidden="true"><rect x="2" y="5" width="12" height="12" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.9"/><circle cx="18" cy="14" r="6.2" fill="none" stroke="#7a3b12" stroke-width="1.9"/></svg><small>Shapes</small></button>
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
@@ -1829,7 +1829,7 @@ $("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 /* ---------- Pen tool: click to place points -> an editable cut polygon ---------- */
 $("tPen").onclick=()=>{ const on=activeTool!=="pen"; setTool(on?"pen":"select");
-  if(on) say("Pen: click to place points. Click the first point (or press Enter) to finish, Esc to cancel."); };
+  if(on) say("Pen: click to place points. Click the first point (or press Enter) to finish. Ctrl+Z takes back a point; Esc keeps the path and leaves the tool."); };
 /* ---------- The Pen picks up a loose end ----------
    Break at Node leaves an open outline, and an open outline cannot be filled - so a broken shape could be
    taken apart and never put back together. Rather than a Close button, the Pen simply continues it: touch a
@@ -1873,10 +1873,10 @@ function penClick(e){
   penHover=[mx,my];
   suppressClick=true;                          // eat the trailing click so it doesn't run selection
   draw();
-  // "Esc to undo" was a lie: Esc throws the WHOLE path away, so a wrong point read as one keypress from being
-  // fixed when it was one keypress from losing the lot. Ctrl-Z is the one that takes back a point.
-  say(penObj ? "Carrying on: "+penPts.length+" points. Click the other end to close it, Enter to leave it open, Ctrl+Z takes back a point, Esc discards them."
-             : "Pen: "+penPts.length+" point"+(penPts.length!==1?"s":"")+". Click the first point or press Enter to finish, Ctrl+Z takes back a point, Esc discards the path.");
+  // This line once read "Esc to undo" while Esc threw every point away. Now Esc really does keep the work, so
+  // the line can say so - and Ctrl-Z is named as the one that takes a point back.
+  say(penObj ? "Carrying on: "+penPts.length+" points. Click the other end to close it, Enter to leave it open, Esc keeps it and leaves the tool, Ctrl+Z takes back a point."
+             : "Pen: "+penPts.length+" point"+(penPts.length!==1?"s":"")+". Click the first point or press Enter to finish, Esc keeps it and leaves the tool, Ctrl+Z takes back a point.");
 }
 // Turn an open outline back into a closed one - the reverse of makeElOpen, which a <polyline> needs because a
 // <polygon> shuts itself. Keeps the same object, so its line type, paper color and group all survive.
@@ -1911,13 +1911,16 @@ function finishPen(close){
   draw(); refreshEditPanel();
   say("Made a "+npts+"-point shape. Use the Nodes tool to fine-tune its points.");
 }
-function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; draw(); if(had) say("Pen canceled - the path is gone. Ctrl+Z takes back one point at a time instead."); }
+// Drop the in-progress path without keeping it. The ONLY caller is penUndo, taking back the pickup itself
+// after every added point has been undone - so nothing is lost and the outline is already as it was.
+function cancelPen(){ penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; draw(); }
 // Leaving the Pen used to THROW THE UNFINISHED PATH AWAY, silently and for good: penPts is not part of the
-// document, so reaching for any other tool wiped it. That is the wall Glen hit extending a broken segment -
-// he still had to break the FAR side, the Nodes tool is the only thing that breaks it, and picking it up cost
-// him the whole path. There was no exit that kept the work. So the path is BANKED instead: it becomes a real
-// open outline, which the Pen picks straight back up by either end. Open, not closed - closing would invent an
-// edge nobody drew. Esc still discards, since that is what Esc is for, and Ctrl-Z undoes the bank.
+// document, so reaching for any other tool wiped it, and so did Esc. That is the wall Glen hit extending a
+// broken segment - he still had to break the FAR side, the Nodes tool is the only thing that breaks it, and
+// picking it up cost him the whole path. So the path is BANKED instead: it becomes a real open outline, which
+// the Pen picks straight back up by either end. Open, not closed - closing would invent an edge nobody drew.
+// EVERY exit banks, Esc included. Ctrl-Z is the one key that removes work, while drawing (a point at a time)
+// and afterwards (the bank) alike.
 // Returns the object it kept, or null. Must NOT call setTool - it is called FROM setTool.
 function bankPen(){
   const pts=penPts.map(p=>[p[0],p[1]]), host=penObj;
@@ -1932,14 +1935,14 @@ function bankPen(){
 // Ctrl-Z while the Pen is running takes back the last point, rather than reaching into the document history.
 // It used to reach: penPts is in-progress state and is not part of serializeState, so an undo stepped straight
 // PAST the path on screen and reverted whatever was committed before it - the last finished shape - while the
-// misplaced point sat there untouched. Esc was the only way out, and it threw the whole path away.
+// misplaced point sat there untouched. Esc was the only way out, and it threw the whole path away (it banks now).
 // Returns true when the Pen has handled the key, so the document undo still runs when no path is in progress.
 function penUndo(){
   if(activeTool!=="pen" || !penPts.length) return false;
   // Below penBase the points belong to the outline the Pen picked up, not to the Pen. Rather than eat into
   // someone's existing shape, the next undo takes back the pickup itself - that being the last thing the Pen
   // actually did. Nothing is lost: penObj is only written on finishPen, so the outline has not been touched.
-  if(penPts.length<=penBase){ cancelPen(); return true; }
+  if(penPts.length<=penBase){ cancelPen(); say("Let go of the outline - it is unchanged, exactly as you picked it up."); return true; }
   penUndone.push(penPts.pop()); penHover=null; draw();
   const n=penPts.length-penBase;
   if(!penPts.length)       say("Took back the last point. The path is empty - Ctrl+Z again undoes the last change, Ctrl+Y puts the point back.");
@@ -1961,7 +1964,12 @@ window.addEventListener("keydown",(e)=>{ if(activeTool!=="pen") return;
   const t=e.target,tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
   if(e.key==="Enter"){ e.preventDefault(); finishPen(!penObj); }   // a new shape closes; a picked-up outline stays open
-  else if(e.key==="Escape"){ e.preventDefault(); cancelPen(); } });
+  // Esc LEAVES THE MODE AND KEEPS THE WORK - it is the same as clicking Select, which banks the path.
+  // It used to throw the path away, on the reasoning that Esc conventionally means cancel. But Esc is the key
+  // called Escape, this is the key Glen reaches for to get out of the tool, and the convention is not worth
+  // one keystroke silently destroying a drawing that cannot be got back. Discarding is still one key away and
+  // it is the key that already means it: Ctrl-Z takes back a point while drawing, and undoes the bank after.
+  else if(e.key==="Escape"){ e.preventDefault(); setTool("select"); } });
 /* ---------- Combine (Union / Difference / Intersect) ---------- */
 // enable the Combine buttons only when two distinct non-brick shapes are selected
 function updateCombine(){
