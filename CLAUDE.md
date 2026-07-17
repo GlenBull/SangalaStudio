@@ -58,6 +58,18 @@ USB only, user-mode.** This constraint is absolute.
   6. Column-heading row: Arial 10 pt **Italic**, **centered**.
   7. Body cells: Arial 10 pt regular, left-aligned.
   8. Borders: single-line grid; the column-heading→body divider is a **double** line.
+- **PAGINATION — headings must never orphan, and autospacing must never be added. These two defects came
+  from MY edits (I add content, the page breaks shift, headings strand and gaps balloon), and Glen has been
+  fixing them by hand. Stop them at the source:**
+  - **Every heading paragraph carries `<w:keepNext/>` AND `<w:keepLines/>`** in its `pPr`, so it stays glued to
+    the text beneath it and can never sit alone at the bottom of a page. The guide's headings currently have
+    NEITHER (verified: zero `keepNext` in the file) — that is why adding a paragraph orphaned a heading two
+    sections away. Whenever I touch a doc, ensure every heading has both.
+  - **Never add autospacing.** Do NOT write `w:beforeAutospacing="1"` / `w:afterAutospacing="1"` on any
+    paragraph I insert, and do NOT copy them off a neighboring run. Word renders autospacing as large
+    browser-style gaps — that is the extra space between a bullet and the next heading. Use the EXPLICIT point
+    values from the spacing rules above. (The file carries ~60 legacy autospacing paragraphs from its HTML
+    origin; leave those alone — mass-converting them is a forbidden document-wide change — but never add more.)
 - Delivery: give the plain Windows file path in text (no preview cards / no `computer://` links).
 
 ## Approval & git safety
@@ -172,10 +184,36 @@ blade 7, 2 passes.
   (no scaling); prepare a CAD Library entry (open SVG + metadata + instructions);
   a "Open from Library" linkage that fetches a design SVG by URL.
 
+## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
+The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
+`unzip` exists; `zip` does not. Do not run `zip -Xr` and rediscover this again.
+1. `unzip -q "Doc.docx" -d unpacked/`
+2. **Skip `merge_runs.py`** — it corrupts validation on this machine (a merged-but-unedited
+   control failed identically). Targets have matched in raw XML anyway.
+3. Edit `unpacked/word/document.xml` surgically with a small Python script (read/write UTF-8).
+4. **Rezip with Python's `zipfile`** (`[Content_Types].xml` first, then walk the tree) — this is
+   the established method here and has been used for every past doc edit.
+5. Validate with `scripts/office/validate.py out.docx --original <orig>`, and set
+   **`PYTHONIOENCODING=utf-8` first** or it crashes printing `→` to the cp1252 console.
+6. **CHECK PAGINATION before delivering — MANDATORY. This is how the defects get caught; skipping it is how
+   they shipped.** Orphaned headings live in the PAGINATION, not the XML, so `validate.py` passes while the
+   page looks wrong. No LibreOffice/poppler here and the Read tool can't rasterize a PDF either — instead drive
+   **Word via COM**, which reports where each heading falls. Run the ready-made check:
+   `powershell -NoProfile -File tools\docxcheck.ps1 "User Guide (Ver 4.1).docx"`
+   It opens the doc read-only (works even while Glen has it open) and prints: headings lacking `keepNext`, any
+   heading currently split from its text across a page break, and the autospacing count. **Deliver only when it
+   prints `PAGINATION CLEAN`** (zero orphans, zero headings missing keepNext). If you need a human-eyeball copy,
+   Word COM `ExportAsFixedFormat` to a PDF for Glen — but the script is the gate.
+Useful facts already established: the docs use em dash U+2014 with spaces, straight apostrophes,
+keystrokes as italic runs written `Ctrl-Z` (hyphen), body paragraphs are `<w:pStyle w:val="NormalWeb"/>`,
+and §6-style labels are sentence case (matching the file, e.g. *Break at a node*).
+
 ## Gotcha
 The project now lives in a plain (non-Dropbox) git checkout, so edit files
-directly with the Write/Edit tools — no need to route saves through bash/python,
-and Python is not installed here. (It formerly lived in a Dropbox-synced folder
+directly with the Write/Edit tools — no need to route saves through bash/python.
+**Python IS installed** (3.12, `C:\Users\glenb\AppData\Local\Programs\Python\Python312`) — an
+earlier version of this file claimed otherwise, which was wrong and steered me away from the
+zipfile path above. (It formerly lived in a Dropbox-synced folder
 that corrupted large saves with NUL bytes/truncation and dehydrated files to
 cloud-only placeholders; that no longer applies.) A quick integrity glance after
 big edits is still cheap: brace balance for .cs, file ends with </html>.
