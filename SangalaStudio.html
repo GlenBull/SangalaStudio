@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.12 -->
+<!-- SANGALA_VERSION: 2026-07-16.13 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -92,6 +92,9 @@
   .swatch:hover{border-color:#7a3b12}
   .swatch.on{outline:2px solid #1a5fb4;outline-offset:1px;border-color:#1a5fb4}
   .ebtn.lyr{flex:1;min-width:0;padding:.4rem .1rem;font-size:.78rem;white-space:nowrap}
+  /* A one-line section label. The explanation lives in its tooltip: the two paragraphs that used to sit here
+     took 18% of the panel's height - more than the controls they described - and a student reads them once. */
+  .hint.lbl{margin:0 0 .2rem;font-weight:700;cursor:help;border-bottom:1px dotted #b9a67f;display:inline-block}   /* the row above already spaces it; .hint's own margin-top would double it */
   .swatch.pick{background:#fff}
   .swatch.pick::after{content:"";position:absolute;inset:3px;border-radius:50%;   /* the color wheel, as Adobe draws it */
     background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
@@ -267,18 +270,20 @@
         <button class="ebtn danger" id="eDelete" disabled>🗑 Delete</button>
       </div>
       <div id="fillrow" style="margin-top:.5rem;display:none">
-        <div class="hint" style="margin-bottom:.25rem">Paper color — a preview of the card it will be cut from. It is never cut or printed.</div>
+        <div class="hint lbl" title="A preview of the card the shape will be cut from. It is never cut and never printed — the die cutter just follows the outline.">Paper color</div>
         <div id="swatches"></div>
         <input type="color" id="fillPick" value="#2e7d32" aria-hidden="true" tabindex="-1"
                style="position:absolute;width:0;height:0;padding:0;border:0;opacity:0;pointer-events:none">
       </div>
       <div id="layerrow" style="margin-top:.5rem;display:none">
-        <div class="hint" style="margin-bottom:.25rem">Layer — which shape sits in front where they overlap.</div>
+        <div class="hint lbl" title="Which shape sits in front where they overlap. Back and Front jump to the ends; Lower and Raise move one step.">Layer</div>
         <div style="display:flex;gap:3px">
-          <button class="ebtn lyr" id="eBack"  title="Send to Back — behind every other shape (End)">⤓ Back</button>
-          <button class="ebtn lyr" id="eLower" title="Lower — one step further back (Page Down)">↓ Lower</button>
-          <button class="ebtn lyr" id="eRaise" title="Raise — one step further forward (Page Up)">↑ Raise</button>
-          <button class="ebtn lyr" id="eFront" title="Bring to Front — in front of every other shape (Home)">⤒ Front</button>
+          <!-- No arrow glyphs: the ones that mean "to the end" (U+2912/U+2913) are not in Arial, so they fell
+               back to plain arrows and Back read the same as Lower. The words carry it on their own. -->
+          <button class="ebtn lyr" id="eBack"  title="Send to Back — behind every other shape (End)">Back</button>
+          <button class="ebtn lyr" id="eLower" title="Lower — one step further back (Page Down)">Lower</button>
+          <button class="ebtn lyr" id="eRaise" title="Raise — one step further forward (Page Up)">Raise</button>
+          <button class="ebtn lyr" id="eFront" title="Bring to Front — in front of every other shape (Home)">Front</button>
         </div>
       </div>
       <div id="groupsrow" style="margin-top:.4rem;display:none">
