@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.6 -->
+<!-- SANGALA_VERSION: 2026-07-17.7 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1779,7 +1779,10 @@ function setTool(t){ activeTool=t;
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; }   // draw/place tools clear selection; select & node keep it
+  // Tools that place a brand-new shape drop the selection; Select, Nodes and the Pen keep it. The Pen used to
+  // drop it too, from when it could only start a fresh shape - but it now continues an existing outline, so the
+  // shape being worked on is exactly what should stay selected on the way in.
+  if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; }
   // Redraw whichever tool we land on. Only the drawing tools used to, so picking up the Nodes tool left the
   // canvas showing the Select cue - a dashed outline over the red one, and not a node in sight - until
   // something else happened to trigger a repaint.
