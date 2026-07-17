@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.16 -->
+<!-- SANGALA_VERSION: 2026-07-17.17 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1246,13 +1246,14 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
     const zb0=Zt-lip;
     t.push(...yzPrism(zb0<=Zc ? [[y0,zb0],[yb,0],[yb,Zc],[y0,Zc]]
                               : [[y0+run*(1-Zc/zb0),Zc],[yb,0],[yb,Zc]], gx, x1+G));
-    // FRONT wall. I built the front as an open overhang; the real LEGO part closes it with a vertical wall on
-    // this fourth side (Glen's side-by-side photo - his brick four-walled, mine three). It is not cosmetic: with
-    // the front open, only the back row of studs was gripped, so the part rocked and twisted about that single
-    // line (the clutch pin cured pull-out but not the twist). Closing the front lets the FRONT row of studs grip
-    // too, and two spaced rows fix the orientation. The wall rises to the sloping underside (zb0 at the front
-    // edge) and fuses into the wedge above it.
-    t.push(...boxTris(gx,gy,gW,wall+G,0,zb0));
+    // Inner-grip wall for the BACK stud. Per Glen: the dock grips only the back stud - the front stud rides over
+    // the sloped overhang and is not held. The back wall already grips the back stud's OUTER face; this wall
+    // mirrors it at the front of the dock, gripping the stud's INNER face, so the stud is pinched front-and-back
+    // and cannot rock or twist. (An earlier version put this wall out at the front EDGE, where it closed the face
+    // but gripped nothing - the stud is 4 mm behind it. Glen: "the wall is in the wrong place.") It sits against
+    // the wedge at yb, matches the back wall's thickness so the grip is symmetric, and rises full height to fuse
+    // into the wedge and roof.
+    t.push(...boxTris(gx,yb,gW,wall+G,0,Zt));
   } else {
     t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
     if(lip>0) t.push(...boxTris(gx,gy,gW,wall+G,0,lip));                           // the vertical lip: a short front wall where the slope stops
