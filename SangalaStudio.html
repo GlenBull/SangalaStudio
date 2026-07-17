@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.9 -->
+<!-- SANGALA_VERSION: 2026-07-16.10 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -85,9 +85,15 @@
   .ebtn:hover{background:linear-gradient(#fff,#dbe6f3)}
   .ebtn:disabled{opacity:.45;cursor:default;box-shadow:none}
   .ebtn.on{background:linear-gradient(#bfe3ff,#8fcaf5);border-color:#3f8fd0;box-shadow:inset 0 1px 0 #fff,0 0 0 2px rgba(63,143,208,.4)}
-  .swatch{width:21px;height:21px;padding:0;border:1px solid #b9a67f;border-radius:4px;cursor:pointer;font-size:.7rem;line-height:1;color:#7a3b12}
+  /* One row, always: nowrap plus shrinkable swatches, so a narrow panel squeezes them rather than wrapping
+     the color wheel onto a second line and breaking the "row of colors, picker at the end" reading. */
+  #swatches{display:flex;flex-wrap:nowrap;gap:3px}
+  .swatch{position:relative;width:21px;height:21px;flex:0 1 21px;min-width:15px;padding:0;border:1px solid #b9a67f;border-radius:4px;cursor:pointer;font-size:.7rem;line-height:1;color:#7a3b12}
   .swatch:hover{border-color:#7a3b12}
   .swatch.on{outline:2px solid #1a5fb4;outline-offset:1px;border-color:#1a5fb4}
+  .swatch.pick{background:#fff}
+  .swatch.pick::after{content:"";position:absolute;inset:3px;border-radius:50%;   /* the color wheel, as Adobe draws it */
+    background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
   .ebtn.danger{color:#8a1c1c}
   .ebtn.danger:hover:not(:disabled){background:linear-gradient(#fff,#f3dbdb)}
   #bar{height:12px;background:#e3d6bd;border-radius:6px;overflow:hidden;margin:.6rem 0}
@@ -261,7 +267,9 @@
       </div>
       <div id="fillrow" style="margin-top:.5rem;display:none">
         <div class="hint" style="margin-bottom:.25rem">Paper color — a preview of the card it will be cut from. It is never cut or printed.</div>
-        <div id="swatches" style="display:flex;flex-wrap:wrap;gap:3px"></div>
+        <div id="swatches"></div>
+        <input type="color" id="fillPick" value="#2e7d32" aria-hidden="true" tabindex="-1"
+               style="position:absolute;width:0;height:0;padding:0;border:0;opacity:0;pointer-events:none">
       </div>
       <div id="groupsrow" style="margin-top:.4rem;display:none">
         <button class="ebtn" id="eGroup" style="width:100%">▦ Group</button>
@@ -2398,7 +2406,11 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
    a red shape WITH a fill as "print" (the window-pane rule), so writing a real fill would make a cut outline
    silently stop cutting the next time the file was opened. data-fill rides along in the saved SVG untouched
    and the classifier never sees it. */
-const FILL_COLORS=["#ffffff","#1a1a1a","#9e9e9e","#d32f2f","#f57c00","#fbc02d","#8bc34a","#2e7d32","#4fc3f7","#1976d2","#6d4c41","#f06292"];
+// Nine defaults, sized to sit on ONE row with the "no fill" square and the picker: white, black, gray, red,
+// then the five the collage chapter actually calls for - orange and blue for the sky, gold for the crane,
+// green for the grass, brown for the trunk. Anything else is one click away in the picker, so the row stays
+// a starting point rather than an attempt at every card color there is.
+const FILL_COLORS=["#ffffff","#1a1a1a","#9e9e9e","#d32f2f","#f57c00","#fbc02d","#2e7d32","#1976d2","#6d4c41"];
 function fillOf(o){ const f=o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-fill"); return f&&f!=="none"?f:null; }
 function buildSwatches(){
   const box=$("swatches"); if(box.childElementCount) return;
@@ -2408,11 +2420,17 @@ function buildSwatches(){
     box.appendChild(b); };
   mk("", "No paper color - just the outline");
   FILL_COLORS.forEach(c=>mk(c,"Preview this shape cut from "+c+" card"));
+  const p=document.createElement("button");   // the color wheel, last: any card color the row does not carry
+  p.className="swatch pick"; p.dataset.pick="1"; p.title="More colors - pick any card color";
+  box.appendChild(p);
 }
 function markSwatches(){
   const ids=selectedIds(), o=ids.length?objects.find(x=>x.id===ids[0]):null;
   const cur=fillOf(o)||"none";
-  Array.from($("swatches").children).forEach(b=>b.classList.toggle("on", b.dataset.fill===cur));
+  const custom = cur!=="none" && FILL_COLORS.indexOf(cur)<0;   // a picked color: light up the wheel, not a square
+  Array.from($("swatches").children).forEach(b=>
+    b.classList.toggle("on", b.dataset.pick ? custom : (!custom && b.dataset.fill===cur)));
+  if(cur!=="none") $("fillPick").value=cur;   // the picker reopens on the shape's current color
 }
 function setFill(c){
   const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then pick a paper color."); return; }
@@ -2424,7 +2442,9 @@ function setFill(c){
 }
 function updateImageTools(){ $("bRemoveBg").style.display = (refImg && refImg.sel) ? "" : "none"; }   // Remove BG is a palette button now; show it only while the photo is selected
 buildSwatches();
-$("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(b) setFill(b.dataset.fill); });
+$("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(!b) return;
+  if(b.dataset.pick) $("fillPick").click(); else setFill(b.dataset.fill); });   // the wheel opens the OS color picker
+$("fillPick").addEventListener("input",(e)=>setFill(e.target.value));   // live: the shape fills as the picker is dragged
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   updateImageTools();
