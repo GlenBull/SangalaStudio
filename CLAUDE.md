@@ -93,11 +93,13 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   GitHub before downloading, and skips the download/backup entirely when they
   match. **Any commit that changes SangalaStudio.html must bump that version
   string**, or the checker calls a real change "already up to date."
-- **When driving the running app from the browser tool, use `http://localhost:8787/`, never
-  `http://127.0.0.1:8787/`.** Both reach the same loopback listener, but the raw IP makes Glen's
-  preview pane throw a "Link to 127.0.0.1 was blocked" banner on EVERY navigation — invisible to me,
-  since the tool still reports success. (The app itself opens 127.0.0.1 in a real browser; that is fine
-  and is not what triggers it.)
+- **Loopback is addressed as `localhost`, never `127.0.0.1`, anywhere the PAGE can reach.** Glen's preview
+  pane blocks raw-IP navigation and shows a "Link to 127.0.0.1 was blocked" banner. The real culprit was
+  SangalaStudio.html's own `file://` hop (it fetches the helper and `location.replace`s to it): the harness
+  previews the file after every edit, the hop fires whenever the helper is running, and the preview blocks
+  it — a banner per edit. Both spellings reach the same IPv4 listener (verified), so prefer `localhost` in
+  the page and in browser-tool navigation alike. `SangalaServer.cs` opening 127.0.0.1 in a REAL browser is
+  fine and is not the trigger — and changing it would force testers to rebuild.
 
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:

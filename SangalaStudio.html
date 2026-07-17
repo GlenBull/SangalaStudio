@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.10 -->
+<!-- SANGALA_VERSION: 2026-07-16.11 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -306,9 +306,12 @@
 // If opened straight from disk (file://) while the local helper is already running,
 // hop to the helper's page so Connect / Make it work. If the helper is not up, stay
 // put - design still works offline.
+// Addressed as localhost, NOT 127.0.0.1: both reach the same loopback listener, but a preview pane that
+// renders this file from disk blocks a hop to a raw IP and shows an error instead - which it did on every
+// edit, since the hop fires whenever the helper happens to be running.
 if(location.protocol==="file:"){
-  fetch("http://127.0.0.1:8787/",{mode:"no-cors"})
-    .then(()=>{ location.replace("http://127.0.0.1:8787/"); })
+  fetch("http://localhost:8787/",{mode:"no-cors"})
+    .then(()=>{ location.replace("http://localhost:8787/"); })
     .catch(()=>{});   // helper not running -> remain on the file page
 }
 (function(){
