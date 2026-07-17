@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.13 -->
+<!-- SANGALA_VERSION: 2026-07-16.14 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2711,7 +2711,14 @@ cv.addEventListener("click",(e)=>{
   objects.forEach(o=>{ const p=placePoly(o.poly);
     if(p.length===1){ const d=Math.hypot(mx-p[0][0],my-p[0][1]); if(d<bd){bd=d;best=o;} return; }
     for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]); if(d<bd){bd=d;best=o;} } });
-  const hit = (best && bd*k<=8) ? best : null;   // within 8 px of a line
+  let hit = (best && bd*k<=8) ? best : null;   // within 8 px of a line
+  // No line under the cursor? A shape with a paper color looks solid, so let its middle be clicked - the
+  // topmost one wins, since that is the one the eye sees. An UNFILLED shape stays grabbable only by its
+  // outline: its middle shows the mat, and clicking through to whatever is behind is what Inkscape does
+  // too, which is the habit these students arrive with.
+  if(!hit) for(let i=objects.length-1;i>=0;i--){ const o=objects[i];
+    if(!fillOf(o) || !o.poly || o.poly.length<3 || !objClosed(o)) continue;
+    if(ptInPoly(mx,my,placePoly(o.poly))){ hit=o; break; } }
   const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
     if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
