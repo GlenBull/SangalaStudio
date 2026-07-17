@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.14 -->
+<!-- SANGALA_VERSION: 2026-07-16.15 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2728,7 +2728,7 @@ cv.addEventListener("click",(e)=>{
     say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
   else if(hit){ selId=hit.id; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine."); }
   else if(onImg){ selId=null; selId2=null; selImg2=false; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
-  else { selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to a line."); }
+  else { selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Nothing there - click closer to an object."); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
