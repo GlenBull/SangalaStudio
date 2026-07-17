@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.14 -->
+<!-- SANGALA_VERSION: 2026-07-17.15 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1242,6 +1242,13 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
     const zb0=Zt-lip;
     t.push(...yzPrism(zb0<=Zc ? [[y0,zb0],[yb,0],[yb,Zc],[y0,Zc]]
                               : [[y0+run*(1-Zc/zb0),Zc],[yb,0],[yb,Zc]], gx, x1+G));
+    // FRONT wall. I built the front as an open overhang; the real LEGO part closes it with a vertical wall on
+    // this fourth side (Glen's side-by-side photo - his brick four-walled, mine three). It is not cosmetic: with
+    // the front open, only the back row of studs was gripped, so the part rocked and twisted about that single
+    // line (the clutch pin cured pull-out but not the twist). Closing the front lets the FRONT row of studs grip
+    // too, and two spaced rows fix the orientation. The wall rises to the sloping underside (zb0 at the front
+    // edge) and fuses into the wedge above it.
+    t.push(...boxTris(gx,gy,gW,wall+G,0,zb0));
   } else {
     t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
     if(lip>0) t.push(...boxTris(gx,gy,gW,wall+G,0,lip));                           // the vertical lip: a short front wall where the slope stops
