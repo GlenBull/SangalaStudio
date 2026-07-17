@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.11 -->
+<!-- SANGALA_VERSION: 2026-07-17.12 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1787,8 +1787,12 @@ const CROSSHAIR = "url(\"data:image/svg+xml;utf8,"
   + "<path d='M12 2v7M12 15v7M2 12h7M15 12h7' fill='none' stroke='white' stroke-width='4'/>"
   + "<path d='M12 2v7M12 15v7M2 12h7M15 12h7' fill='none' stroke='black' stroke-width='2'/>"
   + "</svg>\") 12 12, crosshair";   // the plain keyword stays as the fallback
-function setTool(t){ activeTool=t;
-  if(t!=="pen" && (penPts.length||penHover)){ penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; }   // leaving the Pen tool discards an unfinished path
+function setTool(t){
+  // Leaving the Pen KEEPS the path (see bankPen) rather than discarding it. finishPen clears the Pen state
+  // before it calls setTool("select"), so a finish lands here with nothing to bank and cannot loop.
+  const kept = (t!=="pen" && penPts.length) ? bankPen() : null;
+  if(t!=="pen"){ penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; }   // clears a hover-only leftover
+  activeTool=t;
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? CROSSHAIR : "default";
@@ -1796,10 +1800,15 @@ function setTool(t){ activeTool=t;
   // drop it too, from when it could only start a fresh shape - but it now continues an existing outline, so the
   // shape being worked on is exactly what should stay selected on the way in.
   if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; }
+  // A banked path arrives selected on the tools that can act on it, so the Nodes tool is ready to work the
+  // outline the moment it lands - that being the whole reason to reach for it mid-path.
+  if(kept && (t==="select"||t==="node")){ selId=kept.id; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false; }
+  if(kept) renderBg();
   // Redraw whichever tool we land on. Only the drawing tools used to, so picking up the Nodes tool left the
   // canvas showing the Select cue - a dashed outline over the red one, and not a node in sight - until
   // something else happened to trigger a repaint.
   refreshEditPanel(); draw();
+  if(kept) say("Kept your path - "+kept.poly.length+" points, still open. Pick either end up with the Pen to carry on, or click its other end to close it.");
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -1864,8 +1873,10 @@ function penClick(e){
   penHover=[mx,my];
   suppressClick=true;                          // eat the trailing click so it doesn't run selection
   draw();
-  say(penObj ? "Carrying on: "+penPts.length+" points. Click the other end to close it, Enter to leave it open, Esc to undo."
-             : "Pen: "+penPts.length+" point"+(penPts.length!==1?"s":"")+". Click the first point or press Enter to finish, Esc to cancel.");
+  // "Esc to undo" was a lie: Esc throws the WHOLE path away, so a wrong point read as one keypress from being
+  // fixed when it was one keypress from losing the lot. Ctrl-Z is the one that takes back a point.
+  say(penObj ? "Carrying on: "+penPts.length+" points. Click the other end to close it, Enter to leave it open, Ctrl+Z takes back a point, Esc discards them."
+             : "Pen: "+penPts.length+" point"+(penPts.length!==1?"s":"")+". Click the first point or press Enter to finish, Ctrl+Z takes back a point, Esc discards the path.");
 }
 // Turn an open outline back into a closed one - the reverse of makeElOpen, which a <polyline> needs because a
 // <polygon> shuts itself. Keeps the same object, so its line type, paper color and group all survive.
@@ -1900,7 +1911,24 @@ function finishPen(close){
   draw(); refreshEditPanel();
   say("Made a "+npts+"-point shape. Use the Nodes tool to fine-tune its points.");
 }
-function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; draw(); if(had) say("Pen canceled."); }
+function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; draw(); if(had) say("Pen canceled - the path is gone. Ctrl+Z takes back one point at a time instead."); }
+// Leaving the Pen used to THROW THE UNFINISHED PATH AWAY, silently and for good: penPts is not part of the
+// document, so reaching for any other tool wiped it. That is the wall Glen hit extending a broken segment -
+// he still had to break the FAR side, the Nodes tool is the only thing that breaks it, and picking it up cost
+// him the whole path. There was no exit that kept the work. So the path is BANKED instead: it becomes a real
+// open outline, which the Pen picks straight back up by either end. Open, not closed - closing would invent an
+// edge nobody drew. Esc still discards, since that is what Esc is for, and Ctrl-Z undoes the bank.
+// Returns the object it kept, or null. Must NOT call setTool - it is called FROM setTool.
+function bankPen(){
+  const pts=penPts.map(p=>[p[0],p[1]]), host=penObj;
+  penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[];   // clear first: nothing below may re-enter the Pen
+  if(pts.length<2) return null;                                     // one point is not a line - there is nothing to keep
+  ensureDoc();
+  if(host){ host.poly=dedupePoly(pts); makeElOpen(host); placeEl(host); return host; }   // the outline it picked up
+  const o=makePolyObj(pts,"cut");   // makePolyObj closes the ring; an open path keeps its own two ends instead
+  o.poly.pop(); makeElOpen(o); placeEl(o);
+  return o;
+}
 // Ctrl-Z while the Pen is running takes back the last point, rather than reaching into the document history.
 // It used to reach: penPts is in-progress state and is not part of serializeState, so an undo stepped straight
 // PAST the path on screen and reverted whatever was committed before it - the last finished shape - while the
