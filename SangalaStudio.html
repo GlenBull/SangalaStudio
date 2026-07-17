@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.13 -->
+<!-- SANGALA_VERSION: 2026-07-17.14 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1273,6 +1273,19 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
     t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,Zc+WELD,
       (slope&&!inv)?((x,y)=>Math.min(Zc+WELD, underZ(y)+WELD)):null));
   }
+  // Clutch pin (Moses). An inverted slope docks on its full-height rows alone, over a cavity far shallower than
+  // the deep 1x2 leg - so the wall-flex clutch that holds the leg at Fit -0.2 left the slope with a little play
+  // at the SAME Fit. A real LEGO 1x2 answers the identical shallow-dock problem with one SOLID post centred
+  // between its two studs (Glen's photo of the orange underside), pressing outward on both. It grips by
+  // interference ACROSS the stud gap, not by depth of engagement - exactly what this short dock is short on -
+  // so it works where more wall cannot. Solid, never a ring: the ring is the closed hoop that jammed the studs
+  // on his earlier print; a post sits in the GAP, clear of the studs, and prints clean. 3.2 mm fills the 3.2 mm
+  // gap between two nominal studs, and as negative Fit fattens the studs below the post only bites harder.
+  // Only where there are no tubes to clutch already, and (via the i loop) only where a horizontal stud gap
+  // exists - a 1-wide inverted slope keeps relying on its gripWall walls, the way the leg does.
+  if(dock && inv && !hasTubes) for(let ry=slope; ry<rows; ry++) for(let i=1;i<cols;i++)
+    t.push(...cylTris(x0+i*U, y0+U/2+ry*U, 1.6, 0, Zc+WELD));   // centred on the stud-row line, in the gap; fused up into the roof slab like a tube
+
   // Nothing else goes under here. Where there is no tube the cavity stays OPEN, and the wall (gripWall above)
   // does the gripping - the arrangement Moses's 1x2 leg proved, and the one he asked for after a ring-socket
   // print refused the studs.
