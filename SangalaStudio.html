@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.10 -->
+<!-- SANGALA_VERSION: 2026-07-17.11 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -780,9 +780,15 @@ function draw(){
       } else {
         const nodes=placePoly(shapeNodes(o));
         const many=nodes.length>16, hs=many?2:4;   // dense curve -> small dots so it reads as a tidy path, not a blob
+        const sel=(activeTool==="node"&&selNode!=null&&nodes[selNode])?selNode:-1;
         ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=many?1:1.5;
-        nodes.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
-          ctx.fillStyle=(activeTool==="node"&&i===selNode)?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();});   // selected node = filled
+        const nodeAt=(q,on)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
+          ctx.fillStyle=on?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();};
+        // The selected node goes on LAST. Breaking a closed ring open leaves TWO coincident ends at that
+        // corner, and painting in index order put the white end on top of the blue one - so the node you had
+        // just broken looked deselected, and nothing on the mat said where the break was. Nothing may cover it.
+        nodes.forEach((q,i)=>{ if(i!==sel) nodeAt(q,false); });
+        if(sel>=0) nodeAt(nodes[sel],true);   // selected node = filled
         ctx.restore();}
       if(activeTool==="select"){ const rh=rotHandle(o,k);   // rotate handle above the shape (rect / polygon)
         if(rh){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.fillStyle="#fff"; ctx.lineWidth=1.5;
