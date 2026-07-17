@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.18 -->
+<!-- SANGALA_VERSION: 2026-07-17.19 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1492,8 +1492,11 @@ function boredBoxTris(outer, inner, z0, z1, axis, d, hz){
       t.push(...boxTris(ix0-OV,oy0,(ix1-ix0)+2*OV,iy0-oy0,z0,z1));                // front wall (unpierced), lapped into the bands
       t.push(...boxTris(ix0-OV,iy1,(ix1-ix0)+2*OV,oy1-iy1,z0,z1)); }             // back wall (unpierced)
   } else {          // bore runs along Y, through the front (oy0) and back (oy1) walls; hole face is the X-Z plane
-    const cx=(ox0+ox1)/2, face=[[ox0,z0],[ox1,z0],[ox1,z1],[ox0,z1]], hole=circleRing(cx,hz,r);
-    const map=tr=>tr.map(p=>[p[0],p[2],p[1]]);                                   // (faceX, faceZ, Yextrude) -> (X,Y,Z)
+    // The face is set up as (local x = Z, local y = X) so the map back is a CYCLIC rotation (det +1), NOT a
+    // Y<->Z swap. A swap is a reflection: it inverts every normal, and the whole thing prints inside-out - the
+    // bore then reads as a solid PEG instead of a hole. Same reason yzPrism cycles axes rather than swapping.
+    const cx=(ox0+ox1)/2, face=[[z0,ox0],[z1,ox0],[z1,ox1],[z0,ox1]], hole=circleRing(hz,cx,r);
+    const map=tr=>tr.map(p=>[p[1],p[2],p[0]]);                                   // local (Z, X, Yextrude) -> world (X, Y, Z)
     if(!I){ prismThruTris(face,[hole],oy0,oy1).forEach(tri=>t.push(map(tri))); }
     else{ const [ix0,iy0,ix1,iy1]=I;
       prismThruTris(face,[hole],oy0,iy0).forEach(tri=>t.push(map(tri)));         // front wall band, bored
