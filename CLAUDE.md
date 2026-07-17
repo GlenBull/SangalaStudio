@@ -93,6 +93,11 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   GitHub before downloading, and skips the download/backup entirely when they
   match. **Any commit that changes SangalaStudio.html must bump that version
   string**, or the checker calls a real change "already up to date."
+- **When driving the running app from the browser tool, use `http://localhost:8787/`, never
+  `http://127.0.0.1:8787/`.** Both reach the same loopback listener, but the raw IP makes Glen's
+  preview pane throw a "Link to 127.0.0.1 was blocked" banner on EVERY navigation — invisible to me,
+  since the tool still reports success. (The app itself opens 127.0.0.1 in a real browser; that is fine
+  and is not what triggers it.)
 
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:
