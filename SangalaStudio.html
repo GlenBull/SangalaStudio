@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.17 -->
+<!-- SANGALA_VERSION: 2026-07-17.18 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1466,6 +1466,43 @@ function nestRings(rings){
   R.forEach(item=>{ if(item.depth%2===1 && item.container) item.container.holes.push(item.ring); });
   return R.filter(item=>item.depth%2===0).map(item=>({outer:item.ring, holes:item.holes}));
 }
+function isRectRing(ring){   // an axis-aligned rectangle? (4 corners, every edge horizontal or vertical)
+  let p=ring.map(q=>[q[0],q[1]]);
+  while(p.length>1 && _samePt(p[0],p[p.length-1])) p.pop();   // strip ALL closing dups (makePolyObj can leave two)
+  if(p.length!==4) return false;
+  for(let i=0;i<4;i++){ const a=p[i],b=p[(i+1)%4]; if(Math.abs(a[0]-b[0])>0.02 && Math.abs(a[1]-b[1])>0.02) return false; }
+  return true;
+}
+// A round bore (an axle bearing) through a rectangular box - solid or a hollow frame - along X or Y, centred on
+// the perpendicular axis, at height hz. CSG-FREE: the pierced walls are re-extruded ALONG THE BORE AXIS as a
+// face carrying a circular hole (prismThruTris in a cycled frame, exactly the yzPrism trick), and the two walls
+// the bore misses stay plain slabs. One bore line runs the whole length, so the two openings are COAXIAL by
+// construction - which is what lets an axle actually turn. Assumes both rings are axis-aligned rectangles and the
+// bore sits in the interior span (a centred axle), so it pierces only the facing pair of walls.
+function boredBoxTris(outer, inner, z0, z1, axis, d, hz){
+  const bb=r=>{ let a=1e9,b=1e9,c=-1e9,e=-1e9; r.forEach(p=>{if(p[0]<a)a=p[0];if(p[0]>c)c=p[0];if(p[1]<b)b=p[1];if(p[1]>e)e=p[1];}); return [a,b,c,e]; };
+  const [ox0,oy0,ox1,oy1]=bb(outer), r=Math.max(0.5,d/2), t=[], I=inner?bb(inner):null, OV=0.1;   // OV: the unpierced walls overlap the bored bands a hair, so the slicer welds them instead of meeting face-to-face
+  if(axis==="x"){   // bore runs along X, through the left (ox0) and right (ox1) walls; the hole face is the Y-Z plane
+    const cy=(oy0+oy1)/2, face=[[oy0,z0],[oy1,z0],[oy1,z1],[oy0,z1]], hole=circleRing(cy,hz,r);
+    const map=tr=>tr.map(p=>[p[2],p[0],p[1]]);                                   // (faceY, faceZ, Xextrude) -> (X,Y,Z)
+    if(!I){ prismThruTris(face,[hole],ox0,ox1).forEach(tri=>t.push(map(tri))); }
+    else{ const [ix0,iy0,ix1,iy1]=I;
+      prismThruTris(face,[hole],ox0,ix0).forEach(tri=>t.push(map(tri)));         // left wall band, bored
+      prismThruTris(face,[hole],ix1,ox1).forEach(tri=>t.push(map(tri)));         // right wall band, bored
+      t.push(...boxTris(ix0-OV,oy0,(ix1-ix0)+2*OV,iy0-oy0,z0,z1));                // front wall (unpierced), lapped into the bands
+      t.push(...boxTris(ix0-OV,iy1,(ix1-ix0)+2*OV,oy1-iy1,z0,z1)); }             // back wall (unpierced)
+  } else {          // bore runs along Y, through the front (oy0) and back (oy1) walls; hole face is the X-Z plane
+    const cx=(ox0+ox1)/2, face=[[ox0,z0],[ox1,z0],[ox1,z1],[ox0,z1]], hole=circleRing(cx,hz,r);
+    const map=tr=>tr.map(p=>[p[0],p[2],p[1]]);                                   // (faceX, faceZ, Yextrude) -> (X,Y,Z)
+    if(!I){ prismThruTris(face,[hole],oy0,oy1).forEach(tri=>t.push(map(tri))); }
+    else{ const [ix0,iy0,ix1,iy1]=I;
+      prismThruTris(face,[hole],oy0,iy0).forEach(tri=>t.push(map(tri)));         // front wall band, bored
+      prismThruTris(face,[hole],iy1,oy1).forEach(tri=>t.push(map(tri)));         // back wall band, bored
+      t.push(...boxTris(ox0,iy0-OV,ix0-ox0,(iy1-iy0)+2*OV,z0,z1));                // left wall (unpierced), lapped into the bands
+      t.push(...boxTris(ix1,iy0-OV,ox1-ix1,(iy1-iy0)+2*OV,z0,z1)); }             // right wall (unpierced)
+  }
+  return t;
+}
 // Extrude a SIDE-VIEW (Y-Z) profile along X - the one thing prismTris cannot do, since it only pushes a plan
 // outline straight up. Build the solid in a frame where the profile is the plan and X is "up", then cycle the
 // axes back: (a,b,c) -> (c,a,b) is a rotation (determinant +1), so the outward normals prismTris computed stay
@@ -1602,6 +1639,17 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
     return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"),o.el.getAttribute("data-inv")==="1");   // hollow brick: origin + Fit + cols/rows + height + studs/sockets + slope rows + inverted
   const t=o.el.tagName.toLowerCase(), fit=g("data-fit"), skips=studSkips(o.el);
   const z1=g("data-z0")+g("data-z"), z0=(fuse && g("data-z0")>0) ? g("data-z0")-G : g("data-z0");   // a fused body stacked on another reaches down into it
+  // Axle bore: a round hole clean through a rectangular box (solid or hollow frame), coaxial through the facing
+  // walls. Handled before the ordinary extrude and returns on its own - a bored box carries no studs.
+  const bAxis=o.el.getAttribute("data-bore-axis"), bD=+o.el.getAttribute("data-bore-d")||0;
+  if(bD>0 && (bAxis==="x"||bAxis==="y") && (t==="rect"||t==="polygon")){
+    const outer = t==="rect" ? [[g("x"),g("y")],[g("x")+g("width"),g("y")],[g("x")+g("width"),g("y")+g("height")],[g("x"),g("y")+g("height")]] : o.poly;
+    const inner = (o.holes&&o.holes.length===1) ? o.holes[0] : null;
+    if(isRectRing(outer) && (!inner || isRectRing(inner))){
+      const bh = o.el.hasAttribute("data-bore-h") ? +o.el.getAttribute("data-bore-h") : (z0+z1)/2;
+      return boredBoxTris(outer, inner, z0, z1, bAxis, bD, bh);
+    }
+  }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
   let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
     : t==="rect"   ? boxTris(g("x")-G,g("y")-G,g("width")+2*G,g("height")+2*G,z0,z1)
@@ -2641,6 +2689,21 @@ function dimText(o){
       +flag("studs","Studs (top)",st,"LEGO studs on the top face, on the 8 mm grid wherever one fits. Click a stud on the mat to remove it.")
       +flag("sockets","Sockets (bottom)",sk,"Holes in the underside that clip onto the studs of the part below. Needs a Depth of about 5 mm or more.")+'</div>';
     if(st||sk) html+='<table style="border-collapse:collapse;margin-top:.35rem"><tr>'+cell(["Fit",R("data-fit"),"fit"])+'</tr></table>';   // clutch clearance: shaves the stud, opens the socket
+    // Axle hole: a round bore through a box (a solid rectangle, or a hollow frame from Difference). 3D only.
+    const boxLike = t==="rect" || (t==="polygon" && o.poly && isRectRing(o.poly));
+    if(boxLike){
+      const boreOn = (o.el.getAttribute("data-bore-axis")==="x"||o.el.getAttribute("data-bore-axis")==="y") && (+o.el.getAttribute("data-bore-d")||0)>0;
+      html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+        +flag("bore","Axle hole (round)",boreOn,"A round hole bored straight through both walls for an axle. The two openings line up on their own, so a rod turns freely.");
+      if(boreOn){
+        const bz0=+o.el.getAttribute("data-z0")||0, bz=+o.el.getAttribute("data-z")||0;
+        const hz=Math.round((o.el.hasAttribute("data-bore-h")? +o.el.getAttribute("data-bore-h") : bz0+bz/2)*10)/10;
+        const dia=Math.round((+o.el.getAttribute("data-bore-d")||3.2)*10)/10;
+        html+='<div style="margin-top:.3rem">'+flag("borex","Across the width",o.el.getAttribute("data-bore-axis")==="x","Bore side-to-side across the width instead of front-to-back along the length.")+'</div>'
+          +'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(["Hole ⌀",dia,"bored"])+'<td style="width:1rem"></td>'+cell(["Height",hz,"boreh"])+'</tr></table>';
+      }
+      html+='</div>';
+    }
   }
   return html;
 }
@@ -2650,6 +2713,8 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   const o=selObj(); if(!o||!o.el) return;
   if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
+  if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
+  if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
@@ -2663,6 +2728,11 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   draw(); if(!live)showDims(o); pvRefresh();
 }
 function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEGO connectors on an extruded shape: studs on top, sockets underneath
+  if(flag==="bore"){   // the axle hole: turning it on seeds a default axle, off strips every bore attribute
+    if(on){ o.el.setAttribute("data-bore-axis", o.el.getAttribute("data-bore-axis")||"y"); if(!(+o.el.getAttribute("data-bore-d")>0)) o.el.setAttribute("data-bore-d","3.2"); }
+    else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
+    showDims(o); pvRefresh(); return; }
+  if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
   if(flag!=="studs" && flag!=="sockets") return;
   o.el.setAttribute(flag==="studs"?"data-studs":"data-sockets", on?"1":"0"); showDims(o); draw(); pvRefresh(); }   // draw(): the connector overlay on the mat
 const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
