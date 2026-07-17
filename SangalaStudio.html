@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.15 -->
+<!-- SANGALA_VERSION: 2026-07-17.1 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1160,9 +1160,14 @@ function tubeTris(cx,cy,ro,ri,z0,z1,topFn){
 // slope > 0 makes it a SLOPE BRICK: the roof falls away over the front `slope` rows, from full height at the
 // boundary down to the base at the front edge - the classic roof/wedge brick. slope 0 is an ordinary brick and
 // takes the original path below, unchanged.
-function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
+// inv turns it into an INVERTED slope: the same wedge mirrored in Z. The top stays flat and keeps every stud;
+// it is the UNDERSIDE that rises away over the front rows, which is what LEGO's inverted slope does - it fills
+// the underside of an overhang. The front rows then have no floor, so they cannot sit on a stud: an inverted
+// slope grips only on its full-height rows, which is why at least one must survive here too.
+function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
   cols=Math.max(1,Math.round(cols||3)); rows=Math.max(1,Math.round(rows||2)); Zt=Math.max(3.2, Zt||9.6); studs=studs!==false; dock=dock!==false;   // cols x rows; Zt = height; studs = top studs, dock = underside tubes (both default on)
-  slope=Math.max(0, Math.min(rows-1, Math.round(slope||0)));   // at least one flat row must survive, to carry the studs
+  slope=Math.max(0, Math.min(rows-1, Math.round(slope||0)));   // at least one full-height row must survive, to carry the studs (or, inverted, to grip)
+  inv=!!inv && slope>0;
   const U=8, W=cols*U, H=rows*U, roof=1.0, Zc=Zt-roof, WELD=0.2;   // Zc = roof underside; WELD = small overlap so touching solids fuse (no coincident faces)
   // Tubes only land on INTERIOR grid points, so anything less than 2x2 (a 1xN leg, a 1x1 post) gets none, and
   // its wall's inner face is the only thing left that can grip the stud below. At a fixed 1.2 mm that cavity was
@@ -1172,7 +1177,11 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
   // but the plastic used, on parts that already fit.
   // A slope only takes the TOP. The base is untouched - a 2x2 slope still has a full 2x2 underside and keeps
   // its tube - so the slope must not enter this decision at all.
-  const hasTubes = cols>1 && rows>1, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
+  // An INVERTED slope is the opposite case: it takes the BASE. Its front rows have no floor, so a tube there
+  // would stand in mid-air, and a tube needs an interior grid point among the full-height rows alone. Where the
+  // invert leaves too few, there is no tube and the wall must grip instead - the 1xN case again.
+  const invNoTube = inv && (rows-slope)<2;
+  const hasTubes = cols>1 && rows>1 && !invNoTube, wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
@@ -1188,6 +1197,23 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
     t.push(...boxTris(gx,gy,gW,wall+G,0,Zt), ...boxTris(gx,y1-wall,gW,wall+G,0,Zt),   // front + back walls
            ...boxTris(gx,gy,wall+G,gH,0,Zt), ...boxTris(x1-wall,gy,wall+G,gH,0,Zt));  // left + right walls
     t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab (overlaps wall tops)
+  } else if(inv){
+    // INVERTED: the whole top stays flat, so the roof and the studs are those of an ordinary brick; the front
+    // rows lose their FLOOR instead, the underside rising from the base at yb to Zt-lip at the front edge -
+    // the mirror in Z of the slope above. The wedge is solid from that rising face up to the roof: there is no
+    // cavity to keep under it (nothing can clutch where the floor has gone), it needs no side walls of its own,
+    // and a solid 45 deg overhang prints far better than a thin unsupported shell would.
+    t.push(...boxTris(gx,gy,gW,gH,Zc,Zt));                                         // roof slab, full footprint
+    t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
+    const fy=yb, fh=(y1+G)-yb;                                                     // the full-height rows behind the invert
+    t.push(...boxTris(gx,fy,wall+G,fh,0,Zt), ...boxTris(x1-wall,fy,wall+G,fh,0,Zt));   // their side walls
+    // The tilted underside. Where the run is longer than the brick is tall there is no lip, so the rising face
+    // reaches ABOVE the roof's underside near the front edge - the wedge would have negative thickness there and
+    // fold through itself. Start it where the face passes under the roof instead; ahead of that the brick is
+    // simply its roof, which leaves a printable tip rather than a knife edge.
+    const zb0=Zt-lip;
+    t.push(...yzPrism(zb0<=Zc ? [[y0,zb0],[yb,0],[yb,Zc],[y0,Zc]]
+                              : [[y0+run*(1-Zc/zb0),Zc],[yb,0],[yb,Zc]], gx, x1+G));
   } else {
     t.push(...boxTris(gx,y1-wall,gW,wall+G,0,Zt));                                 // back wall, full height
     if(lip>0) t.push(...boxTris(gx,gy,gW,wall+G,0,lip));                           // the vertical lip: a short front wall where the slope stops
@@ -1200,18 +1226,24 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope){
     t.push(...yzPrism(ub>=0 ? [[y0,lip],[yb,Zt],[yb,Zc],[y0,ub]]                   // the tilted roof slab itself
                             : [[y0,lip],[yb,Zt],[yb,Zc],[y0+run*(roof-lip)/(Zt-lip),0],[y0,0]], gx, x1+G));
   }
-  if(studs) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));   // studs only where the top is flat (off = smooth top, e.g. a wing)
+  // Studs sit wherever the top is flat: every row on an ordinary or INVERTED brick (an invert never touches the
+  // top), but only the rows behind a slope. (off = smooth top, e.g. a wing)
+  if(studs) for(let ry=(inv?0:slope);ry<rows;ry++)for(let cx=0;cx<cols;cx++) t.push(...cylTris(x0+U/2+cx*U,y0+U/2+ry*U,studR,Zt-WELD,Zt+studH));
   // Anti-stud tubes on every interior grid point: a slope takes only the top, so the base is still a full
   // 2x2 and must clutch like one. Under the slope a tube is CUT BY the roof rather than stopped below it -
   // its top follows the ceiling (+WELD, so it bites into the slab and fuses). An earlier version capped the
   // tube at a flat height instead, leaving it touching nothing but the build plate: it printed as a loose
   // cylinder and fell out of Moses's first part. WELD < roof, so the top always lands inside the slab and
   // can never break out through the sloped face.
+  // Inverted, a tube must instead keep clear of the invert entirely: there is no floor under those rows for one
+  // to stand on, so a tube reaching that far forward would hang in mid-air - the very fault that dropped out of
+  // Moses's first slope. It stays full height, on the full-height rows alone.
   if(dock)  for(let i=1;i<cols;i++)for(let j=1;j<rows;j++){
     const yj=y0+j*U;
-    if(slope && underZ(yj-tubeRo)<1.0) continue;                                    // no usable cavity left this far forward
+    if(inv && yj-tubeRo<yb) continue;                                               // the floor has risen away here
+    if(slope && !inv && underZ(yj-tubeRo)<1.0) continue;                            // no usable cavity left this far forward
     t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,Zc+WELD,
-      slope?((x,y)=>Math.min(Zc+WELD, underZ(y)+WELD)):null));
+      (slope&&!inv)?((x,y)=>Math.min(Zc+WELD, underZ(y)+WELD)):null));
   }
   else      t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
@@ -1456,7 +1488,7 @@ function bodiesTouch(a,b){   // do two 3D bodies actually meet? (overlapping in 
 function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
   if(o.el.hasAttribute("data-brick"))
-    return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"));   // hollow brick: origin + Fit + cols/rows + height + studs/sockets + slope rows
+    return brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"),o.el.getAttribute("data-inv")==="1");   // hollow brick: origin + Fit + cols/rows + height + studs/sockets + slope rows + inverted
   const t=o.el.tagName.toLowerCase(), fit=g("data-fit"), skips=studSkips(o.el);
   const z1=g("data-z0")+g("data-z"), z0=(fuse && g("data-z0")>0) ? g("data-z0")-G : g("data-z0");   // a fused body stacked on another reaches down into it
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
@@ -2031,7 +2063,7 @@ function makeBrick(x0,y0){
   ensureDoc();
   const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
   const gid=++groupSeq, ids=[];   // the brick's body + studs are auto-grouped so it moves as one
-  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1","data-slope":0});
+  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1","data-slope":0,"data-inv":"0"});
   objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]],group:gid}); ids.push(objSeq);
   for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
@@ -2048,7 +2080,8 @@ function rebuildBrick(o){   // regenerate a brick's body size + stud grid from i
   old.forEach(s=>{ if(s.el&&s.el.remove) s.el.remove(); }); const oset=new Set(old.map(s=>s.id)); objects=objects.filter(x=>!oset.has(x.id));
   const ids=[o.id], studsOn=o.el.getAttribute("data-studs")!=="0";
   const slope=Math.max(0,Math.min(rows-1,Math.round(+o.el.getAttribute("data-slope")||0)));   // a sloped row has no flat top, so it carries no studs - the 2D view must agree with what prints
-  if(studsOn) for(let ry=slope;ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;   // 2D stud circles only when studs are on (smooth top = none)
+  const inv=o.el.getAttribute("data-inv")==="1" && slope>0;                                   // ...but an INVERTED slope takes the base, never the top: every row keeps its stud
+  if(studsOn) for(let ry=(inv?0:slope);ry<rows;ry++)for(let cx=0;cx<cols;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;   // 2D stud circles only when studs are on (smooth top = none)
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":1.8,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r),group:gid}); ids.push(objSeq); }
   selMulti=ids; selId=null; selId2=null;   // keep the whole brick group selected
@@ -2373,7 +2406,8 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const cols=Math.max(1,Math.round(g("data-cols")||3)), rows=Math.max(1,Math.round(g("data-rows")||2)),
         depth=Math.round((g("data-z")||9.6)*10)/10, fit=Math.round(g("data-fit")*10)/10,
         slope=Math.max(0,Math.min(rows-1,Math.round(g("data-slope")))),
-        studsOn=o.el.getAttribute("data-studs")!=="0", dockOn=o.el.getAttribute("data-dock")!=="0";
+        studsOn=o.el.getAttribute("data-studs")!=="0", dockOn=o.el.getAttribute("data-dock")!=="0",
+        invOn=o.el.getAttribute("data-inv")==="1";
   const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left">'+label+':</td>'
      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'"></td>'
      +'<td style="padding-left:.15rem;color:#8a7350">'+unit+'</td>';
@@ -2384,7 +2418,8 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
     +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td style="width:1rem"></td><td></td><td></td><td></td></tr></table>'
     +'<div class="hint" style="margin-top:.2rem">Slope 0 = a flat top. Slope 1 makes the front row fall away to the base - a roof brick.</div>'
     +'<div class="hint" style="margin-top:.2rem">Fit 0 = standard LEGO. Minus tightens the clutch (fatter studs), plus loosens it.</div>'
-    +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>';
+    +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>'
+    +(slope>0 ? '<div style="margin-top:.35rem">'+flag("inv","Inverted",invOn,"Turn the slope upside down: the top stays flat and keeps all its studs, and the UNDERSIDE falls away instead - the brick that fills the underside of an overhang. It grips only on its full-height rows.")+'</div>' : '');
 }
 function showBrickCtl(o){ const el=$("brickctl");
   if(!o||!mode3D){ el.style.display="none"; return; }
@@ -2402,9 +2437,11 @@ function applyBrickDim(dim,v,live){ const o=selectedBrick(); if(!o) return;
     rebuildBrick(o); draw(); pvRefresh(); if(!live) refreshEditPanel(); return; }   // the sloped rows lose their studs, so the 2D grid is rebuilt too
 }
 function applyBrickFlag(flag,on){ const o=selectedBrick(); if(!o) return;
-  o.el.setAttribute(flag==="studs"?"data-studs":"data-dock", on?"1":"0");
-  if(flag==="studs"){ rebuildBrick(o); draw(); refreshEditPanel(); }   // studs also add/remove the 2D stud circles
+  o.el.setAttribute(flag==="studs"?"data-studs":flag==="inv"?"data-inv":"data-dock", on?"1":"0");
+  if(flag==="studs"||flag==="inv"){ rebuildBrick(o); draw(); refreshEditPanel(); }   // both change which rows carry a 2D stud circle
   pvRefresh();
+  if(flag==="inv") say(on ? "Inverted - the top keeps its studs and the underside falls away instead. It grips on its full-height rows."
+                          : "Back to an ordinary slope - the roof falls away and the base is whole.");
 }
 const onBrickEdit=(e,live)=>{ const el=e.target;
   if(el&&el.dataset&&el.dataset.brickdim!=null) applyBrickDim(el.dataset.brickdim, +el.value||0, live);
