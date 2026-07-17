@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.15 -->
+<!-- SANGALA_VERSION: 2026-07-17.16 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -373,7 +373,7 @@ const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut");
 const scoreObjs =()=>objects.filter(o=>o.kind==="score");
 const printObjs =()=>objects.filter(o=>o.kind==="print");
-const cutPolys  =()=>cutObjs().map(o=>o.poly);
+const cutPolys  =()=>cutObjs().flatMap(o=>(o.holes&&o.holes.length)?[o.poly].concat(o.holes):[o.poly]);   // a holed shape cuts as its outline PLUS each inner loop - a frame
 const scorePolys=()=>scoreObjs().map(o=>o.poly);
 const printPolys=()=>printObjs().map(o=>o.poly);
 
@@ -524,7 +524,9 @@ function loadSVG(text){
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
     const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
     let grp=null; if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; grp=gmap[dg]; }
-    objects.push({id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp});
+    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp};
+    const hs=parseHoles(el); if(hs) o.holes=hs;                  // a frame saved by Sangala carries its inner loops in data-holes
+    objects.push(o);
   });
   if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
   if(!silo) normalize();
@@ -537,7 +539,7 @@ function loadSVG(text){
 function normalize(){let mx=1e9,my=1e9;
   objects.forEach(o=>o.poly.forEach(q=>{mx=Math.min(mx,q[0]);my=Math.min(my,q[1]);}));
   if(mx===1e9)return;
-  objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]);});}
+  objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]); if(o.holes) o.holes=o.holes.map(h=>h.map(q=>[q[0]-mx,q[1]-my]));});}
 
 // per-object placement WITHOUT reordering — same scale/offset math as placeAndOrder.
 // used for the Edit-mode overlay + hit-testing so object identity is preserved.
@@ -715,10 +717,11 @@ function draw(){
   // Drawn in object order, so a shape added later sits over an earlier one - the collage's layers.
   objects.forEach(o=>{ const f=fillOf(o);
     if(!f || !o.poly || o.poly.length<3 || !objClosed(o)) return;   // an open stroke (a fold, a turtle trail) encloses nothing
-    const p=placePoly(o.poly);
     ctx.save(); ctx.fillStyle=f; ctx.beginPath();
-    p.forEach((q,i)=>{ const x=q[0]*k, y=q[1]*k; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
-    ctx.closePath(); ctx.fill(); ctx.restore(); });
+    const addRing=r=>{ const pr=placePoly(r); pr.forEach((q,i)=>{ const x=q[0]*k, y=q[1]*k; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.closePath(); };
+    addRing(o.poly);
+    (o.holes||[]).forEach(addRing);                                // inner loops punch back out under even-odd, so a frame reads as a frame
+    ctx.fill("evenodd"); ctx.restore(); });
   if(selMulti.length){   // multi-selection: a faint translucent plate BENEATH each member (drawn before the machine
     ctx.save(); ctx.fillStyle="rgba(0,0,0,0.07)";   // lines, so red stays red and blue stays blue). Fills cannot be mistaken for a cut or fold, which are strokes;
     selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the gray deepens - stacking stays visible
@@ -1106,8 +1109,9 @@ async function saveSVG(){
   if(!svgEl||!objects.length){say("Add a shape first, then Save SVG.");return;}
   const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
   const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
-  objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping so it survives Save -> reopen
-    if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group"); });
+  objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
+    if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group");
+    syncHolesToEl(o); });
   const clone=svgEl.cloneNode(true);
   clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
   clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
@@ -1406,6 +1410,61 @@ function prismTris(ring,z0,z1,holes){   // extrude a polygon ring (design mm) in
       t.push(facing([[h.x,h.y,zt],a1,b1],0,0,-1)); } });                                 // ceiling, facing down into the hole
   return t;
 }
+// A prism with THROUGH holes: the outer ring extruded z0..z1 with each inner ring cut clean through - both
+// caps opened around the holes (bridgeHoles + ear-clip, the same stitch the sockets use) and a vertical wall
+// lining each hole. This is what makes a Difference FRAME extrude hollow (Jo Watts's box). Note prismTris's own
+// `holes` are BLIND sockets - solid top, cut bottom; these go all the way through, open at both ends.
+function prismThruTris(outer, holeRings, z0, z1){
+  let pts=outer.map(p=>[p[0],p[1]]);
+  if(pts.length>1 && _samePt(pts[0],pts[pts.length-1])) pts.pop();
+  if(pts.length<3 || z1<=z0) return [];
+  const holes=(holeRings||[]).map(h=>{ let r=h.map(p=>[p[0],p[1]]); if(r.length>1&&_samePt(r[0],r[r.length-1])) r.pop(); return r; }).filter(h=>h.length>=3);
+  if(!holes.length) return prismTris(pts,z0,z1);            // no holes -> an ordinary solid prism
+  const t=[];
+  const nz=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  const face=(tri,up)=>{ const s=nz(tri[0],tri[1],tri[2]); return ((up?s>=0:s<=0)?tri:[tri[0],tri[2],tri[1]]); };
+  const nrm=(a,b,c)=>{ const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2]; return [uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx]; };
+  const facing=(tri,dx,dy,dz)=>{ const n=nrm(tri[0],tri[1],tri[2]); return (n[0]*dx+n[1]*dy+n[2]*dz)>=0 ? tri : [tri[0],tri[2],tri[1]]; };
+  const cap=bridgeHoles(pts,holes);                        // outer + slits to each hole -> one ear-clippable ring
+  for(const [i,j,k] of earClip(cap)){
+    t.push(face([[cap[i][0],cap[i][1],z1],[cap[j][0],cap[j][1],z1],[cap[k][0],cap[k][1],z1]], true));     // top +Z, cut around the holes
+    t.push(face([[cap[i][0],cap[i][1],z0],[cap[j][0],cap[j][1],z0],[cap[k][0],cap[k][1],z0]], false));    // bottom -Z, same
+  }
+  let A=0; for(let i=0;i<pts.length;i++){ const a=pts[i],b=pts[(i+1)%pts.length]; A+=a[0]*b[1]-b[0]*a[1]; } const ccw=A>0;
+  for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];                                 // outer wall - faces outward
+    const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
+    const dx=b[0]-a[0],dy=b[1]-a[1], ox=(ccw?dy:-dy), oy=(ccw?-dx:dx);
+    for(const tri of [[a0,b0,b1],[a0,b1,a1]]) t.push(facing(tri,ox,oy,0)); }
+  holes.forEach(h=>{ let cx=0,cy=0; h.forEach(p=>{cx+=p[0]/h.length;cy+=p[1]/h.length;});                  // each hole wall faces INTO its own void
+    for(let i=0;i<h.length;i++){ const a=h[i], b=h[(i+1)%h.length];
+      const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
+      const ix=cx-(a[0]+b[0])/2, iy=cy-(a[1]+b[1])/2;
+      t.push(facing([a0,b0,b1],ix,iy,0), facing([a0,b1,a1],ix,iy,0)); } });
+  return t;
+}
+// data-holes carries a shape's inner loops (design mm) so they survive Save SVG -> reopen and undo. o.holes is
+// the in-memory source of truth; syncHolesToEl mirrors it onto the element only when it must persist.
+function parseHoles(el){ const s=el&&el.getAttribute&&el.getAttribute("data-holes"); if(!s) return null;
+  const rings=s.split(";").map(t=>t.trim()).filter(Boolean)
+    .map(t=>t.split(/\s+/).map(pt=>{const c=pt.split(","); return [parseFloat(c[0]),parseFloat(c[1])];}).filter(p=>isFinite(p[0])&&isFinite(p[1])))
+    .filter(r=>r.length>=3);
+  return rings.length? rings : null; }
+function syncHolesToEl(o){ if(!o||!o.el||!o.el.setAttribute) return;
+  if(o.holes&&o.holes.length) o.el.setAttribute("data-holes", o.holes.map(h=>h.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")).join(";"));
+  else if(o.el.removeAttribute) o.el.removeAttribute("data-holes"); }
+// Nest boolean-result rings into outers that each carry their holes. A ring whose interior point sits inside an
+// ODD number of the others is a hole of the smallest ring containing it (even -> an outer). For a plain
+// Difference (inner fully inside outer) this yields one outer + one hole; when nothing contains anything each
+// ring is its own outer - identical to the old behavior, so only the fully-contained case changes.
+function nestRings(rings){
+  const R=rings.map(r=>{ const o=pbOpen(r); let cx=0,cy=0; o.forEach(p=>{cx+=p[0]/o.length;cy+=p[1]/o.length;});
+    return {ring:r, a:Math.abs(pbArea(o)), c:[cx,cy], container:null, holes:[]}; });
+  R.forEach(item=>{ R.forEach(other=>{ if(other===item||other.a<=item.a) return;
+    if(pbIn(item.c, pbOpen(other.ring)) && (!item.container||other.a<item.container.a)) item.container=other; }); });
+  R.forEach(item=>{ let d=0,c=item.container; while(c){d++;c=c.container;} item.depth=d; });
+  R.forEach(item=>{ if(item.depth%2===1 && item.container) item.container.holes.push(item.ring); });
+  return R.filter(item=>item.depth%2===0).map(item=>({outer:item.ring, holes:item.holes}));
+}
 // Extrude a SIDE-VIEW (Y-Z) profile along X - the one thing prismTris cannot do, since it only pushes a plan
 // outline straight up. Build the solid in a frame where the profile is the plan and X is "up", then cycle the
 // axes back: (a,b,c) -> (c,a,b) is a rotation (determinant +1), so the outward normals prismTris computed stay
@@ -1546,6 +1605,7 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
     : t==="rect"   ? boxTris(g("x")-G,g("y")-G,g("width")+2*G,g("height")+2*G,z0,z1)
     : t==="circle" ? cylTris(g("cx"),g("cy"),g("r")+G,z0,z1)
+    : (o.holes&&o.holes.length) ? prismThruTris(solid,o.holes,z0,z1)          // a frame (Difference) -> extruded HOLLOW, its inner loops cut through
     : prismTris(solid,z0,z1);                                                 // freeform polygon (Pen / Node) -> extruded prism
   if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
   return tris;
@@ -1751,7 +1811,8 @@ function serializeState(){
     objs: objects.map(o=>({ id:o.id,
       tag: (o.el&&o.el.tagName)? o.el.tagName.toLowerCase():null,
       attrs: (o.el&&o.el.attributes)? Array.from(o.el.attributes).map(a=>[a.name,a.value]):[],
-      kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null, group:o.group })) };
+      kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null,
+      holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:o.group })) };
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
   if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
@@ -1763,7 +1824,8 @@ function restoreState(st){
   ensureDoc();
   objects = st.objs.map(so=>{ let el=null;
     if(so.tag){ el=document.createElementNS(SVGNS,so.tag); so.attrs.forEach(a=>el.setAttribute(a[0],a[1])); svgEl.appendChild(el); }
-    return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null, group:so.group }; });
+    return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null,
+             holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:so.group }; });
   objSeq=st.objSeq; groupSeq=st.groupSeq; printFile=st.printFile;
   selId=null; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();
@@ -2029,11 +2091,17 @@ function applyBool(op){
   const kind=o1.kind;
   [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });   // drop operands from the doc + object list
   objects=objects.filter(o=>o!==o1&&o!==o2);
-  rings.forEach(r=>makePolyObj(r,kind));
+  // Nest the result: a ring contained inside another is that shape's HOLE, not a rival solid. This is what
+  // makes Difference of a fully-enclosed shape a hollow FRAME (Jo's box) instead of two overlapping shapes -
+  // and it is why an inner rectangle set inside an outer one now does something at all (that case has no edge
+  // crossings, so the boolean returned both rings and we used to stamp two solids one atop the other).
+  const nested=nestRings(rings);
+  nested.forEach(n=>{ const o=makePolyObj(n.outer,kind);
+    if(n.holes.length){ o.holes=n.holes.map(h=>{ let r=simplify(dedupePoly(pbOpen(h)),0.08); if(r.length<3) r=pbOpen(h); return r.concat([[r[0][0],r[0][1]]]); }); syncHolesToEl(o); } });
   selId=null; selId2=null; selNode=null;   // leave the fresh result unselected -> clean outline, no handle clutter
   renderBg(); draw(); refreshEditPanel();
-  const nm={union:"Union",diff:"Difference",intersect:"Intersect"}[op];
-  say(nm+": made "+rings.length+" shape"+(rings.length!==1?"s":"")+". Click it to select.");
+  const nm={union:"Union",diff:"Difference",intersect:"Intersect"}[op], holed=nested.some(n=>n.holes.length);
+  say(nm+": made "+nested.length+(holed?" frame":" shape")+(nested.length!==1?"s":"")+(holed?" with a hole - Depth in 3D makes it a hollow box.":". Click it to select."));
 }
 // Combine flyout: the palette icon opens a submenu with Union / Difference / Intersect.
 function closeCombine(){ $("combinemenu").style.display="none"; }
@@ -2085,6 +2153,7 @@ function placeEl(o){
 function translateObj(o,dx,dy){
   if(!o||!o.el||!o.poly||(!dx&&!dy)) return;
   o.poly=o.poly.map(p=>[p[0]+dx,p[1]+dy]);
+  if(o.holes) o.holes=o.holes.map(h=>h.map(p=>[p[0]+dx,p[1]+dy]));   // a hole travels with its frame
   const t=o.el.tagName.toLowerCase();
   if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
   else if(t==="circle"){ o.el.setAttribute("cx",fmtn((+o.el.getAttribute("cx")||0)+dx)); o.el.setAttribute("cy",fmtn((+o.el.getAttribute("cy")||0)+dy)); }
@@ -2101,7 +2170,8 @@ function copySel(){
   clipboard=objects.filter(o=>set.has(o.id)&&o.el&&o.el.tagName).map(o=>({
     tag:o.el.tagName.toLowerCase(),
     attrs:Array.from(o.el.attributes).map(a=>[a.name,a.value]),   // carries Depth/Base, studs, sockets, removed cells, Fit - the copy is a true twin
-    kind:o.kind, orig:o.orig, poly:o.poly?o.poly.map(p=>[p[0],p[1]]):null, group:o.group }));
+    kind:o.kind, orig:o.orig, poly:o.poly?o.poly.map(p=>[p[0],p[1]]):null,
+    holes:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:o.group }));
   pasteN=0;
   say("Copied "+clipboard.length+" shape"+(clipboard.length!==1?"s":"")+" - Ctrl+V pastes a copy.");
 }
@@ -2115,8 +2185,9 @@ function pasteClip(){
     c.attrs.forEach(a=>el.setAttribute(a[0],a[1]));
     svgEl.appendChild(el);
     let grp=null; if(c.group!=null){ if(!(c.group in gmap)) gmap[c.group]=++groupSeq; grp=gmap[c.group]; }   // a copied group (or fused piece, or brick) stays bound - as its OWN group
-    const o={id:++objSeq, el:el, kind:c.kind, orig:c.orig, poly:c.poly?c.poly.map(p=>[p[0],p[1]]):null, group:grp};
-    objects.push(o); if(o.poly) translateObj(o,d,d); ids.push(o.id);
+    const o={id:++objSeq, el:el, kind:c.kind, orig:c.orig, poly:c.poly?c.poly.map(p=>[p[0],p[1]]):null,
+             holes:c.holes?c.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:grp};
+    objects.push(o); if(o.poly) translateObj(o,d,d); syncHolesToEl(o); ids.push(o.id);
   });
   if(ids.length>1){ selMulti=ids; selId=null; } else { selMulti=[]; selId=ids[0]; }
   selId2=null; selImg2=false; selNode=null;
@@ -3010,7 +3081,7 @@ cv.addEventListener("mousedown",(e)=>{
       if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){ ensurePolygon(ro);
         let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9; ro.poly.forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];});
         const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
-        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),a0:Math.atan2(py-cy,px-cx),moved:false};
+        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),startHoles:ro.holes?ro.holes.map(h=>h.map(p=>[p[0],p[1]])):null,a0:Math.atan2(py-cy,px-cx),moved:false};
         cv.style.cursor="grabbing"; e.preventDefault(); return; } }
   }
   if(selMulti.length){   // group rotate handle - same idea, spins every member around the shared bounding-box center
@@ -3024,6 +3095,7 @@ cv.addEventListener("mousedown",(e)=>{
         if(o.el.tagName.toLowerCase()!=="circle") ensurePolygon(o);   // rect/path -> polygon or polyline; circle stays a circle
         const tag=o.el.tagName.toLowerCase();
         return { o:o, tag:tag, startPoly:o.poly?o.poly.map(p=>[p[0],p[1]]):null,
+                 startHoles: o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
                  cx0: tag==="circle"?(+o.el.getAttribute("cx")||0):null, cy0: tag==="circle"?(+o.el.getAttribute("cy")||0):null };
       }).filter(Boolean);
       drag={mode:"grouprotate",members:members,cx:cx,cy:cy,a0:Math.atan2(py-cy,px-cx),moved:false};
@@ -3149,6 +3221,7 @@ window.addEventListener("mousemove",(e)=>{
     if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }
     drag.members.forEach(m=>{ const o=m.o; if(!m.startPoly) return;
       o.poly=rotatePts(m.startPoly,drag.cx,drag.cy,delta);
+      if(m.startHoles) o.holes=m.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
       if(m.tag==="circle"){ const c=rotatePts([[m.cx0,m.cy0]],drag.cx,drag.cy,delta)[0];
         o.el.setAttribute("cx",fmtn(c[0])); o.el.setAttribute("cy",fmtn(c[1])); }
       else placeEl(o); });
@@ -3176,6 +3249,7 @@ window.addEventListener("mousemove",(e)=>{
     let delta=Math.atan2(dy-drag.cy,dx-drag.cx)-drag.a0;
     if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }   // Shift snaps to 15 deg (45 / 90 for square fits)
     o.poly=rotatePts(drag.startPoly,drag.cx,drag.cy,delta);
+    if(drag.startHoles) o.holes=drag.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
   if(drag.shape==="line"){ const a=drag.anchor;                       // the fixed end; the other end tracks the cursor
