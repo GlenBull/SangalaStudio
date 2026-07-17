@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.19 -->
+<!-- SANGALA_VERSION: 2026-07-17.20 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -421,11 +421,26 @@ function printSheet(){
       +'</div>';
     say("Opening the print dialog (artwork + registration marks). Print at 100% / Actual size.");
   } else {
+    // A drawn design. Pieces that carry a paper color print FILLED - that is the inkjet artwork for a color
+    // print-and-cut: print the whole collage on one white sheet, then the die cutter follows each outline,
+    // registered to the marks, and cuts every piece at once (no dragging colors to the mat one at a time). The
+    // cut line itself stays hidden, like a machine line. Pieces with no color keep the thin red outline, so a
+    // plain design still shows. Same ox/oy offset as the registered cut (see makeIt), so color and cut line up.
     const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
-    let paths="";
-    cutPolys().forEach(p=>{let d="";p.forEach((q,i)=>{d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" ";});paths+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>';});
-    inner='<svg xmlns="http://www.w3.org/2000/svg" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+(showMarks?marksSVG():"")+paths+'</svg>';
-    say(cutPolys().length?"Opening the print dialog (marks + design). Print at 100% / Actual size.":"Opening the print dialog (registration marks). Print at 100% / Actual size.");
+    const seg=r=>{ let d=""; r.forEach((q,i)=>{ d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" "; }); return d; };
+    let art="", n=0, colored=0;
+    objects.forEach(o=>{   // creation order = back to front, so the mat's layering is what prints
+      if(!o.poly || o.poly.length<2) return;
+      const f=fillOf(o);
+      if(f){ let d=seg(o.poly)+"Z "; (o.holes||[]).forEach(h=>{ d+=seg(h)+"Z "; });   // filled piece + any holes (even-odd)
+        art+='<path d="'+d+'" fill="'+f+'" fill-rule="evenodd" stroke="none"/>'; n++; colored++; }
+      else if(o.kind==="cut"){ let d=seg(o.poly); (o.holes||[]).forEach(h=>{ d+=seg(h); });   // uncolored cut -> red outline as before
+        art+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>'; n++; }
+    });
+    inner='<svg xmlns="http://www.w3.org/2000/svg" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+art+(showMarks?marksSVG():"")+'</svg>';
+    say(!n?"Opening the print dialog (registration marks). Print at 100% / Actual size."
+         :colored?"Opening the print dialog - the colored pieces print in color. Print at 100% / Actual size, then Make It to cut them all out."
+                 :"Opening the print dialog (marks + design). Print at 100% / Actual size.");
   }
   document.getElementById("printarea").innerHTML=inner;
   setTimeout(function(){window.print();},60);
