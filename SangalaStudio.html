@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.7 -->
+<!-- SANGALA_VERSION: 2026-07-17.8 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1774,11 +1774,20 @@ window.addEventListener("keydown",(e)=>{   // Ctrl-Z undo; Ctrl-Shift-Z or Ctrl-
 commit();   // seed with the initial (empty) state
 /* ---------- tool selection (Select / Rect / Circle / Brick) ---------- */
 let activeTool="select";   // "select" = pick/move/resize; "rect"/"circle" = drag to draw; "brick" = click to place
+// The browser's own crosshair is a single flat color - white on this machine - so it disappeared against the
+// white page, which is most of where the drawing tools are used. Draw our own instead: a black cross under a
+// white halo, legible on the page, on a black traced silhouette, and on the cork alike. The gap at the middle
+// leaves the exact point visible. Hotspot 12,12 = the centre of the 24x24 sprite.
+const CROSSHAIR = "url(\"data:image/svg+xml;utf8,"
+  + "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
+  + "<path d='M12 2v7M12 15v7M2 12h7M15 12h7' fill='none' stroke='white' stroke-width='4'/>"
+  + "<path d='M12 2v7M12 15v7M2 12h7M15 12h7' fill='none' stroke='black' stroke-width='2'/>"
+  + "</svg>\") 12 12, crosshair";   // the plain keyword stays as the fallback
 function setTool(t){ activeTool=t;
   if(t!=="pen" && (penPts.length||penHover)){ penPts=[]; penHover=null; penObj=null; }   // leaving the Pen tool discards an unfinished path
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
-  cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? "crosshair" : "default";
+  cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? CROSSHAIR : "default";
   // Tools that place a brand-new shape drop the selection; Select, Nodes and the Pen keep it. The Pen used to
   // drop it too, from when it could only start a fresh shape - but it now continues an existing outline, so the
   // shape being worked on is exactly what should stay selected on the way in.
@@ -3137,7 +3146,7 @@ window.addEventListener("mouseup",()=>{
                : t==="polyline" ? (lineLen<1)
                : (+el.getAttribute("r")<0.5);
     drag=null; suppressClick=true;
-    if(tiny){ if(el.remove)el.remove(); objects=objects.filter(x=>x.id!==o.id); selId=null; say(""); cv.style.cursor="crosshair"; }   // nothing made: stay in the tool
+    if(tiny){ if(el.remove)el.remove(); objects=objects.filter(x=>x.id!==o.id); selId=null; say(""); cv.style.cursor=CROSSHAIR; }   // nothing made: stay in the tool
     else { say(t==="rect" ? "Drew a "+fmtn(+el.getAttribute("width"))+" x "+fmtn(+el.getAttribute("height"))+" mm rectangle. Refine it in the readout."
              : t==="polyline" ? "Drew a "+fmtn(lineLen)+" mm line. Set it to Fold for a crease, or leave it Cut to slit. Drag its ends with the Nodes tool."
              : "Drew a "+fmtn(2*(+el.getAttribute("r")))+" mm circle. Refine it in the readout.");
