@@ -68,8 +68,13 @@ USB only, user-mode.** This constraint is absolute.
   - **Never add autospacing.** Do NOT write `w:beforeAutospacing="1"` / `w:afterAutospacing="1"` on any
     paragraph I insert, and do NOT copy them off a neighboring run. Word renders autospacing as large
     browser-style gaps — that is the extra space between a bullet and the next heading. Use the EXPLICIT point
-    values from the spacing rules above. (The file carries ~60 legacy autospacing paragraphs from its HTML
+    values from the spacing rules above. (The file carries ~110 legacy autospacing paragraphs from its HTML
     origin; leave those alone — mass-converting them is a forbidden document-wide change — but never add more.)
+  - **A few lines must not spill onto a near-empty page.** When my added content pushes a couple of lines onto
+    a fresh page that then holds nothing else, that reads as broken. Glen's fix, and mine: reclaim room on the
+    PRIOR page (tighten the spacing there — usually the autospacing gaps are the culprit) so the stray lines
+    pull back up. `docxcheck.ps1` flags these as UNDERFILLED pages; treat each as a judgment call, not an
+    auto-fix — sometimes the short page is a legitimate section end.
 - Delivery: give the plain Windows file path in text (no preview cards / no `computer://` links).
 
 ## Approval & git safety
