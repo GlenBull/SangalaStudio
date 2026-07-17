@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.5 -->
+<!-- SANGALA_VERSION: 2026-07-17.6 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1779,7 +1779,11 @@ function setTool(t){ activeTool=t;
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? "crosshair" : "default";
-  if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; refreshEditPanel(); draw(); }   // draw/place tools clear selection; select & node keep it
+  if(t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen"){ selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; }   // draw/place tools clear selection; select & node keep it
+  // Redraw whichever tool we land on. Only the drawing tools used to, so picking up the Nodes tool left the
+  // canvas showing the Select cue - a dashed outline over the red one, and not a node in sight - until
+  // something else happened to trigger a repaint.
+  refreshEditPanel(); draw();
 }
 // click a tool to activate it; click the same tool again to deactivate (back to select)
 $("tSelect").onclick=()=>{ setTool("select"); say("Select mode: click a shape to pick it, drag to move, Shift+click a 2nd to Combine."); };
@@ -1879,7 +1883,10 @@ function finishPen(close){
   say("Made a "+npts+"-point shape. Use the Nodes tool to fine-tune its points.");
 }
 function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; draw(); if(had) say("Pen canceled."); }
-cv.addEventListener("dblclick",(e)=>{ if(activeTool==="pen" && penPts.length>=3){ e.preventDefault(); finishPen(!penObj); } });   // a new shape closes; a picked-up outline stays open
+cv.addEventListener("dblclick",(e)=>{
+  if(activeTool==="pen" && penPts.length>=3){ e.preventDefault(); finishPen(!penObj); return; }   // a new shape closes; a picked-up outline stays open
+  if(activeTool==="node"){ e.preventDefault(); insertNodeAt(e); }                                 // double-click an outline to add a node
+});
 window.addEventListener("keydown",(e)=>{ if(activeTool!=="pen") return;
   const t=e.target,tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
@@ -2205,21 +2212,33 @@ function startNodeDrag(e){
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
   if(t==="circle" || o.el.hasAttribute("data-brick")) return;   // a circle stays parametric (drag its handles), and so does a brick
-  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
+  const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o));
   let hit=-1,bd=8;
   disp.forEach((q,i)=>{ const d=Math.hypot(q[0]-mx,q[1]-my)*k; if(d<bd){bd=d;hit=i;} });   // within 8px of a node
-  if(hit<0){                                            // no node -> if near a segment, insert a new node there
-    ensurePolygon(o);
-    const ring=placePoly(o.poly); let seg=-1,sbd=8;
-    for(let i=0;i+1<ring.length;i++){ const d=segDist(mx,my,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]); if(d*k<sbd){sbd=d*k;seg=i;} }
-    if(seg<0){ selNode=null; return; }                 // not on an edge either -> let the click select
-    o.poly.splice(seg+1,0,[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s]);   // insert node at the pointer, after segment seg
-    placeEl(o);
-    hit=seg+1;
-  } else ensurePolygon(o);
+  // Not on a node? Let the click through to selection. This used to insert a node wherever it landed on the
+  // outline, so merely clicking a shape to look at its nodes cost it one. Adding a node is a DOUBLE-click now
+  // (insertNodeAt), which is the gesture Inkscape uses and cannot happen by accident.
+  if(hit<0){ selNode=null; draw(); refreshEditPanel(); return; }
+  ensurePolygon(o);
   selNode=hit;                                         // mark the node selected (drawn filled)
   drag={mode:"node", obj:o, idx:hit, moved:false, snap:snapTargets(new Set([o.id]))};
   cv.style.cursor="grabbing"; e.preventDefault(); draw(); refreshEditPanel();
+}
+// Double-click an outline with the Nodes tool to add a node there.
+function insertNodeAt(e){
+  if(selId==null) return;
+  const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
+  const t=o.el.tagName.toLowerCase();
+  if(t==="circle" || o.el.hasAttribute("data-brick")) return;   // a circle stays parametric, and so does a brick
+  const {mx,my,k}=evtMM(e), pp=placeParams();
+  ensurePolygon(o);
+  const ring=placePoly(o.poly); let seg=-1,sbd=8;
+  for(let i=0;i+1<ring.length;i++){ const d=segDist(mx,my,ring[i][0],ring[i][1],ring[i+1][0],ring[i+1][1]); if(d*k<sbd){sbd=d*k;seg=i;} }
+  if(seg<0) return;                                    // not on an edge
+  o.poly.splice(seg+1,0,[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s]);   // insert node at the pointer, after segment seg
+  placeEl(o); selNode=seg+1;
+  draw(); refreshEditPanel();
+  say("Added a node. Drag it to reshape the outline, or press Delete to remove it.");
 }
 // delete the selected node from a polygon (keeps >= 3 nodes)
 function deleteNode(){
