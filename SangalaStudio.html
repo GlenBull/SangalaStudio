@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-16.11 -->
+<!-- SANGALA_VERSION: 2026-07-16.12 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -91,6 +91,7 @@
   .swatch{position:relative;width:21px;height:21px;flex:0 1 21px;min-width:15px;padding:0;border:1px solid #b9a67f;border-radius:4px;cursor:pointer;font-size:.7rem;line-height:1;color:#7a3b12}
   .swatch:hover{border-color:#7a3b12}
   .swatch.on{outline:2px solid #1a5fb4;outline-offset:1px;border-color:#1a5fb4}
+  .ebtn.lyr{flex:1;min-width:0;padding:.4rem .1rem;font-size:.78rem;white-space:nowrap}
   .swatch.pick{background:#fff}
   .swatch.pick::after{content:"";position:absolute;inset:3px;border-radius:50%;   /* the color wheel, as Adobe draws it */
     background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
@@ -270,6 +271,15 @@
         <div id="swatches"></div>
         <input type="color" id="fillPick" value="#2e7d32" aria-hidden="true" tabindex="-1"
                style="position:absolute;width:0;height:0;padding:0;border:0;opacity:0;pointer-events:none">
+      </div>
+      <div id="layerrow" style="margin-top:.5rem;display:none">
+        <div class="hint" style="margin-bottom:.25rem">Layer — which shape sits in front where they overlap.</div>
+        <div style="display:flex;gap:3px">
+          <button class="ebtn lyr" id="eBack"  title="Send to Back — behind every other shape (End)">⤓ Back</button>
+          <button class="ebtn lyr" id="eLower" title="Lower — one step further back (Page Down)">↓ Lower</button>
+          <button class="ebtn lyr" id="eRaise" title="Raise — one step further forward (Page Up)">↑ Raise</button>
+          <button class="ebtn lyr" id="eFront" title="Bring to Front — in front of every other shape (Home)">⤒ Front</button>
+        </div>
       </div>
       <div id="groupsrow" style="margin-top:.4rem;display:none">
         <button class="ebtn" id="eGroup" style="width:100%">▦ Group</button>
@@ -2401,6 +2411,7 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
   $("ePrint").style.display   = mode3D?"none":"";
   $("eDelete").style.gridColumn = mode3D?"1/-1":"";
   $("fillrow").style.display  = mode3D?"none":"";   // paper color is a collage idea; a 3D part has no card
+  $("layerrow").style.display = mode3D?"none":"";   // and in 3D, what sits in front is real geometry, not an order
 }
 /* ---------- Paper color: fill a shape to preview the finished collage ----------
    The fill stands for the CARD the shape will be cut from, so it is a design aid and nothing else: it never
@@ -2443,6 +2454,56 @@ function setFill(c){
   say(c==="none" ? "Paper color removed."
                  : "Filled "+ids.length+" shape"+(ids.length!==1?"s":"")+" - a preview of the card. The die cutter still just follows the outline.");
 }
+/* ---------- Layer order ----------
+   Which shape sits in front where they overlap is just the order of `objects`: the fill pass in draw() walks
+   the array, so a later shape paints over an earlier one. Until now that was fixed at creation order, which
+   left no way to put the sky behind the grass short of deleting and redrawing it.
+   The element order in the retained doc has to follow, or the layering would be lost on Save -> reopen: the
+   importer builds `objects` from the document in order. Only elements that are direct children of svgEl are
+   moved - an imported Silhouette design keeps its geometry in <defs> and draws it through <use>, and hoisting
+   those out of their parent would break the transforms they depend on. */
+function syncDomOrder(){
+  if(!svgEl) return;
+  objects.forEach(o=>{ if(o.el && o.el.parentNode===svgEl) svgEl.appendChild(o.el); });
+}
+function reorder(dir){
+  const ids=selectedIds();
+  if(!ids.length){ say("Select a shape first, then change its layer."); return; }
+  const set=new Set(ids), n=ids.length;
+  const at=objects.map((o,i)=>set.has(o.id)?i:-1).filter(i=>i>=0);
+  const was=objects.map(o=>o.id).join(",");   // compare the real order after, so a no-op says so honestly
+  if(dir==="front"||dir==="back"){
+    const sel=objects.filter(o=>set.has(o.id)), rest=objects.filter(o=>!set.has(o.id));
+    objects = dir==="front" ? rest.concat(sel) : sel.concat(rest);
+  } else if(dir==="up"){
+    let j=at[at.length-1]+1; while(j<objects.length && set.has(objects[j].id)) j++;   // the nearest shape above the block
+    if(j<objects.length) objects.splice(at[0],0,objects.splice(j,1)[0]);              // drop it below the block
+  } else {
+    let j=at[0]-1; while(j>=0 && set.has(objects[j].id)) j--;                          // the nearest shape below
+    if(j>=0) objects.splice(at[at.length-1],0,objects.splice(j,1)[0]);                 // lift it above the block
+  }
+  if(objects.map(o=>o.id).join(",")===was){
+    say(dir==="front"||dir==="up" ? "Already at the front." : "Already at the back."); return; }
+  syncDomOrder(); renderBg(); draw(); refreshEditPanel();
+  const what=n===1?"Shape":n+" shapes";
+  say(dir==="front" ? what+" brought to the front."
+    : dir==="back"  ? what+" sent to the back."
+    : dir==="up"    ? what+" raised one layer." : what+" lowered one layer.");
+}
+$("eFront").onclick=()=>reorder("front");
+$("eRaise").onclick=()=>reorder("up");
+$("eLower").onclick=()=>reorder("down");
+$("eBack").onclick =()=>reorder("back");
+// Page Up / Page Down / Home / End, as Inkscape does it - the chapter's readers will already have the habit
+window.addEventListener("keydown",(e)=>{
+  if(mode3D || e.ctrlKey || e.metaKey || e.altKey) return;
+  const tg=(e.target&&e.target.tagName||"").toLowerCase();
+  if(tg==="input"||tg==="textarea"||tg==="select"||(e.target&&e.target.isContentEditable)) return;
+  if(!selectedIds().length) return;
+  const d = e.key==="PageUp"?"up" : e.key==="PageDown"?"down" : e.key==="Home"?"front" : e.key==="End"?"back" : null;
+  if(!d) return;
+  e.preventDefault(); reorder(d);
+});
 function updateImageTools(){ $("bRemoveBg").style.display = (refImg && refImg.sel) ? "" : "none"; }   // Remove BG is a palette button now; show it only while the photo is selected
 buildSwatches();
 $("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(!b) return;
