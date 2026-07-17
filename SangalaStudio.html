@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.9 -->
+<!-- SANGALA_VERSION: 2026-07-17.10 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -342,6 +342,8 @@ let hist=[], redoStack=[], histBusy=false, histTimer=null;   // Undo (Ctrl-Z) / 
 let penPts=[];               // Pen tool: in-progress polygon vertices (design mm)
 let penHover=null;           // Pen tool: current cursor (placed mm) for the rubber-band segment
 let penObj=null;             // Pen tool: the open outline it picked up, if it is continuing one rather than starting fresh
+let penBase=0;               // Pen tool: how many of penPts came from the outline it picked up - undo stops here, since the Pen did not put those there
+let penUndone=[];            // Pen tool: points taken back with Ctrl-Z, ready for Ctrl-Y
 let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
@@ -1759,8 +1761,10 @@ window.addEventListener("keydown",(e)=>{   // Ctrl-Z undo; Ctrl-Shift-Z or Ctrl-
   const tg=(e.target&&e.target.tagName||"").toLowerCase();
   if(tg==="input"||tg==="textarea") return;   // let a focused field keep its own text undo / copy / paste
   const k=(e.key||"").toLowerCase();
-  if(k==="z" && !e.shiftKey){ e.preventDefault(); undo(); }
-  else if((k==="z" && e.shiftKey) || k==="y"){ e.preventDefault(); redo(); }
+  // An in-progress Pen path gets first refusal: while one is down, Ctrl-Z means "that point was wrong", not
+  // "revert the document". penUndo/penRedo return false when no path is running, and the document undo runs.
+  if(k==="z" && !e.shiftKey){ e.preventDefault(); if(!penUndo()) undo(); }
+  else if((k==="z" && e.shiftKey) || k==="y"){ e.preventDefault(); if(!penRedo()) redo(); }
   else if(k==="c"){ if(String(window.getSelection?window.getSelection():"")) return;   // text is highlighted -> that is what the user meant to copy
     e.preventDefault(); copySel(); }
   else if(k==="v"){ e.preventDefault(); pasteClip(); }
@@ -1778,7 +1782,7 @@ const CROSSHAIR = "url(\"data:image/svg+xml;utf8,"
   + "<path d='M12 2v7M12 15v7M2 12h7M15 12h7' fill='none' stroke='black' stroke-width='2'/>"
   + "</svg>\") 12 12, crosshair";   // the plain keyword stays as the fallback
 function setTool(t){ activeTool=t;
-  if(t!=="pen" && (penPts.length||penHover)){ penPts=[]; penHover=null; penObj=null; }   // leaving the Pen tool discards an unfinished path
+  if(t!=="pen" && (penPts.length||penHover)){ penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; }   // leaving the Pen tool discards an unfinished path
   ["tSelect","tShapes","tBrick","tNode","tPen"].forEach(id=>$(id).classList.remove("on"));
   const btn={select:"tSelect",rect:"tShapes",circle:"tShapes",line:"tShapes",tab:"tShapes",brick:"tBrick",node:"tNode",pen:"tPen"}[t]; if(btn) $(btn).classList.add("on");
   cv.style.cursor = (t==="rect"||t==="circle"||t==="line"||t==="tab"||t==="brick"||t==="pen") ? CROSSHAIR : "default";
@@ -1839,6 +1843,7 @@ function penClick(e){
       penObj=end.o;
       penPts=end.o.poly.map(p=>[p[0],p[1]]);
       if(end.i===0) penPts.reverse();          // work away from the end that was grabbed, so points append
+      penBase=penPts.length; penUndone=[];     // everything so far is the outline's own: undo stops at this line
       penHover=[mx,my]; suppressClick=true; draw();
       say("Carrying on from that end - click to add points, click the outline's other end to close it, or Enter to leave it open.");
       return;
@@ -1849,6 +1854,7 @@ function penClick(e){
     if(Math.hypot(mx-fx,my-fy)*k<=10){ finishPen(true); return; }   // the far end: close it
   }
   penPts.push([(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s]);   // store in design mm
+  penUndone=[];                                // a new point invalidates redo, the same rule the document history uses
   penHover=[mx,my];
   suppressClick=true;                          // eat the trailing click so it doesn't run selection
   draw();
@@ -1874,7 +1880,7 @@ function finishPen(close){
     else     { o.poly=dedupePoly(pts); }
     placeEl(o);
     const n=o.poly.length-(close?1:0);
-    penPts=[]; penHover=null; penObj=null;
+    penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[];
     renderBg(); setTool("select"); selId=o.id; selId2=null; selImg2=false; selMulti=[]; selNode=null;
     draw(); refreshEditPanel();
     say(close ? "Closed the outline - "+n+" points. It can take a paper color now."
@@ -1883,12 +1889,36 @@ function finishPen(close){
   }
   const o=makePolyObj(penPts.map(p=>[p[0],p[1]]),"cut");   // build an editable <polygon> (same as Combine/Node output)
   const npts=o.poly.length-1;
-  penPts=[]; penHover=null; penObj=null;
+  penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[];
   renderBg(); setTool("select"); selId=o.id; selId2=null; selImg2=false; selMulti=[]; selNode=null;
   draw(); refreshEditPanel();
   say("Made a "+npts+"-point shape. Use the Nodes tool to fine-tune its points.");
 }
-function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; draw(); if(had) say("Pen canceled."); }
+function cancelPen(){ const had=penPts.length; penPts=[]; penHover=null; penObj=null; penBase=0; penUndone=[]; draw(); if(had) say("Pen canceled."); }
+// Ctrl-Z while the Pen is running takes back the last point, rather than reaching into the document history.
+// It used to reach: penPts is in-progress state and is not part of serializeState, so an undo stepped straight
+// PAST the path on screen and reverted whatever was committed before it - the last finished shape - while the
+// misplaced point sat there untouched. Esc was the only way out, and it threw the whole path away.
+// Returns true when the Pen has handled the key, so the document undo still runs when no path is in progress.
+function penUndo(){
+  if(activeTool!=="pen" || !penPts.length) return false;
+  // Below penBase the points belong to the outline the Pen picked up, not to the Pen. Rather than eat into
+  // someone's existing shape, the next undo takes back the pickup itself - that being the last thing the Pen
+  // actually did. Nothing is lost: penObj is only written on finishPen, so the outline has not been touched.
+  if(penPts.length<=penBase){ cancelPen(); return true; }
+  penUndone.push(penPts.pop()); penHover=null; draw();
+  const n=penPts.length-penBase;
+  if(!penPts.length)       say("Took back the last point. The path is empty - Ctrl+Z again undoes the last change, Ctrl+Y puts the point back.");
+  else if(!n && penObj)    say("Back to the end you picked up. Ctrl+Z again releases the outline, Ctrl+Y puts the point back.");
+  else                     say("Took back a point - "+n+" added. Ctrl+Y puts it back.");
+  return true;
+}
+function penRedo(){
+  if(activeTool!=="pen" || !penUndone.length) return false;
+  penPts.push(penUndone.pop()); penHover=null; draw();
+  say("Put the point back - "+(penPts.length-penBase)+" added. Ctrl+Z takes it off again.");
+  return true;
+}
 cv.addEventListener("dblclick",(e)=>{
   if(activeTool==="pen" && penPts.length>=3){ e.preventDefault(); finishPen(!penObj); return; }   // a new shape closes; a picked-up outline stays open
   if(activeTool==="node"){ e.preventDefault(); insertNodeAt(e); }                                 // double-click an outline to add a node
