@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.1 -->
+<!-- SANGALA_VERSION: 2026-07-17.2 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1704,7 +1704,7 @@ function serializeState(){
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
   if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
-  hist.push(s); redoStack=[];                                                        // a genuinely new edit invalidates redo
+  hist.push(s); redoStack=[];                                                        // a new edit invalidates redo
   if(hist.length>60) hist.shift(); }
 function scheduleCommit(){ if(histBusy) return; clearTimeout(histTimer); histTimer=setTimeout(commit,350); }   // snapshot once edits settle
 function restoreState(st){
@@ -2513,7 +2513,7 @@ function reorder(dir){
   if(!ids.length){ say("Select a shape first, then change its layer."); return; }
   const set=new Set(ids), n=ids.length;
   const at=objects.map((o,i)=>set.has(o.id)?i:-1).filter(i=>i>=0);
-  const was=objects.map(o=>o.id).join(",");   // compare the real order after, so a no-op says so honestly
+  const was=objects.map(o=>o.id).join(",");   // compare the real order after, so a no-op says so rather than claiming a move
   if(dir==="front"||dir==="back"){
     const sel=objects.filter(o=>set.has(o.id)), rest=objects.filter(o=>!set.has(o.id));
     objects = dir==="front" ? rest.concat(sel) : sel.concat(rest);

@@ -10,7 +10,10 @@ USB only, user-mode.** This constraint is absolute.
 ## Interaction / process (please follow)
 - Be concise and direct. Cut any word that isn't needed. Minimal formatting; prose over bullet lists unless a list is clearly warranted.
 - Do NOT use popup question dialogs. Ask inline in plain chat, one question at a time.
-- Avoid the words "honest", "honestly", "genuinely", "straightforward".
+- **NEVER write "honest", "honestly", "genuinely", or "straightforward"** — not in chat, not in code comments,
+  not in commit messages. This is not a style preference to weigh: "honest" implies I was lying up to that
+  point, which is insulting, and Glen has had to tell me more than once. Say the thing plainly instead; if a
+  sentence seems to need "honestly", the sentence is the problem. Check before sending.
 - **American spelling everywhere** — UI text, code comments, commit messages, docs, and chat. Not just the
   docs: color (not colour), center, gray, behavior, neighbor, canceled. This is a US project for a US course;
   I have drifted into British spelling repeatedly and had to sweep it back out, including shipping "Paper
