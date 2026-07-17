@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.4 -->
+<!-- SANGALA_VERSION: 2026-07-17.5 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1038,9 +1038,11 @@ function integrateTrace(){
     +cutSVG+'</svg>';
   refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   loadSVG(svg);                                        // proven print-and-cut path: image prints, red paths cut
-  showMarks=true; $("bMarks").classList.add("on");
   draw();
-  say("Background removed. Print-and-cut ready: Print the subject + marks, then Make It! to cut it out.");
+  // Marks are NOT switched on here. Removing a background is just as often the start of more work, or of a
+  // plain cut from colored card, and a page of registration marks in the way of either is a nuisance to undo.
+  // The Marks button turns them on when a print-and-cut is actually wanted.
+  say("Background removed. Cut it straight out with Make It!, or turn Marks on to print it first and cut round the print.");
 }
 $("bUseCut").onclick=integrateTrace;
 // Crop the imported photo to a drawn shape: everything outside the shape is removed and the
@@ -1070,8 +1072,8 @@ function cropToShape(){
     +'<image x="'+fmtn(PX)+'" y="'+fmtn(PY)+'" width="'+fmtn(pw)+'" height="'+fmtn(ph)+'" xlink:href="'+dataURL+'" href="'+dataURL+'"/>'+cutSVG+'</svg>';
   refImg=null; selImg2=false; if(typeof closeCombine==="function") closeCombine();
   $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
-  loadSVG(svg); showMarks=true; $("bMarks").classList.add("on"); draw();
-  say("Cropped the photo to the shape - print-and-cut ready. Print, then Make It! to cut it out.");
+  loadSVG(svg); draw();   // marks stay off until asked for - see integrateTrace
+  say("Cropped the photo to the shape. Turn Marks on to print it and cut round the print, or Make It! to cut the shape alone.");
 }
 // Trace tuning: re-trace the cached mask live (no model re-run). Threshold = tighter/looser
 // silhouette; Ignore specks = ImageTracer pathomit (drop small stray loops). Shared debounce.
