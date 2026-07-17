@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.8 -->
+<!-- SANGALA_VERSION: 2026-07-17.9 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1193,14 +1193,15 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
   // would stand in mid-air, and a tube needs an interior grid point among the full-height rows alone.
   const invNoTube = inv && (rows-slope)<2;
   const hasTubes = cols>1 && rows>1 && !invNoTube;
-  // A SLOPE ALWAYS HAS SOCKETS UNDERNEATH. LEGO makes no slope with a bare cavity - Glen, 2026-07-17, and a
-  // photograph of a real 1x2 slope with a ring around each stud. Where no interior crossing exists to stand a
-  // tube on (a 1-wide brick; an invert that has eaten the rows), the socket is a RING ROUND EACH STUD instead.
-  // I had reasoned the other way: no crossing, therefore no socket, let the wall grip. That is not what the
-  // part does. Rings grip, so the wall stays thin; only a brick with NO slope still falls back on gripWall,
-  // which leaves Moses's print-validated 1x2 leg exactly as it was.
-  const ringSockets = dock && slope>0 && !hasTubes;
-  const wall = (dock && !hasTubes && !ringSockets) ? gripWall(fit) : 1.2;
+  // Where no interior crossing exists to stand a tube on, the underside is left OPEN and the WALL grips.
+  // A real LEGO slope has a ring around each stud there instead (Glen's photograph of a 1x2), and this did
+  // too for a day - but Moses printed it and the studs would not go in: "too much solid material around the
+  // tubes". A ring is a closed hoop, so a printed bore that comes out a hair under nominal has nothing to
+  // give, and its outer wall merges with the side walls and stiffens them. A moulded ring works because ABS
+  // and a steel tool are exact; ours are not. An open cavity's walls FLEX onto the stud, which is why his
+  // 1x2 leg clutches, and why he asked for the underside "almost entirely hollowed out, similar to how our
+  // custom 1x2 brick is designed". A printed part outranks the part it imitates.
+  const wall = (dock && !hasTubes) ? gripWall(fit) : 1.2;
   // Fit = clutch clearance (mm), 0 = nominal: positive shaves the stud, negative fattens it (see studRadius).
   const studR=studRadius(fit), studH=1.8, tubeRo=3.255, tubeRi=2.4, x1=x0+W, y1=y0+H, t=[];
   const G=grow||0, gx=x0-G, gy=y0-G, gW=W+2*G, gH=H+2*G;   // Fuse grows the shell outward (never the studs or tubes: they must stay on the 8 mm grid)
@@ -1264,16 +1265,9 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
     t.push(...tubeTris(x0+i*U,yj,tubeRo,tubeRi,0,Zc+WELD,
       (slope&&!inv)?((x,y)=>Math.min(Zc+WELD, underZ(y)+WELD)):null));
   }
-  // ...and where a tube had nowhere to stand, a ring round each stud does the same job. Its bore takes the stud
-  // (socketRadius, the hole a stud drops into); its top is cut by whatever ceiling is above it, so it fuses to
-  // the shell instead of standing loose. On a 1-wide brick the ring reaches the side walls and merges with
-  // them, which is what fills the width in the photograph of the real part.
-  if(ringSockets){
-    const sr=socketRadius(fit), ro=Math.min(sr+1.2, U/2-0.1);                        // never let the ring break out of its own 8 mm cell
-    for(let ry=(inv?slope:0); ry<rows; ry++) for(let cx=0; cx<cols; cx++)
-      t.push(...tubeTris(x0+U/2+cx*U, y0+U/2+ry*U, ro, sr, 0, Zc+WELD,
-        (slope&&!inv)?((x,y)=>Math.min(Zc+WELD, Math.max(0.6, underZ(y)+WELD))):null));
-  }
+  // Nothing else goes under here. Where there is no tube the cavity stays OPEN, and the wall (gripWall above)
+  // does the gripping - the arrangement Moses's 1x2 leg proved, and the one he asked for after a ring-socket
+  // print refused the studs.
   if(!dock) t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
   return t;
 }
