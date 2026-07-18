@@ -132,13 +132,12 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:
   PID 0x113F, width 216 mm, TG "11". **Cameo 2: PID 0x112B, width 304 mm (12 in), mat TG "3", EyeRightMm 0.
-  Gina's plain cut WORKED (2026-07-18); registration first did NOT find the marks. FIX CONFIRMED (2026-07-18):
-  the auto reg-scan's eye shift is per-machine (`EyeRightMm`) — Portrait 30, **Cameo 2 = 0** — and with 0 the
-  Cameo 2 READ THE MARKS. (The reference driver applies no eye shift and works on Cameos; the Portrait's 30 mm
-  was indeed the cause.) Still to confirm on the Cameo 2: that the registered CUT lands accurately on the marks
-  (reading them ≠ cutting on them), and mat feed — TG "3" is Studio-sniffed, unverified. On failed registration
-  the machine re-inits (`Reset()` = ESC EOT; no dedicated clear command exists — power-cycle is the sure clear
-  of a stuck Cameo 2 job).** Detection is by VID alone (`Native.Find("vid_0b4d")`), then a PID branch picks width/TG/eye; an
+  FULL print-and-cut VALIDATED on the Cameo 2 (2026-07-18, Gina): reads the marks AND the registered cut
+  lands accurately — so EyeRightMm 0 and mat TG "3" are both correct for it. The fix was the per-machine eye
+  shift (`EyeRightMm`): Portrait 30, **Cameo 2 = 0** — the Portrait's 30 mm was aiming the scan past the marks
+  (the reference driver applies no eye shift and works on Cameos). On failed registration the machine re-inits
+  (`Reset()` = ESC EOT; no dedicated clear command exists — power-cycle is the sure clear of a stuck Cameo 2
+  job); that reset path is in place but not yet exercised (Gina's scans succeeded).** Detection is by VID alone (`Native.Find("vid_0b4d")`), then a PID branch picks width/TG/eye; an
   unknown PID falls back to Portrait 3. usbprint.sys interface GUID
   {28d78fad-5a12-11d1-ae5b-0000f803a8c2}. WebUSB/WinUSB are dead ends (blocked or
   need admin); usbprint.sys user-mode is the proven path.
@@ -199,6 +198,7 @@ blade 7, 2 passes.
 ## Current state (as of handoff)
 - Full no-admin print-and-cut VALIDATED end-to-end on the Calibration Card:
   print artwork + marks → scan/register → cut outline → crease fold. Known-good.
+  Also VALIDATED on the Cameo 2 (2026-07-18, Gina) — third machine, registration + accurate cut.
 - JBK colonial house (John Blair Kitchen): **blocked on Gina redrawing the design so
   every fold line is explicitly dashed** in the exported SVG (some folds currently
   export as solid red and get cut, splitting the model). Classifier + positioning
