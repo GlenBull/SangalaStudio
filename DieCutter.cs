@@ -99,7 +99,13 @@ namespace DieCutterApp
             string path = Native.Find("vid_0b4d");
             if (path == null)
                 throw new IOException("Die Cutter not found. Is it powered on and connected by USB, and is Silhouette Studio closed?");
-            if (path.ToLowerInvariant().Contains("pid_113f")) { ModelName = "Silhouette Portrait 4"; WidthMm = 216.0; MatTG = "11"; }
+            string pid = path.ToLowerInvariant();
+            if (pid.Contains("pid_113f")) { ModelName = "Silhouette Portrait 4"; WidthMm = 216.0; MatTG = "11"; }
+            // Cameo 2: VID 0B4D / PID 112B, 12 in (304 mm) bed (widths per fablabnbg/inkscape-silhouette). Same
+            // GPGL + type-2 registration as the Portraits, so those carry over. MatTG "3" is a GUESS - the mat code
+            // is Studio-sniffed and unverified for the Cameo; if Gina's test cut lands off or the mat misfeeds,
+            // this is the first value to tune (or read her Cameo 2's mat setting from Silhouette Studio).
+            else if (pid.Contains("pid_112b")) { ModelName = "Silhouette Cameo 2"; WidthMm = 304.0; MatTG = "3"; }
             else { ModelName = "Silhouette Portrait 3"; WidthMm = 203.0; MatTG = "3"; }
 
             const uint GENERIC_RW = 0x80000000u | 0x40000000u;
