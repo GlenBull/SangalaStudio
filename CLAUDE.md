@@ -176,7 +176,7 @@ Toolbar: Connect · Open SVG · **Marks** (toggle, default OFF) · Print · **Te
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
 **Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen/**Custom**) sits BELOW the Make it! button in the
 Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
-most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** instead opens the Settings panel (`openSettings()`) and leaves the fields for you to set (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
+most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** seeds the fields with Cardstock's values as a starting point and opens the Settings panel (`openSettings()`) to adjust (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
 the rest under a **Silhouette Settings** header: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
 blade 7, 2 passes.
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.23 -->
+<!-- SANGALA_VERSION: 2026-07-17.24 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -898,9 +898,10 @@ async function makeIt(){
 
 /* ---------- wiring ---------- */
 function applyMat(){ const v=$("material").value;
-  if(v==="Custom"){ openSettings(); return; }   // Custom = set your own; open the Settings panel and keep the current fields
-  const m=MATS[v]; if(!m) return;
-  $("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1); }
+  const m = v==="Custom" ? MATS.Cardstock : MATS[v];   // Custom seeds Cardstock's values as the starting point, then opens the panel to adjust
+  if(!m) return;
+  $("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1);
+  if(v==="Custom") openSettings(); }
 $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
