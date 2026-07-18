@@ -132,12 +132,13 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:
   PID 0x113F, width 216 mm, TG "11". **Cameo 2: PID 0x112B, width 304 mm (12 in), mat TG "3", EyeRightMm 0.
-  Gina's plain cut WORKED (2026-07-18); registration did NOT find the marks. Fix in flight: the auto reg-scan's
-  eye shift is per-machine now (`EyeRightMm`) — Portrait 30, **Cameo 2 = 0** (the reference driver applies no
-  eye shift and works on Cameos, so the Portrait's 30 mm was the likely cause). TG "3" still Studio-sniffed/
-  unverified. On failed registration the machine now re-inits (`Reset()` = ESC EOT; no dedicated clear command
-  exists — power-cycle is the sure clear of a stuck Cameo 2 job). All UNTESTED on the Cameo 2 — Gina's the
-  test.** Detection is by VID alone (`Native.Find("vid_0b4d")`), then a PID branch picks width/TG/eye; an
+  Gina's plain cut WORKED (2026-07-18); registration first did NOT find the marks. FIX CONFIRMED (2026-07-18):
+  the auto reg-scan's eye shift is per-machine (`EyeRightMm`) — Portrait 30, **Cameo 2 = 0** — and with 0 the
+  Cameo 2 READ THE MARKS. (The reference driver applies no eye shift and works on Cameos; the Portrait's 30 mm
+  was indeed the cause.) Still to confirm on the Cameo 2: that the registered CUT lands accurately on the marks
+  (reading them ≠ cutting on them), and mat feed — TG "3" is Studio-sniffed, unverified. On failed registration
+  the machine re-inits (`Reset()` = ESC EOT; no dedicated clear command exists — power-cycle is the sure clear
+  of a stuck Cameo 2 job).** Detection is by VID alone (`Native.Find("vid_0b4d")`), then a PID branch picks width/TG/eye; an
   unknown PID falls back to Portrait 3. usbprint.sys interface GUID
   {28d78fad-5a12-11d1-ae5b-0000f803a8c2}. WebUSB/WinUSB are dead ends (blocked or
   need admin); usbprint.sys user-mode is the proven path.
