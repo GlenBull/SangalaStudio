@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.29 -->
+<!-- SANGALA_VERSION: 2026-07-17.30 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -245,7 +245,7 @@
     <h2 class="marker" style="margin-top:.6rem">Material</h2>
     <select id="material" style="width:100%">
       <option disabled>– – – – – – – – – – – – –</option>
-      <option>Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Custom</option>
+      <option>Paper</option><option>Sticker Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Custom</option>
       <hr>
       <option>Pen (draw)</option>
     </select>
@@ -370,7 +370,7 @@ function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; v
 let selNode=null;            // index of the selected node within the selected object (node tool)
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
-const MATS={Paper:[14,8,3,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};
+const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};   // Sticker Paper = Avery's white/clear kiss-cut setting (Blade 2, Speed 3, Thickness 6); metallic gold/silver would be Thickness 15
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
