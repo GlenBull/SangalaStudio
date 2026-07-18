@@ -172,12 +172,12 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
 
 ## UI
 Toolbar: Connect · Open SVG · **Marks** (toggle, default OFF) · Print · **Test**
-(menu: Test square / Scan test / Manual align) · Setup. Green **Make it!** branches
+(menu: Test square / Scan test / Manual align) · Settings (gear). Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
 **Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen) sits BELOW the Make it! button in the
 Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
-most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`. Setup panel (the gear) holds
-the rest: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
+most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`. Settings panel (the gear) holds
+the rest under a **Silhouette Settings** header: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
 blade 7, 2 passes.
 
 ## Current state (as of handoff)
