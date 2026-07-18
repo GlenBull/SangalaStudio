@@ -369,7 +369,7 @@ namespace DieCutterApp
                 _cutter.Setup(speed, force, pen, depth, 0.9, MAT_H, note);
                 double wid = pageW - 2 * inset, len = pageH - 2 * inset;
                 string reg = _cutter.ScanRegMarks(len, wid, inset, inset);
-                if (reg.Trim() != "0") { _lastStatus = "marks not found"; return "{\"ok\":false,\"error\":\"Registration marks not found (reply " + Esc(reg) + ").\"}"; }
+                if (reg.Trim() != "0") { try { _cutter.Reset(); } catch { } _framed = false; _lastStatus = "marks not found"; return "{\"ok\":false,\"error\":\"Registration marks not found (reply " + Esc(reg) + "). The machine was re-initialized; if a job still seems stuck, power-cycle the die cutter.\"}"; }
                 for (int pass = 0; paths.Count > 0 && pass < passes; pass++)
                     _cutter.Cut(paths, false, pct => { _lastStatus = "cutting " + pct + "%"; }, note, (pass == passes - 1) && scores.Count == 0);
                 if (scores.Count > 0) { _cutter.SetForce(ScoreForce(force)); _cutter.Cut(scores, false, pct => { _lastStatus = "scoring " + pct + "%"; }, note, true); }

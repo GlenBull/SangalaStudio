@@ -91,6 +91,7 @@ namespace DieCutterApp
         public string ModelName = "Silhouette Portrait";
         public double WidthMm = 203.0;   // Portrait 3 usable width
         public string MatTG = "3";       // 8x12 mat
+        public double EyeRightMm = 30;   // optical eye offset (mm right of the blade); the auto reg-scan starts this far LEFT so the eye reaches the mark. Portrait value; Cameo differs.
 
         static int SU(double mm) { return (int)Math.Round(mm * 20.0); }
 
@@ -100,13 +101,17 @@ namespace DieCutterApp
             if (path == null)
                 throw new IOException("Die Cutter not found. Is it powered on and connected by USB, and is Silhouette Studio closed?");
             string pid = path.ToLowerInvariant();
-            if (pid.Contains("pid_113f")) { ModelName = "Silhouette Portrait 4"; WidthMm = 216.0; MatTG = "11"; }
+            if (pid.Contains("pid_113f")) { ModelName = "Silhouette Portrait 4"; WidthMm = 216.0; MatTG = "11"; EyeRightMm = 30; }
             // Cameo 2: VID 0B4D / PID 112B, 12 in (304 mm) bed (widths per fablabnbg/inkscape-silhouette). Same
-            // GPGL + type-2 registration as the Portraits, so those carry over. MatTG "3" is a GUESS - the mat code
-            // is Studio-sniffed and unverified for the Cameo; if Gina's test cut lands off or the mat misfeeds,
-            // this is the first value to tune (or read her Cameo 2's mat setting from Silhouette Studio).
-            else if (pid.Contains("pid_112b")) { ModelName = "Silhouette Cameo 2"; WidthMm = 304.0; MatTG = "3"; }
-            else { ModelName = "Silhouette Portrait 3"; WidthMm = 203.0; MatTG = "3"; }
+            // GPGL + type-2 registration as the Portraits. Gina's plain cut worked; registration did NOT find the
+            // marks. Two Portrait-tuned values are the suspects, both flagged for her testing:
+            //  * EyeRightMm 0 - the Portrait shifts the scan 30 mm LEFT for its eye; the reference driver applies
+            //    NO such shift and works on Cameos, so 30 was almost certainly why the eye missed the marks. Try 0
+            //    first; if it undershoots/overshoots, this is the number to tune.
+            //  * MatTG "3" - the mat code is Studio-sniffed and unverified for the Cameo; tune if the mat misfeeds
+            //    (or read her Cameo 2's mat setting from Silhouette Studio).
+            else if (pid.Contains("pid_112b")) { ModelName = "Silhouette Cameo 2"; WidthMm = 304.0; MatTG = "3"; EyeRightMm = 0; }
+            else { ModelName = "Silhouette Portrait 3"; WidthMm = 203.0; MatTG = "3"; EyeRightMm = 30; }
 
             const uint GENERIC_RW = 0x80000000u | 0x40000000u;
             const uint SHARE_RW = 0x3, OPEN_EXISTING = 3, OVERLAPPED = 0x40000000u;
@@ -239,6 +244,16 @@ namespace DieCutterApp
             }
         }
 
+        // Re-initialize the machine. The closest Sangala has to Silhouette Studio's "clear a stuck job":
+        // ESC EOT is the only reset the reverse-engineered protocol exposes (no dedicated buffer-flush command).
+        // On the Cameo 2 this may not fully clear a stuck registration job - if it doesn't, power-cycling the
+        // machine is the sure clear.
+        public void Reset()
+        {
+            WriteRaw(new byte[] { ESC, EOT });   // initialize
+            try { Firmware(); } catch { }        // drain the version reply
+        }
+
         // Experimental: print-and-cut registration scan (Cameo/Portrait GPGL).
         // Returns the machine's reply -- "0" means the marks were found.
         // TB123,height,width,top,left. height=reglength (Y distance between
@@ -246,16 +261,17 @@ namespace DieCutterApp
         // start = mark origin minus a 10 mm search range. This mirrors exactly
         // the reverse-engineered Silhouette driver (fablabnbg/inkscape-silhouette
         // Graphtec.py: automatic_regmark_test_mm_cmd, origin - 10). Keep 10.
-        public string ScanRegMarks(double lenMm, double widMm, double oxMm, double oyMm, double approachMm = 10, double eyeRightMm = 30)
+        public string ScanRegMarks(double lenMm, double widMm, double oxMm, double oyMm, double approachMm = 10)
         {
             // Caller must Setup() first (init + mat + boundary) so the machine has a coordinate frame.
             WriteCmd("TB50,0"); WriteCmd("TB99"); WriteCmd("TB52,2");   // type 2 = Cameo/Portrait
             WriteCmd("TB51,400"); WriteCmd("TB53,10"); WriteCmd("TB55,1"); // 20mm long, 0.5mm thick
-            // The optical eye sits ~eyeRightMm to the RIGHT of the blade. The firmware
+            // The optical eye sits ~EyeRightMm to the RIGHT of the blade. The firmware
             // aims the blade, so start the search that much further LEFT (may go negative,
-            // into the left margin) so the eye actually reaches the top-left square.
+            // into the left margin) so the eye actually reaches the top-left square. EyeRightMm
+            // is per-machine (Portrait 30, Cameo 2 0) - set in Open().
             double startY = Math.Max(oyMm - approachMm, 0);
-            double startX = oxMm - approachMm - eyeRightMm;
+            double startX = oxMm - approachMm - EyeRightMm;
             WriteCmd("TB123," + SU(lenMm) + "," + SU(widMm) + "," + SU(startY) + "," + SU(startX));
             string r = ReadResp(60000);          // "    0" = found
             return r == null ? "(no response)" : r.Trim();
