@@ -108,11 +108,19 @@ USB only, user-mode.** This constraint is absolute.
 3. It opens the page in the browser and drives the machine over USB.
 The HTML is served fresh from disk each request, so UI-only changes need just a
 browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
-- **Beta testers update via `Update SangalaStudio.cmd`**, which checks a
-  `SANGALA_VERSION` marker (an HTML comment on line 2 of SangalaStudio.html) against
-  GitHub before downloading, and skips the download/backup entirely when they
-  match. **Any commit that changes SangalaStudio.html must bump that version
-  string**, or the checker calls a real change "already up to date."
+- **Beta testers update via `Update SangalaStudio.cmd`**, which now fetches BOTH the
+  page AND the engine (`SangalaStudio.exe`) in one double-click — so engine (.cs)
+  changes reach non-technical users without anyone rebuilding. The exe is therefore
+  COMMITTED to the repo (un-ignored in .gitignore) and served from its raw URL; a
+  normal `git push` ships it. The updater gates on the `SANGALA_VERSION` marker (HTML
+  comment on line 2), downloads to temp, verifies BOTH (page ends in `</html>`, exe
+  > 20 KB), then `taskkill`s the running exe and swaps both — both-or-nothing, so a
+  half-download changes nothing. `SANGALA_VERSION` is the **release** number: bump it
+  on ANY shipped change, **page or engine** (an engine-only fix still bumps the line,
+  else the checker calls it "already up to date"). **After an engine (.cs) change:
+  rebuild the exe (`Build SangalaStudio.cmd`) AND commit the exe**, or testers get the
+  new page over a stale engine. The updater .cmd itself is stable infrastructure —
+  distribute a new copy of it by USB the once (it can't update itself while running).
 - **Loopback is addressed as `localhost`, never `127.0.0.1`, anywhere the PAGE can reach.** Glen's preview
   pane blocks raw-IP navigation and shows a "Link to 127.0.0.1 was blocked" banner. The real culprit was
   SangalaStudio.html's own `file://` hop (it fetches the bridge and `location.replace`s to it): the harness

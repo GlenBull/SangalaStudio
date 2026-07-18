@@ -1,5 +1,9 @@
 # Build output
 *.exe
+# ...except the shipped engine: testers get it via Update SangalaStudio.cmd, which
+# fetches this committed binary. Rebuild it (Build SangalaStudio.cmd) and commit it
+# whenever the engine (.cs) changes, or testers get a stale engine.
+!SangalaStudio.exe
 
 # Temp / diagnostic files
 _*.png
