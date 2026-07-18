@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.20 -->
+<!-- SANGALA_VERSION: 2026-07-17.21 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -130,10 +130,7 @@
 </header>
 
 <div id="setup" class="panel">
-    <h2 class="marker">Material</h2>
-    <select id="material">
-      <option>Paper</option><option>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
-    </select>
+    <h2 class="marker">Cut Settings</h2>
     <div class="two">
       <div><label class="fld">Force</label><input type="number" id="force" min="1" max="33" value="14"></div>
       <div><label class="fld">Speed</label><input type="number" id="speed" min="1" max="30" value="8"></div>
@@ -245,6 +242,10 @@
     <h2 class="marker">Fabricate</h2>
     <div class="conn" id="conn">Not connected</div>
     <button class="go" id="make" disabled>Make It!</button>
+    <h2 class="marker" style="margin-top:.6rem">Material</h2>
+    <select id="material" style="width:100%">
+      <option>Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
+    </select>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
     <label id="plateRow" style="display:none;align-items:center;gap:.45rem;cursor:pointer;margin:.55rem 0 .1rem;color:#5a4a34;font-size:.9rem;font-weight:600" title="Show the A1 Mini build plate in the 3D View. Turn off to orbit under the object and see its underside.">

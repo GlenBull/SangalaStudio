@@ -1,7 +1,7 @@
 # Sangala Studio — project guide for Claude Code
 
 No-admin control of a **Silhouette Portrait 3/4** die cutter from a browser page
-plus a tiny local helper. Prints Silhouette-standard registration marks, scans
+plus a tiny local **bridge**. Prints Silhouette-standard registration marks, scans
 them, and does a registered print-and-cut (cut outlines + creased/folded score
 lines) for paper-craft designs exported to SVG from Silhouette Studio. Built for
 schools: **no admin rights, no driver install, no Bluetooth, no extra hardware —
@@ -93,7 +93,7 @@ USB only, user-mode.** This constraint is absolute.
   device interface (SetupDi* + CreateFile, user-mode, no admin). Classes: Native
   (USB discovery), Cutter (Open/Setup/Cut/ScanRegMarks/ManualRegMarks/MoveToMm/
   SetForce/SetBladeDepth/Unload), Svg, MainForm (standalone desktop app entry).
-- **SangalaServer.cs** — local helper. Loopback `TcpListener` (no admin/firewall),
+- **SangalaServer.cs** — the local **bridge** (call it the bridge, never "helper"). Loopback `TcpListener` (no admin/firewall),
   serves SangalaStudio.html, holds the USB connection. Routes: /connect /status
   /cut /scan /printcut /manualstart /jog /manualread /manualcut. Runs in the tray.
 - **SangalaStudio.html** — the browser UI (single file: HTML+CSS+JS).
@@ -115,8 +115,8 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   string**, or the checker calls a real change "already up to date."
 - **Loopback is addressed as `localhost`, never `127.0.0.1`, anywhere the PAGE can reach.** Glen's preview
   pane blocks raw-IP navigation and shows a "Link to 127.0.0.1 was blocked" banner. The real culprit was
-  SangalaStudio.html's own `file://` hop (it fetches the helper and `location.replace`s to it): the harness
-  previews the file after every edit, the hop fires whenever the helper is running, and the preview blocks
+  SangalaStudio.html's own `file://` hop (it fetches the bridge and `location.replace`s to it): the harness
+  previews the file after every edit, the hop fires whenever the bridge is running, and the preview blocks
   it — a banner per edit. Both spellings reach the same IPv4 listener (verified), so prefer `localhost` in
   the page and in browser-tool navigation alike. `SangalaServer.cs` opening 127.0.0.1 in a REAL browser is
   fine and is not the trigger — and changing it would force testers to rebuild.
@@ -174,8 +174,10 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
 Toolbar: Connect · Open SVG · **Marks** (toggle, default OFF) · Print · **Test**
 (menu: Test square / Scan test / Manual align) · Setup. Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
-Setup panel: Material (Paper/Cardstock/Heavy cardstock/Vinyl/Pen), Force, Speed,
-Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
+**Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen) sits BELOW the Make it! button in the
+Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
+most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`. Setup panel (the gear) holds
+the rest: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
 blade 7, 2 passes.
 
 ## Current state (as of handoff)
