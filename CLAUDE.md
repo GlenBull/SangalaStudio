@@ -123,7 +123,11 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
 
 ## Hardware / protocol facts
 - Portrait 3: USB VID 0x0B4D, PID 0x113A, width 203 mm, mat TG "3". Portrait 4:
-  PID 0x113F, width 216 mm, TG "11". usbprint.sys interface GUID
+  PID 0x113F, width 216 mm, TG "11". **Cameo 2: PID 0x112B, width 304 mm (12 in), mat TG "3"
+  (UNVERIFIED — the TG is Studio-sniffed and untested for the Cameo; tune it if Gina's cut lands off).
+  Added for Gina 2026-07-18; shares the GPGL + type-2 registration, so those carry over.** Detection is by
+  VID alone (`Native.Find("vid_0b4d")`), then a PID branch picks width/TG; an unknown PID falls back to
+  Portrait 3. usbprint.sys interface GUID
   {28d78fad-5a12-11d1-ae5b-0000f803a8c2}. WebUSB/WinUSB are dead ends (blocked or
   need admin); usbprint.sys user-mode is the proven path.
 - GPGL: ASCII commands terminated by ETX (0x03). 1 mm = 20 Silhouette Units
