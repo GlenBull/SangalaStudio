@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-17.22 -->
+<!-- SANGALA_VERSION: 2026-07-17.23 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -244,7 +244,7 @@
     <button class="go" id="make" disabled>Make It!</button>
     <h2 class="marker" style="margin-top:.6rem">Material</h2>
     <select id="material" style="width:100%">
-      <option>Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Pen (draw)</option>
+      <option>Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Pen (draw)</option><option>Custom</option>
     </select>
     <div id="bar"><div id="barfill"></div></div>
     <div id="status">Connect to the Die Cutter to begin.</div>
@@ -868,7 +868,7 @@ async function connect(){
 }
 async function makeIt(){
   if(!connected){say("Connect to the Die Cutter first.");return;}
-  const m=MATS[$("material").value], pen=m[3];
+  const m=MATS[$("material").value]||[0,0,0,0,1], pen=m[3];   // Custom isn't a preset -> blade mode; the force/speed/blade/passes come from the fields
   let pl, spl, url;
   if(showMarks){
     // marks on -> register to the printed marks, then cut/score in that frame
@@ -897,7 +897,10 @@ async function makeIt(){
 }
 
 /* ---------- wiring ---------- */
-function applyMat(){const m=MATS[$("material").value];$("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1);}
+function applyMat(){ const v=$("material").value;
+  if(v==="Custom"){ openSettings(); return; }   // Custom = set your own; open the Settings panel and keep the current fields
+  const m=MATS[v]; if(!m) return;
+  $("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1); }
 $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
@@ -1850,8 +1853,9 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
 }
 $("bMode").onclick=()=>setMode3D(!mode3D);                        // one button, label toggles 2D<->3D
 $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kind:"cut",orig:"cut",poly:[[0,0],[30,0],[30,30],[0,30],[0,0]]}];selId=null;printFile=false;bgImg=null;draw();refreshEditPanel();say("Test Square loaded (30 mm).");};
-$("bSetup").onclick=()=>{const s=$("setup"),r=$("bSetup").getBoundingClientRect();const open=s.style.display!=="block";
-  if(open){s.style.left=Math.max(8,r.left-30)+"px";s.style.top=(r.bottom+8)+"px";}s.style.display=open?"block":"none";};
+function openSettings(){ const s=$("setup"), r=$("bSetup").getBoundingClientRect();   // show the Settings panel below the gear (also used by Material = Custom)
+  s.style.left=Math.max(8,r.left-30)+"px"; s.style.top=(r.bottom+8)+"px"; s.style.display="block"; }
+$("bSetup").onclick=()=>{ const s=$("setup"); if(s.style.display==="block") s.style.display="none"; else openSettings(); };
 /* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
 // Each shape gets a REAL <rect>/<circle> node in the retained doc (design coords, 1
 // user unit = 1 mm) plus a poly cache for preview/cut - the same el+poly pairing that
@@ -3445,7 +3449,7 @@ $("rawEscEOT").onclick=()=>sendRaw("hex 1B 04");
 $("rawcmd").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sendRaw();}});
 /* ---------- manual registration ---------- */
 let mReady=false;
-function jbody(){const m=MATS[$("material").value];return hdrStr(m[3]);}
+function jbody(){const m=MATS[$("material").value]||[0,0,0,0,1];return hdrStr(m[3]);}
 function jpos(r){$("jpos").innerHTML=(+r.x).toFixed(1)+",<br>"+(+r.y).toFixed(1);}
 $("mManual").onclick=async()=>{closeTest();
   if(!connected){say("Connect to the Die Cutter first.");return;}
