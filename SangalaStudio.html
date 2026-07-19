@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.36 -->
+<!-- SANGALA_VERSION: 2026-07-18.37 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1868,6 +1868,13 @@ $("mTest").onclick=()=>{closeTest();clearDoc();objects=[{id:++objSeq,el:null,kin
 function openSettings(){ const s=$("setup"), r=$("bSetup").getBoundingClientRect();   // show the Settings panel below the gear (also used by Material = Custom)
   s.style.left=Math.max(8,r.left-30)+"px"; s.style.top=(r.bottom+8)+"px"; s.style.display="block"; }
 $("bSetup").onclick=()=>{ const s=$("setup"); if(s.style.display==="block") s.style.display="none"; else openSettings(); };
+// Light dismiss (like the About panel): a click outside Settings closes it, EXCEPT on the canvas - so clicking a
+// shape to select it never nukes the open panel. The gear is excluded (its own toggle is in charge) and the
+// Material select is excluded (picking Custom opens Settings; without this, that same click would re-close it).
+document.addEventListener("click",(e)=>{ const s=$("setup");
+  if(s.style.display!=="none" && !s.contains(e.target) && !$("bSetup").contains(e.target)
+     && !$("cv").contains(e.target) && !$("pv").contains(e.target) && !$("material").contains(e.target)) s.style.display="none"; });
+window.addEventListener("keydown",(e)=>{ if(e.key==="Escape" && $("setup").style.display!=="none") $("setup").style.display="none"; });
 /* ---------- Add shape: build a shape object from typed mm dimensions ---------- */
 // Each shape gets a REAL <rect>/<circle> node in the retained doc (design coords, 1
 // user unit = 1 mm) plus a poly cache for preview/cut - the same el+poly pairing that
