@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.39 -->
+<!-- SANGALA_VERSION: 2026-07-18.40 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2401,6 +2401,7 @@ function startTab(e){
     if(!o.el||!o.poly||o.poly.length<2) return;
     const t=o.el.tagName.toLowerCase();
     if(t==="circle") return;                                  // a hinge needs a straight edge
+    if(o.kind==="score") return;                              // don't hinge a fold line (e.g. a tab already made)
     if(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")) return;
     const p=placePoly(o.poly);
     for(let i=0;i+1<p.length;i++){
@@ -2593,40 +2594,24 @@ function makeTab(d){
   const depth=Math.min(10,Math.max(2,Lt*0.4)), inset=Math.min(depth*0.8,Lt/3), uxn=ux/L, uyn=uy/L;
   const Q1=[P1[0]+uxn*inset+d.nx*depth, P1[1]+uyn*inset+d.ny*depth];
   const Q2=[P2[0]-uxn*inset+d.nx*depth, P2[1]-uyn*inset+d.ny*depth];
-  // 1) take the hinge stretch out of the host's own outline
-  if(objClosed(o)){
-    const nodes=o.poly.slice(0,-1), n=nodes.length, order=[];
-    for(let j=1;j<=n;j++) order.push(nodes[(si+j)%n]);        // from the edge's far node right round to its near node
-    makeElOpen(o);
-    o.poly=dedupePoly([[P2[0],P2[1]]].concat(order,[[P1[0],P1[1]]]));
-    placeEl(o);
-  } else {
-    const before=dedupePoly(o.poly.slice(0,si+1).concat([[P1[0],P1[1]]]));
-    const after =dedupePoly([[P2[0],P2[1]]].concat(o.poly.slice(si+1)));
-    if(before.length>=2){
-      o.poly=before; makeElOpen(o); placeEl(o);
-      if(after.length>=2){                                    // the far side of the hinge becomes its own piece
-        const el2=document.createElementNS(SVGNS,"polyline");
-        BREAK_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) el2.setAttribute(a,o.el.getAttribute(a)); });
-        o.el.parentNode.insertBefore(el2,o.el.nextSibling);
-        const o2={id:++objSeq, el:el2, kind:o.kind, orig:o.orig, poly:after, group:o.group};
-        objects.push(o2); placeEl(o2);
-      }
-    } else { o.poly=after; makeElOpen(o); placeEl(o); }
-  }
-  // 2) the hinge and the three cut sides, grouped so the tab moves as one
+  // 1) DETOUR the host's own outline OUT around the flap, keeping it ONE connected piece. The edge A->B
+  //    becomes A -> P1 -> Q1 -> Q2 -> P2 -> B: the flap's three sides join the cut boundary, and the stretch
+  //    under the hinge (P1->P2) is not cut - the outline goes around it - so the flap folds up and stays
+  //    attached. The old code instead REMOVED the edge and opened the shape, which split an already-open
+  //    outline in two - so a 2nd tab (e.g. the right side of a shadowbox) fragmented the base.
+  o.poly=dedupePoly(o.poly.slice(0,si+1).concat([[P1[0],P1[1]],[Q1[0],Q1[1]],[Q2[0],Q2[1]],[P2[0],P2[1]]], o.poly.slice(si+1)));
+  placeEl(o);   // host stays the polygon/polyline it was (closed stays closed), now with the flap bumped out
+  // 2) a fold hinge (score) across the base of the flap, grouped with the host so they move together - and so a
+  //    shadowbox can carry a tab on every side without the base coming apart.
   ensureDoc();
-  const gid=++groupSeq;
+  if(o.group==null) o.group=++groupSeq;
   const foldEl=svgNode("polyline",{points:fmtn(P1[0])+","+fmtn(P1[1])+" "+fmtn(P2[0])+","+fmtn(P2[1]), "stroke-dasharray":"4 1.2"});
-  const fold={id:++objSeq, el:foldEl, kind:"score", orig:"score", poly:[[P1[0],P1[1]],[P2[0],P2[1]]], group:gid};
+  const fold={id:++objSeq, el:foldEl, kind:"score", orig:"score", poly:[[P1[0],P1[1]],[P2[0],P2[1]]], group:o.group};
   objects.push(fold);
-  const cutEl=svgNode("polyline",{points:[P1,Q1,Q2,P2].map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")});
-  const cut={id:++objSeq, el:cutEl, kind:"cut", orig:"cut", poly:[P1,Q1,Q2,P2].map(p=>[p[0],p[1]]), group:gid};
-  objects.push(cut);
-  selMulti=[fold.id,cut.id]; selId=null; selId2=null; selNode=null;
+  selMulti=[o.id,fold.id]; selId=null; selId2=null; selNode=null;
   setTool("select");
   renderBg(); draw(); refreshEditPanel();
-  say("Made a "+fmtn(Lt)+" mm tab: a fold hinge on the edge, three cut sides, and the edge under the hinge removed so the tab stays attached.");
+  say("Made a "+fmtn(Lt)+" mm tab: the outline bumps out into the flap with a fold hinge across its base. Add tabs to the other sides the same way.");
 }
 function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), poly=[];
