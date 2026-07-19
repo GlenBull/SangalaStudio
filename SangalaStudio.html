@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.38 -->
+<!-- SANGALA_VERSION: 2026-07-18.39 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -388,6 +388,10 @@ function say(t){$("status").innerHTML=t;}
 let units="in";
 function offMM(v){return units==="in"?v*25.4:v;}
 function fmtn(v){return Math.round(v*100)/100;}
+// Object dimensions honor the Units setting (the same one that drives Position). Only 2D lengths convert; the
+// 3D/LEGO params (Depth/Base/Fit/bore) stay mm - they're metric by nature (LEGO's 8 mm grid, a sub-mm clutch).
+const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
+function unit2D(){ return units==="in" ? {f:v=>Math.round(v/25.4*100)/100, step:"0.01", lab:"in"} : MM_UNIT; }
 function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:PAGE_H;   // the MATERIAL page, in its DISPLAYED orientation
   if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
   const f=x=>{const r=Math.round(x/25.4*10)/10; return Number.isInteger(r)?String(r):r.toFixed(1);};   // 215.9 mm -> "8.5", not "9"
@@ -403,6 +407,7 @@ function setUnits(u){
   $("offx").value = u==="in"?fmtn(oxmm/25.4):Math.round(oxmm);
   $("offy").value = u==="in"?fmtn(oymm/25.4):Math.round(oymm);
   $("posHead").textContent="Position ("+u+")";
+  const o=selObj(); if(o) showDims(o);   // re-render the selected object's readout in the new unit
   draw();
 }
 
@@ -2734,19 +2739,21 @@ function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
 // Returns HTML; "" hides the box.
 function dimText(o){
   if(!o||!o.el) return "";
-  const t=o.el.tagName.toLowerCase(), R=s=>Math.round((+o.el.getAttribute(s)||0)*10)/10;   // pairs: [label, mm value (0.1 res), dim key]
+  const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
   let rows;
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
     if(mode3D){ if(o.el.hasAttribute("data-brick")) rows.push([["Fit",R("data-fit"),"fit"],null]);   // brick: depth is parametric, only Fit (clutch clearance) is tunable
                 else rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } }
-  else if(t==="circle"){ rows=[[["Diameter",Math.round(2*(+o.el.getAttribute("r")||0)*10)/10,"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
+  else if(t==="circle"){ rows=[[["Diameter",2*R("r"),"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
   else if(t==="polygon"){ if(!mode3D) return ""; rows=[[["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]]; }   // freeform shape: extrude with Depth/Base (drag to reposition)
   else return "";
-  const cell=p=>p?('<td style="text-align:left">'+p[0]+':</td>'
-      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="0.1" data-dim="'+p[2]+'" value="'+p[1]+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">mm</td>')
-    :'<td></td><td></td><td></td>';
+  const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d";   // 2D lengths follow the Units setting; the rest stay mm
+  const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
+    const u=is2D(p[2])?unit2D():MM_UNIT;
+    return '<td style="text-align:left">'+p[0]+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
   if(mode3D && !o.el.hasAttribute("data-brick")){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath
     const st=o.el.getAttribute("data-studs")==="1", sk=o.el.getAttribute("data-sockets")==="1";
@@ -2782,6 +2789,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
   if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
+  if(units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
@@ -3449,9 +3457,10 @@ window.addEventListener("mouseup",()=>{
                : (+el.getAttribute("r")<0.5);
     drag=null; suppressClick=true;
     if(tiny){ if(el.remove)el.remove(); objects=objects.filter(x=>x.id!==o.id); selId=null; say(""); cv.style.cursor=CROSSHAIR; }   // nothing made: stay in the tool
-    else { say(t==="rect" ? "Drew a "+fmtn(+el.getAttribute("width"))+" x "+fmtn(+el.getAttribute("height"))+" mm rectangle. Refine it in the readout."
-             : t==="polyline" ? "Drew a "+fmtn(lineLen)+" mm line. Set it to Fold for a crease, or leave it Cut to slit. Drag its ends with the Nodes tool."
-             : "Drew a "+fmtn(2*(+el.getAttribute("r")))+" mm circle. Refine it in the readout.");
+    else { const U=unit2D();
+      say(t==="rect" ? "Drew a "+U.f(+el.getAttribute("width"))+" x "+U.f(+el.getAttribute("height"))+" "+U.lab+" rectangle. Refine it in the readout."
+             : t==="polyline" ? "Drew a "+U.f(lineLen)+" "+U.lab+" line. Set it to Fold for a crease, or leave it Cut to slit. Drag its ends with the Nodes tool."
+             : "Drew a "+U.f(2*(+el.getAttribute("r")))+" "+U.lab+" circle. Refine it in the readout.");
       setTool("select"); }   // part made: auto-release to select, with it selected for editing
     draw(); refreshEditPanel(); return;
   }
