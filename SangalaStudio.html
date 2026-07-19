@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.37 -->
+<!-- SANGALA_VERSION: 2026-07-18.38 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2023,6 +2023,12 @@ function nearestEnd(mx,my,k){   // the loose end under the cursor, if any (mx,my
     if(d<bd){ bd=d; best=e; } });
   return (best && bd*k<=10) ? best : null;
 }
+// Snap (px,py) so the segment from (ax,ay) locks to the nearest 45 deg - horizontal, vertical, or diagonal -
+// keeping its length. The same constraint the Line tool uses; shared by the Pen preview and the Pen click.
+function snap45(ax,ay,px,py){ const dx=px-ax, dy=py-ay, L=Math.hypot(dx,dy);
+  if(L<1e-9) return [px,py];
+  const ang=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4);
+  return [ax+L*Math.cos(ang), ay+L*Math.sin(ang)]; }
 function penClick(e){
   const {mx,my,k}=evtMM(e), pp=placeParams();
   if(!penPts.length){                         // nothing drawn yet: a click on a loose end picks that outline up
@@ -2041,9 +2047,11 @@ function penClick(e){
     const f=penPts[0], fx=pp.ox+f[0]*pp.s, fy=pp.oy+f[1]*pp.s;
     if(Math.hypot(mx-fx,my-fy)*k<=10){ finishPen(true); return; }   // the far end: close it
   }
-  penPts.push([(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s]);   // store in design mm
+  let cx=(mx-pp.ox)/pp.s, cy=(my-pp.oy)/pp.s;
+  if(e.shiftKey && penPts.length){ const a=penPts[penPts.length-1], s=snap45(a[0],a[1],cx,cy); cx=s[0]; cy=s[1]; }   // Shift locks the new segment to 45 deg
+  penPts.push([cx,cy]);                        // store in design mm
   penUndone=[];                                // a new point invalidates redo, the same rule the document history uses
-  penHover=[mx,my];
+  penHover=[pp.ox+cx*pp.s,pp.oy+cy*pp.s];
   suppressClick=true;                          // eat the trailing click so it doesn't run selection
   draw();
   // This line once read "Esc to undo" while Esc threw every point away. Now Esc really does keep the work, so
@@ -3308,7 +3316,9 @@ cv.addEventListener("mousedown",(e)=>{
 window.addEventListener("mousemove",(e)=>{
   if(panDrag){ const p=canvasPt(e); view.panX=panDrag.px+(p[0]-panDrag.sx); view.panY=panDrag.py+(p[1]-panDrag.sy); clampPan(); draw(); return; }
   if(marquee){ const {mx,my}=evtMM(e); marquee.x1=mx; marquee.y1=my; draw(); return; }
-  if(activeTool==="pen"){ const {mx,my}=evtMM(e); penHover=[mx,my]; draw(); return; }   // rubber-band to the cursor - and, before the first click, light up any loose end under it
+  if(activeTool==="pen"){ let {mx,my}=evtMM(e);   // rubber-band to the cursor - and, before the first click, light up any loose end under it
+    if(e.shiftKey && penPts.length){ const pp=placeParams(), a=penPts[penPts.length-1], s=snap45(pp.ox+a[0]*pp.s,pp.oy+a[1]*pp.s,mx,my); mx=s[0]; my=s[1]; }   // Shift locks the preview segment to 45 deg
+    penHover=[mx,my]; draw(); return; }
   if(!drag) return;
   if(drag.mode==="groupmove"){ const {mx,my,k}=evtMM(e), pp=placeParams(); let ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
     snapHint=null;
