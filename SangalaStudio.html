@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.41 -->
+<!-- SANGALA_VERSION: 2026-07-18.42 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -59,6 +59,7 @@
   input.dimin{width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
   .board{position:relative;border-radius:12px;padding:14px;border:6px solid #8a6a44;box-shadow:inset 0 0 24px rgba(60,40,20,.4)}
+  body.dropping .board{border-color:#2d7bb8;box-shadow:0 0 0 4px rgba(45,123,184,.55),inset 0 0 24px rgba(60,40,20,.4)}  /* drag a file over: workspace lights up */
   #zoomctl{margin-top:auto;align-self:center;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,.92);border:1px solid #c9b48c;border-radius:9px;padding:3px 5px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:.82rem;color:#5a4326;user-select:none}
   #pv{position:absolute;border-radius:8px;cursor:grab;touch-action:none}
   #pv:active{cursor:grabbing}
@@ -1000,12 +1001,24 @@ async function pollSnap(){
 setInterval(pollSnap,1500);
 // Open handles both an SVG design and a photo: .svg -> loadSVG; .png/.jpg -> loadImageFile
 // (a REFERENCE layer for tracing - it never cuts, prints, or saves; the traced vector is the design).
+function openFile(f){ if(!f) return;
+  const nm=(f.name||"").toLowerCase(), ty=f.type||"";
+  if(nm.endsWith(".svg")||ty==="image/svg+xml"){ f.text().then(loadSVG); return; }
+  if(ty.indexOf("image/")===0||/\.(png|jpe?g|gif|webp|bmp)$/.test(nm)){ loadImageFile(f); return; }
+  say("Open an SVG design or a photo (.svg, .png, .jpg).");
+}
 $("bOpen").onclick=()=>$("file").click();
-$("file").onchange=e=>{ const f=e.target.files[0]; if(!f) return;
-  const nm=(f.name||"").toLowerCase();
-  if(nm.endsWith(".svg")||f.type==="image/svg+xml") f.text().then(loadSVG);
-  else loadImageFile(f);
-  e.target.value=""; };
+$("file").onchange=e=>{ openFile(e.target.files[0]); e.target.value=""; };
+// Drag-and-drop: drop an .svg / .png / .jpg anywhere on the page to open it, just like the Open button.
+(function(){
+  const hasFiles=e=>e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types||[],"Files")>=0;
+  ["dragenter","dragover"].forEach(t=>window.addEventListener(t,e=>{ if(!hasFiles(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect="copy"; document.body.classList.add("dropping"); }));
+  window.addEventListener("dragleave",e=>{ if(!e.relatedTarget) document.body.classList.remove("dropping"); });
+  window.addEventListener("drop",e=>{ if(!hasFiles(e)) return;
+    e.preventDefault(); document.body.classList.remove("dropping");
+    openFile(e.dataTransfer.files[0]); });
+})();
 function loadImageFile(file){
   const rd=new FileReader();
   rd.onload=ev=>{ const img=new Image();
