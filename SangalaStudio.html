@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.34 -->
+<!-- SANGALA_VERSION: 2026-07-18.35 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3256,7 +3256,7 @@ cv.addEventListener("mousedown",(e)=>{
         self:(()=>{ const pts=[]; selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id);
           if(o&&o.poly&&pts.length<40) snapSample(o.poly).forEach(q=>{ if(pts.length<40) pts.push(q); }); }); return pts; })(),
         orig:selMulti.map(id=>{const o=objects.find(x=>x.id===id),N=s=>+o.el.getAttribute(s)||0,t=o.el.tagName.toLowerCase();
-          return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy"),sh:elShift(o)};})};
+          return {o,t,poly:o.poly.map(p=>[p[0],p[1]]),holes:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,x:N("x"),y:N("y"),cx:N("cx"),cy:N("cy"),sh:elShift(o)};})};
       cv.style.cursor="move"; e.preventDefault(); return; }
     const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
     if(!(refImg&&refImg.sel) && !onImg && !objects.some(onObjId)){ marquee={x0:mx,y0:my,x1:mx,y1:my}; e.preventDefault(); return; }
@@ -3268,7 +3268,7 @@ cv.addEventListener("mousedown",(e)=>{
   if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, or any stroke from an imported design (a Snap! drawing arrives as
     const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);   // polylines, a Silhouette file as paths): no parametric resize, but drag the body to move it
     if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys))
-      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),sh0:elShift(o),moved:false,
+      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),origHoles:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,sh0:elShift(o),moved:false,
             snap:snapTargets(new Set([o.id])),self:snapSample(o.poly)},cv.style.cursor="move",e.preventDefault();
     return; }
   const N=s=>+o.el.getAttribute(s)||0;
@@ -3296,6 +3296,7 @@ window.addEventListener("mousemove",(e)=>{
     if(!e.altKey && drag.snap && drag.self.length){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     drag.orig.forEach(g=>{ const o=g.o; o.poly=g.poly.map(p=>[p[0]+ddx,p[1]+ddy]);
+      if(g.holes) o.holes=g.holes.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
       if(g.t==="rect"){ o.el.setAttribute("x",fmtn(g.x+ddx)); o.el.setAttribute("y",fmtn(g.y+ddy)); }
       else if(g.t==="circle"){ o.el.setAttribute("cx",fmtn(g.cx+ddx)); o.el.setAttribute("cy",fmtn(g.cy+ddy)); }
       else { o.el.setAttribute("data-shx",fmtn(g.sh[0]+ddx)); o.el.setAttribute("data-shy",fmtn(g.sh[1]+ddy)); placeEl(o); } });
@@ -3353,6 +3354,7 @@ window.addEventListener("mousemove",(e)=>{
     if(!e.altKey && drag.snap){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
+    if(drag.origHoles) o.holes=drag.origHoles.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
     o.el.setAttribute("data-shx",fmtn(drag.sh0[0]+ddx)); o.el.setAttribute("data-shy",fmtn(drag.sh0[1]+ddy));
     placeEl(o);
     drag.moved=true; draw(); return; }
