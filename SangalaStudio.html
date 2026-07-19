@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.33 -->
+<!-- SANGALA_VERSION: 2026-07-18.34 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -143,6 +143,8 @@
       <div><label class="fld">Scale %</label><input type="number" id="scale" min="10" max="1000" value="100"></div>
       <div></div>
     </div>
+    <label class="fld" style="margin-top:.6rem">Page size (material)</label>
+    <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option></select>
     <label class="fld" style="margin-top:.6rem">Units</label>
     <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
     <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
@@ -336,6 +338,7 @@ if(location.protocol==="file:"){
 (function(){
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
 let MAT_W=203, MAT_H=305, objects=[], svgText="", printFile=false, bgImg=null, showMarks=false, connected=false;
+let PAGE_W=215.9, PAGE_H=279.4;   // the MATERIAL page (cardstock) the design sits on - Settings > Page size. Distinct from the MAT (machine width x 305 mm). Defaults to Letter 8.5 x 11 in on every machine, Cameo included.
 let svgDoc=null, svgHolder=null, svgEl=null, objSeq=0;   // retained parsed SVG doc, its hidden container, and the live <svg> root; per-object id counter
 let selId=null;              // currently selected object id (null = nothing selected)
 let selId2=null;             // secondary selection (Shift+click) - the 2nd operand for Combine (Union/Diff/Intersect)
@@ -362,7 +365,7 @@ let matLandscape=false;   // the mat/cut are the same 8x12 either way; landscape
                           // designs that sit better wide. The design's stored + cut coords stay portrait, so the
                           // machine never knows - landscape is purely a rotation of the view (see draw() / evtMM).
 function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; vw/vh = how it is DISPLAYED (turned in landscape)
-  const dw=printFile?PAGE_LW:MAT_W, dh=printFile?PAGE_LH:MAT_H;
+  const dw=printFile?PAGE_LW:PAGE_W, dh=printFile?PAGE_LH:PAGE_H;   // plain-cut workspace = the material page, not the mat
   const vw=matLandscape?dh:dw, vh=matLandscape?dw:dh;
   const baseK=Math.min(cv.width/(vw+2*VIEW_MARGIN), cv.height/(vh+2*VIEW_MARGIN));   // fit the DISPLAYED page + a small margin
   return { dw:dw, dh:dh, vw:vw, vh:vh, baseK:baseK, MX:(cv.width/baseK-vw)/2, MY:(cv.height/baseK-vh)/2 };
@@ -385,11 +388,15 @@ function say(t){$("status").innerHTML=t;}
 let units="in";
 function offMM(v){return units==="in"?v*25.4:v;}
 function fmtn(v){return Math.round(v*100)/100;}
-function matLabel(){ const a=matLandscape?MAT_H:MAT_W, b=matLandscape?MAT_W:MAT_H;   // show the DISPLAYED orientation (12 x 8 in landscape)
-  return units==="in"?("Mat "+Math.round(a/25.4)+" x "+Math.round(b/25.4)+" inches"):("Mat "+Math.round(a)+" x "+Math.round(b)+" mm");}
+function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:PAGE_H;   // the MATERIAL page, in its DISPLAYED orientation
+  if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
+  const f=x=>{const r=Math.round(x/25.4*10)/10; return Number.isInteger(r)?String(r):r.toFixed(1);};   // 215.9 mm -> "8.5", not "9"
+  return f(a)+" x "+f(b)+" in";}
 function applyRanges(){const ox=$("offx"),oy=$("offy");
-  if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(MAT_W/25.4);oy.max=fmtn(MAT_H/25.4);}
-  else{ox.step=oy.step=1;ox.max=Math.round(MAT_W);oy.max=Math.round(MAT_H);}}
+  if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(PAGE_W/25.4);oy.max=fmtn(PAGE_H/25.4);}
+  else{ox.step=oy.step=1;ox.max=Math.round(PAGE_W);oy.max=Math.round(PAGE_H);}}
+function setPageSize(v){ if(v==="12x12"){PAGE_W=304.8;PAGE_H=304.8;} else {PAGE_W=215.9;PAGE_H=279.4;}   // Letter is the default; 12x12 is for plain cut / layout (registered print-and-cut stays Letter for now)
+  applyRanges(); draw(); }
 function setUnits(u){
   const oxmm=offMM(+$("offx").value), oymm=offMM(+$("offy").value);
   units=u; applyRanges();
@@ -908,6 +915,7 @@ function applyMat(){ const v=$("material").value;
 $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
+$("pagesize").onchange=e=>setPageSize(e.target.value);
 $("bConnect").onclick=connect;
 /* ---------- Snap! bridge: a turtle drawing made in Snap! lands on the mat ----------
    Snap! logs its pen strokes as vectors (its "Log pen vectors" setting) and can hand them over as
@@ -926,7 +934,7 @@ function centerDesign(){   // a turtle drawing carries Snap!'s own corner as its
   if(pts.length<2) return;
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   pts.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
-  const W=printFile?PAGE_LW:MAT_W, H=printFile?PAGE_LH:MAT_H;
+  const W=printFile?PAGE_LW:PAGE_W, H=printFile?PAGE_LH:PAGE_H;
   const dx=W/2-(mnx+mxx)/2, dy=H/2-(mny+mxy)/2;
   objects.forEach(o=>translateObj(o,dx,dy));
 }
@@ -997,9 +1005,9 @@ function loadImageFile(file){
   const rd=new FileReader();
   rd.onload=ev=>{ const img=new Image();
     img.onload=()=>{ ensureDoc();
-      let w=img.naturalWidth||100, h=img.naturalHeight||100;       // px as arbitrary units -> fit within ~70% of the mat
-      const s=Math.min(MAT_W*0.7/w, MAT_H*0.7/h); w*=s; h*=s;
-      refImg={img:img, x:(MAT_W-w)/2, y:(MAT_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
+      let w=img.naturalWidth||100, h=img.naturalHeight||100;       // px as arbitrary units -> fit within ~70% of the page
+      const s=Math.min(PAGE_W*0.7/w, PAGE_H*0.7/h); w*=s; h*=s;
+      refImg={img:img, x:(PAGE_W-w)/2, y:(PAGE_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
       $("bRemoveBg").disabled=false;
       selId=null; selId2=null; draw(); refreshEditPanel();
       say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, or Remove BG to make a silhouette.");
@@ -3506,7 +3514,7 @@ $("jCut").onclick=async()=>{
     $("jstatus").textContent=r.ok?"Done - the cut should land on the printed design.":("Problem: "+r.error);
   }catch(e){clearInterval(poll);$("jstatus").textContent="Failed: "+e.message;}
 };
-applyMat(); draw();
+applyMat(); applyRanges(); draw();   // applyRanges syncs the Position caps to the material page at startup
 })();
 </script>
 </body>
