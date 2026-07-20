@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.47 -->
+<!-- SANGALA_VERSION: 2026-07-18.48 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2202,7 +2202,7 @@ function applyBool(op){
   if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
   if(!o1||!o2||o1===o2){ say("Pick two shapes: Shift+click a 2nd, or sweep a box around both."); return; }
   ensureDoc();
-  const rings=polyBool(op, o1.poly, o2.poly);
+  const rings=boolShapes(op, {outer:o1.poly, holes:o1.holes}, {outer:o2.poly, holes:o2.holes});
   if(!rings.length){ say(op==="intersect"?"The two shapes don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
   const kind=o1.kind;
   [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });   // drop operands from the doc + object list
@@ -2685,6 +2685,31 @@ function polyBool(op, Aring, Bring){
       if(ni<0) break; cur=keep[ni]; curIdx=ni; if(curIdx===si) break; }
     const d=pbDedupe(ring); if(d.length>=3) result.push(d); });
   return result;
+}
+// polyBool works on two SIMPLE outlines. This wraps it to respect each operand's HOLES (a frame's window).
+// Union is the case that needs it: merging a shape onto a frame must keep the frame's window as a hole - minus
+// whatever the merged shape now fills - instead of silently dropping every hole and collapsing the frame to a
+// filled outline (which is why unioning the crane onto the shadowbox left only the bare square). Difference
+// and Intersect keep the plain outer-only path: their common use (carving a frame OUT of a solid) has no holed
+// operand. Returns a FLAT ring list for nestRings to re-pair into outer+holes, exactly like polyBool's output.
+function subtractSolid(ring, S){   // ring minus S's SOLID region (S.outer, with S's own holes punched back out)
+  const frags = polyBool('diff', ring, S.outer);                                     // the part of ring outside S entirely
+  (S.holes||[]).forEach(h => polyBool('intersect', ring, h).forEach(r=>frags.push(r)));   // + the part sitting inside one of S's holes
+  return frags;
+}
+function boolShapes(op, A, B){   // A,B = {outer, holes}
+  const ah=A.holes||[], bh=B.holes||[];
+  if(op!=='union' || (!ah.length && !bh.length)) return polyBool(op, A.outer, B.outer);   // no holes, or diff/intersect -> plain path
+  const rings = polyBool('union', A.outer, B.outer);        // the combined outer boundary (>=1 ring)
+  ah.forEach(h => subtractSolid(h, B).forEach(r=>rings.push(r)));   // A's window(s), minus B's solid: the part still open
+  // B's windows contribute ONLY where they fall outside A's outer entirely. Anything inside A's outer is either
+  // A's own solid, or - where the two windows overlap - already emitted by an A-window term above. Subtracting
+  // by A's SOLID here (like A does) would re-emit that shared overlap as a 2nd coincident hole ring: the die
+  // cutter would trace it twice and even-odd fill would cancel (re-fill) it. Subtracting by A's OUTER instead
+  // deliberately drops the part A already owns, so each open region is emitted exactly once. (A solid A has no
+  // holes, so this reduces to plain h - A.outer - the crane-onto-frame case is unaffected either way.)
+  bh.forEach(h => polyBool('diff', h, A.outer).forEach(r=>rings.push(r)));
+  return rings;                                            // nestRings pairs these back into outer + holes by containment
 }
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
