@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.49 -->
+<!-- SANGALA_VERSION: 2026-07-18.50 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -557,7 +557,11 @@ function loadSVG(text){
     const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
     let grp=null; if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; grp=gmap[dg]; }
     const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp};
-    const hs=parseHoles(el); if(hs) o.holes=hs;                  // a frame saved by Sangala carries its inner loops in data-holes
+    const hs=parseHoles(el);                                     // a frame saved by Sangala carries its inner loops in data-holes,
+    if(hs){ const m=el.getCTM();                                 // in the element's OWN user units - so map them through the SAME
+      o.holes=hs.map(ring=>ring.map(p=>{                         // transform sample() gives the outer. Without this, Save SVG's cropped
+        if(m){ rootPt.x=p[0]; rootPt.y=p[1]; const q=rootPt.matrixTransform(m); return [q.x*PX2MM, q.y*PX2MM]; }   // viewBox re-bases the outer but
+        return [p[0]*scale, p[1]*scale]; })); }                  // leaves the holes at their old coords - the window drifts off the frame on reimport.
     objects.push(o);
   });
   if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
