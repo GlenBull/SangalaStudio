@@ -25,7 +25,7 @@ USB only, user-mode.** This constraint is absolute.
 - **Never regenerate a doc to revise it — edit the user's actual file IN PLACE** (surgical
   text edits only; run no document-wide formatting commands). Regenerating wipes his manual
   formatting and has caused repeated rework. New version = copy to the next version number, edit,
-  then MOVE the prior version into the `.Archive` subfolder (main folder shows only the current).
+  then MOVE the prior version into the `Documents/.Archive` subfolder (the docs live in `Documents/`, which shows only the current version of each).
 - Body = **Times New Roman 11 pt**, black, never below 11 pt; code identifiers in Consolas.
 - Numbered lists for step sequences; **3 pt space after each list item**. A label leading a list
   item is **italic** (not bold). Labels: Title-Case every word EXCEPT words in parentheses (lowercase).
@@ -222,7 +222,7 @@ The standard skill recipe's rezip step **does not work here: there is no `zip` c
    they shipped.** Orphaned headings live in the PAGINATION, not the XML, so `validate.py` passes while the
    page looks wrong. No LibreOffice/poppler here and the Read tool can't rasterize a PDF either — instead drive
    **Word via COM**, which reports where each heading falls. Run the ready-made check:
-   `powershell -NoProfile -File tools\docxcheck.ps1 "User Guide (Ver 4.1).docx"`
+   `powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.1).docx"`
    It opens the doc read-only (works even while Glen has it open) and prints: headings lacking `keepNext`, any
    heading currently split from its text across a page break, and the autospacing count. **Deliver only when it
    prints `PAGINATION CLEAN`** (zero orphans, zero headings missing keepNext). If you need a human-eyeball copy,
