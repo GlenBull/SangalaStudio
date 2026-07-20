@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.52 -->
+<!-- SANGALA_VERSION: 2026-07-18.53 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2558,7 +2558,8 @@ function deleteNode(){
   const t=o.el.tagName.toLowerCase(); if(t!=="polygon"&&t!=="polyline") return false;
   const rc=editNodes(o)[selNode]; if(!rc) return false;      // which ring + index
   const ring=nodeRing(o,rc.r); if(!ring) return false;
-  const closed=isClosedRing(ring), nodes=closed?ring.slice(0,-1):ring.slice();
+  const closed = rc.r===0 ? objClosed(o) : isClosedRing(ring);   // outer honors data-open (a broken-open outline stays open); a hole is always closed
+  const nodes=closed?ring.slice(0,-1):ring.slice();
   const least=closed?3:2;                                    // a closed shape needs 3 corners; an open stroke needs 2 ends
   if(nodes.length<=least){ say("A "+(closed?"shape needs at least 3 nodes":"line needs at least 2 nodes")+"."); return true; }
   nodes.splice(rc.i,1);
@@ -3495,7 +3496,10 @@ window.addEventListener("mousemove",(e)=>{
   const dx=(mx-pp.ox)/pp.s, dy=(my-pp.oy)/pp.s;               // pointer in design mm (invert placement)
   if(drag.mode==="node"){ const o=drag.obj, i=drag.idx, ring=nodeRing(o,drag.r||0);   // move one node of its ring (outer or a hole)
     if(!ring) return;
-    const closed=isClosedRing(ring);                         // ask BEFORE moving it: once the first point has moved, the ring no longer LOOKS closed
+    // Closedness per ring: the OUTER honors data-open (a shape Broken open at a node has two coincident ends but
+    // must stay OPEN, so its ends move apart); a hole is always a closed ring. Geometry alone (isClosedRing)
+    // can't tell a broken-open outline from a closed one - both have coincident ends - so it would re-weld the break.
+    const closed = (drag.r||0)===0 ? objClosed(o) : isClosedRing(ring);
     let ndx=dx, ndy=dy; snapHint=null;
     if(!e.altKey && drag.snap){ const s=snapDelta([[ndx,ndy]], drag.snap, snapTolMm(pp,k));   // a node pulls onto another shape's corner or edge (Alt = free)
       if(s){ ndx+=s.ox; ndy+=s.oy; snapHint=[s.hx,s.hy]; } }
