@@ -27,7 +27,7 @@ is which. That is the single most important idea in this guide — see Section 3
   to the die cutter.
 - **Tools palette** (left edge) — the drawing and editing tools: Select, Pen,
   Nodes, Shapes, Combine, Align.
-- **The mat** (centre) — your working page. The label at the top tells you the mat
+- **The mat** (center) — your working page. The label at the top tells you the mat
   size (about 8 × 12 inches).
 - **Fabricate panel** (right) — the **Make it!** button, status messages, and — when
   a shape is selected — the **Selected object** panel for changing or measuring it.
@@ -79,7 +79,7 @@ remove it. Great for reshaping a traced silhouette or pulling up a mountain peak
 
 ### Shapes
 Opens a menu to draw a **Rectangle** or a **Circle**. Pick one, then drag on the mat —
-rectangle corner‑to‑corner, circle centre‑outward. After drawing, adjust the exact
+rectangle corner‑to‑corner, circle center‑outward. After drawing, adjust the exact
 size in the **Selected object** panel.
 
 ### Combine
@@ -99,12 +99,12 @@ removed. This is how you make a round (or any‑shaped) photo cut‑out for a co
 Opens a menu to line up two or more objects. Select them (drag a box around them, or
 click one and **Shift + click** another), then choose:
 
-- **↕ Vertical** — line them up on a vertical axis (same left‑right centre).
-- **↔ Horizontal** — line them up on a horizontal axis (same up‑down centre).
-- **✛ Center (both)** — centre them on each other.
+- **↕ Vertical** — line them up on a vertical axis (same left‑right center).
+- **↔ Horizontal** — line them up on a horizontal axis (same up‑down center).
+- **✛ Center (both)** — center them on each other.
 
 The largest object stays put and the others move to it — so **Center** drops a small
-circle exactly into the middle of a larger square (or onto the centre of a photo).
+circle exactly into the middle of a larger square (or onto the center of a photo).
 
 ---
 
@@ -150,7 +150,7 @@ other software needed.
 outline) for a collage: **Open** the photo, draw a shape over the part you want with
 **Shapes** or **Pen**, then use **Combine → Intersect** (Section 4). Everything
 outside the shape is removed and you get a print‑and‑cut of the cropped photo. Use
-**Align → Center** first if you want the shape centred on the photo.
+**Align → Center** first if you want the shape centered on the photo.
 
 ---
 
@@ -196,7 +196,7 @@ when you're ready.
   how many times it traces each cut. Thick material needs more force and more passes,
   not just a deeper blade.
 - **Scale %** — enlarge or shrink the whole design (100% = as drawn).
-- **Units** — inches or millimetres for the readouts.
+- **Units** — inches or millimeters for the readouts.
 - **Position (From left / From top)** — where the design sits on the mat.
 
 **Tip:** for heavy cardstock, more passes beats brute force — try the Heavy cardstock
@@ -221,7 +221,7 @@ reference photo is not part of the saved design — only the shapes you made are
 | Reshape an outline | **Nodes**, drag / add / delete points |
 | Make a line fold instead of cut | Select it, click **⁝ Score / Fold** |
 | Merge / subtract / overlap two shapes | **Combine → Union / Difference / Intersect** |
-| Centre one shape in another | Select both, **Align → Center** |
+| Center one shape in another | Select both, **Align → Center** |
 | Cut a subject out of a photo | **Open** photo → **Remove BG** → **Confirm** |
 | Crop a photo to a circle/shape | Draw the shape, **Combine → Intersect** |
 | Print and cut on the print | **Marks on → Print → Make it!** |
