@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.42 -->
+<!-- SANGALA_VERSION: 2026-07-18.43 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1055,30 +1055,23 @@ $("bRemoveBg").onclick=async()=>{
   }catch(e){ say("Background removal failed: "+((e&&e.message)||e)); }
   btn.disabled=false;
 };
-// Step 5: turn the traced subject outline into cut objects, then drop the reference image.
-// Flatten each subpath (ImageTracer's L/Q Beziers) via an off-DOM <path>, map mask-pixels
-// to design mm at the image's placement, and hand to makePolyObj (simplifies at 0.08 mm).
-// Confirm: build a PRINT-AND-CUT design and load it through the proven print path.
-// The subject (background removed, over white) becomes a printable <image>; its traced
-// outline becomes red cut paths at the same page position. Print lays down the subject +
-// registration marks; Make it! (Marks on) registers and cuts it out - for a collage.
+// Turn the traced subject outline into cut shape(s) ADDED to the current design, then drop the photo.
+// Flatten each subpath (ImageTracer's L/Q Beziers) via an off-DOM <path>, map mask-pixels to design mm at
+// the photo's OWN current position/size (refImg.x/y/w/h - the same transform the live red-boundary preview
+// already used), and hand each to makePolyObj (same 0.08 mm simplify every other tool uses).
+// This used to instead build a whole PRINT-AND-CUT page and load it through loadSVG() - which replaced the
+// ENTIRE document (wiping out anything else already on the mat, e.g. a shadowbox built earlier) and embedded
+// the subject as a plain <image>, which is not a selectable/deletable object - a photo you could never get rid
+// of. A silhouette is a plain cut shape; Paper Color + Print already covers a colored print-and-cut (it paints
+// from each shape's data-fill, independent of Remove BG) for anyone who wants the collage version instead.
 function integrateTrace(){
   if(!refImg||!refImg.trace||!refImg.trace.paths.length){ say("Remove the background first to get an outline."); return; }
+  ensureDoc();
   const W=refImg.trace.width, H=refImg.trace.height;
-  // subject over white (hard alpha at the threshold, so the white edge = the cut line)
-  const disp=document.createElement("canvas"); disp.width=W; disp.height=H;
-  const dcx=disp.getContext("2d"); dcx.fillStyle="#ffffff"; dcx.fillRect(0,0,W,H);
-  const tmp=document.createElement("canvas"); tmp.width=W; tmp.height=H;
-  const tcx=tmp.getContext("2d"); tcx.drawImage(refImg.img,0,0,W,H);
-  const im=tcx.getImageData(0,0,W,H), mm=refImg.mask.getContext("2d").getImageData(0,0,W,H);
-  for(let i=0;i<im.data.length;i+=4) im.data[i+3]=(mm.data[i]>=traceThreshold)?255:0;
-  tcx.putImageData(im,0,0); dcx.drawImage(tmp,0,0);
-  const dataURL=disp.toDataURL("image/png");
-  // place the subject on the Letter page, centered and clamped inside the registration marks
-  const maxW=PAGE_LW-2*INSET-10, maxH=PAGE_LH-2*INSET-10;
-  const fit=Math.min(1, maxW/refImg.w, maxH/refImg.h), iw=refImg.w*fit, ih=refImg.h*fit;
-  const PX=(PAGE_LW-iw)/2, PY=(PAGE_LH-ih)/2, sx=iw/W, sy=ih/H;
-  let cutSVG="", ncut=0;
+  const PX=refImg.x, PY=refImg.y, sx=refImg.w/W, sy=refImg.h/H;   // the photo's own placement - the shape takes its exact spot
+  const multi=refImg.trace.paths.length>1;
+  const gid=multi?++groupSeq:null;                     // more than one piece (e.g. disjoint regions) -> group so they move together
+  const made=[];
   refImg.trace.paths.forEach(d=>{
     d.split(/(?=[Mm])/).forEach(sub=>{ if(!/\d/.test(sub)) return;
       const s=document.createElementNS(SVGNS,"svg"), pth=document.createElementNS(SVGNS,"path");
@@ -1086,23 +1079,17 @@ function integrateTrace(){
       let len=0; try{ len=pth.getTotalLength(); }catch(e){}
       if(len>2){ const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
         for(let i=0;i<=n;i++){ const p=pth.getPointAtLength(len*i/n); pts.push([PX+p.x*sx, PY+p.y*sy]); }
-        const simp=simplify(pts,0.3), keep=(simp.length>=3?simp:pts);
-        cutSVG+='<polygon points="'+keep.map(q=>fmtn(q[0])+","+fmtn(q[1])).join(" ")+'" fill="none" stroke="#ff0000" stroke-width="0.2"/>'; ncut++;
+        const o=makePolyObj(pts,"cut"); if(gid!=null) o.group=gid; made.push(o);
       }
       s.remove();
     });
   });
-  if(!ncut){ say("Couldn't turn the outline into a cut path."); return; }
-  const svg='<svg xmlns="'+SVGNS+'" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'
-    +'<image x="'+fmtn(PX)+'" y="'+fmtn(PY)+'" width="'+fmtn(iw)+'" height="'+fmtn(ih)+'" xlink:href="'+dataURL+'" href="'+dataURL+'"/>'
-    +cutSVG+'</svg>';
+  if(!made.length){ say("Couldn't turn the outline into a cut path."); return; }
   refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
-  loadSVG(svg);                                        // proven print-and-cut path: image prints, red paths cut
-  draw();
-  // Marks are NOT switched on here. Removing a background is just as often the start of more work, or of a
-  // plain cut from colored card, and a page of registration marks in the way of either is a nuisance to undo.
-  // The Marks button turns them on when a print-and-cut is actually wanted.
-  say("Background removed. Cut it straight out with Make It!, or turn Marks on to print it first and cut round the print.");
+  if(made.length>1){ selMulti=made.map(o=>o.id); selId=null; } else { selId=made[0].id; selMulti=[]; }
+  selId2=null; selNode=null;
+  renderBg(); draw(); refreshEditPanel();
+  say("Made a silhouette from the photo - drag it into place. Paper Color previews it as cut card; Print + Marks for a registered color print-and-cut.");
 }
 $("bUseCut").onclick=integrateTrace;
 // Crop the imported photo to a drawn shape: everything outside the shape is removed and the
