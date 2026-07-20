@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.43 -->
+<!-- SANGALA_VERSION: 2026-07-18.45 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2735,7 +2735,12 @@ function dimText(o){
                 else rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } }
   else if(t==="circle"){ rows=[[["Diameter",2*R("r"),"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
-  else if(t==="polygon"){ if(!mode3D) return ""; rows=[[["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]]; }   // freeform shape: extrude with Depth/Base (drag to reposition)
+  else if(t==="polygon"||t==="polyline"){   // freeform shape (drawn, traced, or Combine/Difference result): resize by its bounding box
+    if(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")) return "";   // bricks stay parametric - Brick-size controls elsewhere
+    const bb=bbox([o.poly]);
+    rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]];
+    if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
+  }
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
@@ -2788,6 +2793,27 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
     if(dim==="d")r=Math.max(0.25,v/2); else if(dim==="x")cx=v; else if(dim==="y")cy=v;
     o.el.setAttribute("cx",fmtn(cx));o.el.setAttribute("cy",fmtn(cy));o.el.setAttribute("r",fmtn(r));
     o.poly=circlePoly(cx,cy,r);
+  } else if((t==="polygon"||t==="polyline") && (dim==="width"||dim==="height")){
+    // Scale every point from the bounding box's top-left corner (same anchor a rect resize uses), on ONE axis
+    // only - editing Width never touches Height and vice versa. A hole travels with its frame at the same
+    // scale, so a window stays centered in a resized frame instead of drifting. placeEl() (not a raw
+    // setAttribute) writes the new points back through the element's own CTM, so this is safe on an IMPORTED
+    // shape with a transform/scale too, not just one the app drew itself.
+    // Width and Height scale along the GLOBAL x/y axes, not the shape's own - fine for an axis-aligned shape
+    // (the common case: a fresh trace, a Difference frame, an unrotated rect), but editing Width and Height to
+    // DIFFERENT ratios on a shape with straight edges at an angle (a rotated rectangle, a diagonal Line-tool
+    // stroke) shears those edges out of true, the same "gotcha" non-uniform scale has in any vector tool. There
+    // is no stored rotation/orientation to scale along instead - once rotated, a shape is just absolute points.
+    const bb=bbox([o.poly]), minX=bb[0], minY=bb[1], curW=bb[2]-bb[0], curH=bb[3]-bb[1];
+    let sx=1, sy=1;
+    if(dim==="width"  && curW>1e-6) sx=Math.max(1,v)/curW;
+    if(dim==="height" && curH>1e-6) sy=Math.max(1,v)/curH;
+    if(sx!==1||sy!==1){
+      const scalePt=p=>[minX+(p[0]-minX)*sx, minY+(p[1]-minY)*sy];
+      o.poly=o.poly.map(scalePt);
+      if(o.holes) o.holes=o.holes.map(h=>h.map(scalePt));
+      placeEl(o);
+    }
   }
   draw(); if(!live)showDims(o); pvRefresh();
 }
