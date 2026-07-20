@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.48 -->
+<!-- SANGALA_VERSION: 2026-07-18.49 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3255,8 +3255,8 @@ cv.addEventListener("click",(e)=>{
   if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
     if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
     else if(onImg && refImg && refImg.img){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
-  } else if(hit && hit.group!=null){   // a grouped object -> select the whole group (moves/deletes as one)
-    selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+  } else if(hit && hit.group!=null && activeTool!=="node"){   // a grouped object -> select the whole group (moves/deletes as one).
+    selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;   // EXCEPT the Node tool, which edits ONE shape - it falls through below and picks the individual object out of the group (e.g. the frame of a tabbed shadowbox)
     say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
   else if(hit){ selId=hit.id; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine."); }
   else if(onImg){ selId=null; selId2=null; selImg2=false; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
