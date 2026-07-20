@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.46 -->
+<!-- SANGALA_VERSION: 2026-07-18.47 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2726,11 +2726,13 @@ function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
 // readout of the selected shape's dimensions in whole mm, as a 2-column table with
 // right-justified numbers so they line up (rect: W/H | X/Y; circle: ⌀ | center).
 // Returns HTML; "" hides the box.
+const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:.7rem">'
+  +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
 function dimText(o){
   if(!o||!o.el) return "";
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
-  let rows;
-  if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]];
+  let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
+  if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]]; lockableWH=true;
     if(mode3D){ if(o.el.hasAttribute("data-brick")) rows.push([["Fit",R("data-fit"),"fit"],null]);   // brick: depth is parametric, only Fit (clutch clearance) is tunable
                 else rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } }
   else if(t==="circle"){ rows=[[["Diameter",2*R("r"),"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
@@ -2742,7 +2744,7 @@ function dimText(o){
       rows=[[["Length",len,"linelen"],null]];                                      // change the line's ANGLE, not just its size - not a resize.
     } else {
       const bb=bbox([o.poly]);
-      rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]];
+      rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]]; lockableWH=true;
     }
     if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
   }
@@ -2754,10 +2756,12 @@ function dimText(o){
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+  if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
+    html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
+      "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
+  }
   if(mode3D && !o.el.hasAttribute("data-brick")){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath
     const st=o.el.getAttribute("data-studs")==="1", sk=o.el.getAttribute("data-sockets")==="1";
-    const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:.7rem">'
-      +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
     html+='<div style="margin-top:.45rem">'
       +flag("studs","Studs (top)",st,"LEGO studs on the top face, on the 8 mm grid wherever one fits. Click a stud on the mat to remove it.")
       +flag("sockets","Sockets (bottom)",sk,"Holes in the underside that clip onto the studs of the part below. Needs a Depth of about 5 mm or more.")+'</div>';
@@ -2791,7 +2795,10 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   if(units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
-    if(dim==="width")w=Math.max(1,v); else if(dim==="height")h=Math.max(1,v); else if(dim==="x")x=v; else if(dim==="y")y=v;
+    const locked=o.el.getAttribute("data-lockratio")==="1";   // Lock ratio: the OTHER side follows so Width:Height holds
+    if(dim==="width"){ const nw=Math.max(1,v); if(locked&&w>1e-6) h=fmtn(h*(nw/w)); w=nw; }
+    else if(dim==="height"){ const nh=Math.max(1,v); if(locked&&h>1e-6) w=fmtn(w*(nh/h)); h=nh; }
+    else if(dim==="x")x=v; else if(dim==="y")y=v;
     o.el.setAttribute("x",fmtn(x));o.el.setAttribute("y",fmtn(y));o.el.setAttribute("width",fmtn(w));o.el.setAttribute("height",fmtn(h));
     o.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
   } else if(t==="circle"){ let cx=N("cx"),cy=N("cy"),r=N("r");
@@ -2819,10 +2826,14 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
     // straight edge at an angle is almost always a rotated rectangle or tab, not a trace, and non-uniform
     // scaling opens its corners into a parallelogram - there is no stored rotation to scale along instead, so
     // warn rather than deliver a skewed cut line with no indication anything changed shape, not just size.
+    // Lock ratio sidesteps that entirely: it forces sx===sy (a uniform scale), which can never shear a shape -
+    // uniform scale is the one case where "along the page axes" and "along the shape's own axes" are the same.
     const bb=bbox([o.poly]), minX=bb[0], minY=bb[1], curW=bb[2]-bb[0], curH=bb[3]-bb[1];
+    const locked=o.el.getAttribute("data-lockratio")==="1";
     let sx=1, sy=1;
     if(dim==="width"  && curW>1e-6) sx=Math.max(1,v)/curW;
     if(dim==="height" && curH>1e-6) sy=Math.max(1,v)/curH;
+    if(locked){ if(dim==="width") sy=sx; else sx=sy; }
     if(sx!==1||sy!==1){
       let angled=false;
       if(o.poly.length<=9 && Math.abs(sx-sy)>1e-6){   // few points (a drawn/rotated shape, not a dense trace) + a non-uniform edit
@@ -2843,6 +2854,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   draw(); if(!live)showDims(o); pvRefresh();
 }
 function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEGO connectors on an extruded shape: studs on top, sockets underneath
+  if(flag==="lockratio"){ o.el.setAttribute("data-lockratio", on?"1":"0"); return; }   // just remembered for the next Width/Height edit - no geometry changes yet
   if(flag==="bore"){   // the axle hole: turning it on seeds a default axle, off strips every bore attribute
     if(on){ o.el.setAttribute("data-bore-axis", o.el.getAttribute("data-bore-axis")||"y"); if(!(+o.el.getAttribute("data-bore-d")>0)) o.el.setAttribute("data-bore-d","3.2"); }
     else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
