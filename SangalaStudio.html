@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.53 -->
+<!-- SANGALA_VERSION: 2026-07-20.54 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1354,7 +1354,10 @@ function brickTris(x0,y0,fit,cols,rows,Zt,studs,dock,grow,slope,inv){
   // Nothing else goes under here. Where there is no tube the cavity stays OPEN, and the wall (gripWall above)
   // does the gripping - the arrangement Moses's 1x2 leg proved, and the one he asked for after a ring-socket
   // print refused the studs.
-  if(!dock) t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));                                                                      // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
+  if(!dock){                                                                                                                          // no sockets -> flat closed floor: a solid base to glue to a surface (and a clean first layer)
+    if(inv) t.push(...boxTris(gx,yb,gW,(y1+G)-yb,0,Math.min(wall,Zt)));                                                               // ...but an inverted slope has NO base under its front rows - the wedge is the underside there. Floor only the full-height rows (behind yb), or the slab hangs in the gap below the wedge as a floating plate (Moses)
+    else    t.push(...boxTris(gx,gy,gW,gH,0,Math.min(wall,Zt)));
+  }
   return t;
 }
 function stlAscii(tris,name){
