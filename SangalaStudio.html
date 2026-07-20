@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-18.45 -->
+<!-- SANGALA_VERSION: 2026-07-18.46 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2737,12 +2737,17 @@ function dimText(o){
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
   else if(t==="polygon"||t==="polyline"){   // freeform shape (drawn, traced, or Combine/Difference result): resize by its bounding box
     if(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")) return "";   // bricks stay parametric - Brick-size controls elsewhere
-    const bb=bbox([o.poly]);
-    rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]];
+    if(o.poly.length===2){   // a straight open line/hinge (the Line tool's own shape): ONE size dimension, its Length. Width/Height
+      const len=Math.hypot(o.poly[1][0]-o.poly[0][0],o.poly[1][1]-o.poly[0][1]);   // (extent along x, extent along y) independently would
+      rows=[[["Length",len,"linelen"],null]];                                      // change the line's ANGLE, not just its size - not a resize.
+    } else {
+      const bb=bbox([o.poly]);
+      rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]];
+    }
     if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
   }
   else return "";
-  const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d";   // 2D lengths follow the Units setting; the rest stay mm
+  const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
     const u=is2D(p[2])?unit2D():MM_UNIT;
     return '<td style="text-align:left">'+p[0]+':</td>'
@@ -2793,26 +2798,46 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
     if(dim==="d")r=Math.max(0.25,v/2); else if(dim==="x")cx=v; else if(dim==="y")cy=v;
     o.el.setAttribute("cx",fmtn(cx));o.el.setAttribute("cy",fmtn(cy));o.el.setAttribute("r",fmtn(r));
     o.poly=circlePoly(cx,cy,r);
+  } else if((t==="polygon"||t==="polyline") && dim==="linelen" && o.poly.length===2){
+    // A straight line's only size is its Length - scale UNIFORMLY along its own direction from the first
+    // point, so the angle never changes. (Width/Height, below, would change a diagonal line's angle instead
+    // of its size - that's exactly why a 2-point line gets this single field instead of those two.)
+    const A=o.poly[0], B=o.poly[1], curLen=Math.hypot(B[0]-A[0],B[1]-A[1]);
+    if(curLen>1e-6){
+      const s=Math.max(1,v)/curLen;
+      o.poly=[[A[0],A[1]],[A[0]+(B[0]-A[0])*s, A[1]+(B[1]-A[1])*s]];
+      placeEl(o);
+    }
   } else if((t==="polygon"||t==="polyline") && (dim==="width"||dim==="height")){
     // Scale every point from the bounding box's top-left corner (same anchor a rect resize uses), on ONE axis
     // only - editing Width never touches Height and vice versa. A hole travels with its frame at the same
     // scale, so a window stays centered in a resized frame instead of drifting. placeEl() (not a raw
     // setAttribute) writes the new points back through the element's own CTM, so this is safe on an IMPORTED
     // shape with a transform/scale too, not just one the app drew itself.
-    // Width and Height scale along the GLOBAL x/y axes, not the shape's own - fine for an axis-aligned shape
-    // (the common case: a fresh trace, a Difference frame, an unrotated rect), but editing Width and Height to
-    // DIFFERENT ratios on a shape with straight edges at an angle (a rotated rectangle, a diagonal Line-tool
-    // stroke) shears those edges out of true, the same "gotcha" non-uniform scale has in any vector tool. There
-    // is no stored rotation/orientation to scale along instead - once rotated, a shape is just absolute points.
+    // Width and Height scale along the GLOBAL x/y axes, not the shape's own - fine for an axis-aligned shape,
+    // or an organic one (a trace) with no rigid right angle to protect. But a shape with FEW points and a
+    // straight edge at an angle is almost always a rotated rectangle or tab, not a trace, and non-uniform
+    // scaling opens its corners into a parallelogram - there is no stored rotation to scale along instead, so
+    // warn rather than deliver a skewed cut line with no indication anything changed shape, not just size.
     const bb=bbox([o.poly]), minX=bb[0], minY=bb[1], curW=bb[2]-bb[0], curH=bb[3]-bb[1];
     let sx=1, sy=1;
     if(dim==="width"  && curW>1e-6) sx=Math.max(1,v)/curW;
     if(dim==="height" && curH>1e-6) sy=Math.max(1,v)/curH;
     if(sx!==1||sy!==1){
+      let angled=false;
+      if(o.poly.length<=9 && Math.abs(sx-sy)>1e-6){   // few points (a drawn/rotated shape, not a dense trace) + a non-uniform edit
+        for(let i=0;i+1<o.poly.length && !angled;i++){
+          const ex=o.poly[i+1][0]-o.poly[i][0], ey=o.poly[i+1][1]-o.poly[i][1], el=Math.hypot(ex,ey);
+          if(el<0.5) continue;   // ignore a near-zero-length segment
+          const na=Math.abs(((Math.atan2(ey,ex)*180/Math.PI)%90+90)%90);   // edge angle folded into [0,90)
+          if(Math.min(na,90-na)>3) angled=true;                            // more than ~3 deg off horizontal/vertical
+        }
+      }
       const scalePt=p=>[minX+(p[0]-minX)*sx, minY+(p[1]-minY)*sy];
       o.poly=o.poly.map(scalePt);
       if(o.holes) o.holes=o.holes.map(h=>h.map(scalePt));
       placeEl(o);
+      if(angled) say((dim==="width"?"Width":"Height")+" changed - this shape has an angled edge, so it is no longer square. Ctrl-Z undoes it if that is not what you wanted.");
     }
   }
   draw(); if(!live)showDims(o); pvRefresh();
