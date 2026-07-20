@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-20.54 -->
+<!-- SANGALA_VERSION: 2026-07-20.56 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -146,7 +146,7 @@
     </div>
     <label class="fld" style="margin-top:.6rem">Page size (material)</label>
     <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option></select>
-    <label class="fld" style="margin-top:.6rem">Units</label>
+    <label class="fld" style="margin-top:.6rem">Units <span style="font-weight:normal;color:#8a7350">(affects 2D view only; 3D always in mm)</span></label>
     <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
     <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
     <div class="two">
@@ -2807,7 +2807,7 @@ function dimText(o){
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
-    const u=is2D(p[2])?unit2D():MM_UNIT;
+    const u=(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // 3D is always mm (LEGO/print parts are metric); only 2D follows the Units toggle - no mixed units in either view
     return '<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
@@ -2848,7 +2848,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
   if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
-  if(units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm
+  if(!mode3D && units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm. In 3D the field shows mm (see cell()), so the typed value is already mm - no conversion.
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     const locked=o.el.getAttribute("data-lockratio")==="1";   // Lock ratio: the OTHER side follows so Width:Height holds
