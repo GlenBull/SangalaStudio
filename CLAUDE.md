@@ -222,7 +222,7 @@ The standard skill recipe's rezip step **does not work here: there is no `zip` c
    they shipped.** Orphaned headings live in the PAGINATION, not the XML, so `validate.py` passes while the
    page looks wrong. No LibreOffice/poppler here and the Read tool can't rasterize a PDF either — instead drive
    **Word via COM**, which reports where each heading falls. Run the ready-made check:
-   `powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.1).docx"`
+   `powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.3).docx"`
    It opens the doc read-only (works even while Glen has it open) and prints: headings lacking `keepNext`, any
    heading currently split from its text across a page break, and the autospacing count. **Deliver only when it
    prints `PAGINATION CLEAN`** (zero orphans, zero headings missing keepNext). If you need a human-eyeball copy,

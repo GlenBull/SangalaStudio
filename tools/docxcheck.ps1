@@ -2,7 +2,7 @@
 # These defects (orphaned headings, autospacing gaps) live in the PAGINATION, not the XML, so validate.py
 # passes while the page looks wrong. There is no LibreOffice/poppler on this machine, so we drive Word via COM
 # (read-only, so it works even while the doc is open) and ask Word itself where each heading falls.
-# Usage:  powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.1).docx"
+# Usage:  powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.3).docx"
 param([Parameter(Mandatory=$true)][string]$Path)
 $wdActiveEndPageNumber = 3
 $wdVerticalPositionRelativeToPage = 6
