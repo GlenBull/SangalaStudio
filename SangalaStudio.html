@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-21.65 -->
+<!-- SANGALA_VERSION: 2026-07-21.66 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3147,7 +3147,11 @@ function refreshEditPanel(){
     $("editdims").style.display="none"; $("esimprow").style.display="none"; $("eBreak").style.display="none";
     $("groupsrow").style.display="block";
     $("eGroup").textContent   = mode3D ? "⛓ Fuse into one piece" : "▦ Group";       // in 3D a group IS the printed piece
-    $("eUngroup").textContent = mode3D ? "⛓ Unfuse" : "▤ Ungroup";
+    // "Unfuse" reads as its own opposite at a glance, so say what it does. fusedBodies counts the members that
+    // actually carry volume - a brick's stud circles ride along in the selection but are not pieces.
+    const sepN = mode3D ? fusedBodies(selMulti).length : 0;
+    $("eUngroup").textContent = mode3D ? (sepN>1 ? "⛓ Separate into "+sepN+" pieces" : "⛓ Separate the pieces") : "▤ Ungroup";
+    $("eUngroup").title = mode3D ? "Split this back into separate printed pieces - each exports as its own STL again." : "";
     $("eGroup").title = mode3D ? "Print these as a single solid: they grow a hair so they overlap, and the slicer welds them. They must touch." : "";
     $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     const mbrk=selectedBrick();                               // a grouped brick: offer its size controls too
@@ -3228,7 +3232,7 @@ function groupSel(){
 function ungroupSel(){
   const set=new Set(selMulti); let n=0; objects.forEach(o=>{ if(set.has(o.id)&&o.group!=null){ o.group=null; n++; } });
   refreshEditPanel(); draw(); pvRefresh();
-  say(mode3D ? "Unfused "+n+" shapes - each prints as its own piece again." : "Ungrouped "+n+" objects.");
+  say(mode3D ? "Separated into "+n+" pieces - each prints on its own again." : "Ungrouped "+n+" objects.");
 }
 $("eGroup").onclick=groupSel;
 $("eUngroup").onclick=ungroupSel;
