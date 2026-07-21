@@ -22,6 +22,11 @@ Houses/*.docx
 # (Keeping 129 MB of past .docx revisions would bloat every clone a school makes.)
 .Archive/
 
+# Source photos and screenshots for the documents — same reason: 20 MB of PNG/JPG
+# (one 16 MB silhouette source alone) would sit in every clone forever. Keep the
+# originals in Dropbox; the documents carry their own embedded copies.
+Images/
+
 # OS / Dropbox / editor cruft
 .DS_Store
 Thumbs.db
