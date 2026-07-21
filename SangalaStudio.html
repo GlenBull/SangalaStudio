@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-21.63 -->
+<!-- SANGALA_VERSION: 2026-07-21.65 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1749,11 +1749,18 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
   return tris;
 }
-function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
+function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
+  // onlyIds (optional Set) limits the build to a selection, for exporting ONE piece at a time. Selecting any
+  // member of a fused group pulls in the WHOLE group, because a fused group IS one printed piece - exporting
+  // half of one would write a part that cannot print.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
-  const bodies=bricks.concat(plain);
+  let bodies=bricks.concat(plain);
+  if(onlyIds && onlyIds.size){
+    const grp=new Set(); bodies.forEach(o=>{ if(onlyIds.has(o.id) && o.group!=null) grp.add(o.group); });
+    bodies=bodies.filter(o=> onlyIds.has(o.id) || (o.group!=null && grp.has(o.group)) );   // whole groups, never a fragment
+  }
   const per={}; bodies.forEach(o=>{ if(o.group!=null) per[o.group]=(per[o.group]||0)+1; });   // bodies per group; 2+ = fused into one printed piece
   const parts=new Map();                                                                      // a PART is one printed piece: a fused group, or a body on its own
   bodies.forEach(o=>{ const fuse=o.group!=null && per[o.group]>1, key=o.group!=null ? "g"+o.group : "o"+o.id;
@@ -1762,28 +1769,39 @@ function buildTris(){   // assemble the 3D triangle soup (mm, Z up) that BOTH th
   const list=Array.from(parts.values());
   return {tris:[].concat.apply([],list), n:bodies.length, bricks:bricks.length, parts:list};
 }
+// Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
+// dialog per click, so the old loop - asking for five files from one press - was refused after the first and
+// silently wrote only one. Exporting what is selected sidesteps that completely: one piece, one click, one
+// dialog, and the student still chooses where every file goes. With nothing selected it writes the whole
+// design, which is the right thing when the pieces are laid out to print together in one job.
 async function exportSTL(){
-  const {tris,n,bricks,parts}=buildTris();
-  if(!n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
-  if(parts.length===1){
-    const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),"sangala-model.stl","STL model",".stl");
-    if(name) say("Exported "+name+" - "+n+" object"+(n!==1?"s":"")+(bricks?" ("+bricks+" hollow brick"+(bricks!==1?"s":"")+")":"")+", "+tris.length+" triangles.");
-    return;
-  }
-  say("Saving "+parts.length+" printed pieces, one STL each - a Save dialog opens for each. (Fused shapes count as one piece.)");
-  let saved=0;
-  for(let i=0;i<parts.length;i++){
-    const nm=await saveBlob(new Blob([stlAscii(parts[i],"sangala_part"+(i+1))],{type:"model/stl"}),"sangala-part"+(i+1)+".stl","STL model",".stl");
-    if(!nm) break;                                                     // canceled - stop asking
-    saved++;
-  }
-  say(saved ? "Exported "+saved+" of "+parts.length+" pieces, "+tris.length+" triangles in all."
-            : "Export canceled - nothing written.");
+  const sel=new Set(selectedIds());
+  const {tris,n,bricks,parts}=buildTris(sel.size?sel:null);
+  if(!n){ say(sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
+                       : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
+                            sel.size?"sangala-part.stl":"sangala-model.stl","STL model",".stl");
+  if(!name){ say("Export canceled - nothing written."); return; }
+  const what = sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
+                        : (parts.length>1 ? "all "+parts.length+" pieces together" : "the model");
+  say("Exported "+name+" - "+what+(bricks?", "+bricks+" hollow brick"+(bricks!==1?"s":""):"")+", "+tris.length+" triangles."
+      + (parts.length>1 && !sel.size ? " To save pieces separately, select one and export again." : ""));
 }
 $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
-let pvOn=false, pvTris=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null;
+let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null;
+// One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
+// different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
+// one triangle soup, so two shapes that merely overlap look exactly like two that are fused - which is how a
+// pair of un-fused rectangles can appear joined on screen and then export as two separate files.
+// Piece 1 keeps the original brick red, so a single-piece model looks exactly as it always did.
+const PIECE_COLORS=[[214,74,48],[62,116,178],[86,150,90],[196,150,54],[142,96,166],[70,150,150]];
+function pvSetTris(b){   // parts are concatenated in order by buildTris, so a per-triangle color array lines up
+  pvTris=b.tris; pvCol=[];
+  (b.parts||[]).forEach((tris,i)=>{ const c=PIECE_COLORS[i%PIECE_COLORS.length];
+    for(let k=0;k<tris.length;k++) pvCol.push(c); });
+}
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
@@ -1798,7 +1816,7 @@ function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so B
   scheduleCommit();   // Undo: 3D-only edits (Depth/Base/Fit) may not redraw the 2D canvas, so snapshot here too
   if(!pvOn) return;
   const b=buildTris(); if(!b.n){ closePreview(); return; }   // last 3D object removed -> leave preview
-  pvTris=b.tris; renderPreview();
+  pvSetTris(b); renderPreview();
 }
 function renderPreview(){
   const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
@@ -1825,11 +1843,12 @@ function renderPreview(){
   const L=[0.38,-0.42,0.82], Ll=Math.hypot(L[0],L[1],L[2]); L[0]/=Ll;L[1]/=Ll;L[2]/=Ll;   // world light from upper-front
   // ---- model: rasterize with a PER-PIXEL depth buffer. Sorting whole triangles (painter's) mis-orders a small
   // stud against the large flat face it sits on, so the face paints over it. A z-buffer keeps whatever is nearest. ----
-  const base=[214,74,48];                             // warm brick-red plastic
   const img=g.getImageData(0,0,W,H), px=img.data;     // composite over the background + plate already drawn
   if(!pvZbuf || pvZbuf.length!==W*H) pvZbuf=new Float32Array(W*H);
   pvZbuf.fill(Infinity);                              // depth: smaller = nearer
-  for(const t of pvTris){
+  for(let ti=0; ti<pvTris.length; ti++){
+    const t=pvTris[ti];
+    const base=(pvCol && pvCol[ti]) || PIECE_COLORS[0];   // this triangle's PIECE color (see pvSetTris)
     const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],
           vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;   // outward normal
@@ -1874,9 +1893,9 @@ function renderPreview(){
   }
 }
 function openPreview(){
-  const {tris,n}=buildTris();
-  if(!n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
-  pvTris=tris; pvOn=true;
+  const b=buildTris();
+  if(!b.n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  pvSetTris(b); pvOn=true;
   $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
   pvBounds(); renderPreview();
