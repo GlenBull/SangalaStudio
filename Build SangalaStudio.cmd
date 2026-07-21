@@ -20,9 +20,11 @@ set "OUT=SangalaStudio.exe"
 set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if not exist "%CSC%" set "CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe"
 if not exist "%CSC%" ( echo Could not find the built-in .NET compiler ^(csc.exe^). & pause & exit /b 1 )
+if not exist "Sangala.ico" ( echo Could not find Sangala.ico ^(the program icon^) in this folder. & pause & exit /b 1 )
 
 echo Building %OUT% ...
 "%CSC%" /nologo /target:winexe /main:DieCutterApp.Server /out:"%OUT%" ^
+  /win32icon:"Sangala.ico" ^
   /reference:System.dll ^
   /reference:System.Core.dll ^
   /reference:System.Drawing.dll ^
