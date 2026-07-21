@@ -12,6 +12,10 @@ REM
 REM  It only downloads when there is actually a newer version, and it never
 REM  leaves you half-updated: if either file fails to download, nothing on your
 REM  computer is changed.
+REM
+REM  It also puts a "Sangala Studio" icon on your Desktop -- and refreshes it if
+REM  you have moved this folder -- so you can start the program without hunting
+REM  for it. That happens whether or not there was anything new to download.
 REM ==========================================================================
 setlocal
 cd /d "%~dp0"
@@ -45,6 +49,7 @@ if exist "%HTML%" for /f "delims=" %%V in ('findstr /c:"SANGALA_VERSION" "%HTML%
 if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" (
   del "%TMPHTML%" >nul 2>&1
   echo Already up to date - nothing downloaded.
+  call :shortcut
   echo.
   pause
   exit /b 0
@@ -84,6 +89,7 @@ echo Done - Sangala Studio is up to date.
 echo.
 echo   Now reopen SangalaStudio.exe (double-click it). Your browser will open
 echo   the design page. If a page was already open, press F5 to refresh it.
+call :shortcut
 echo.
 echo   (Your previous version was saved as %HTML%.bak and %EXE%.bak, just in case.)
 echo.
@@ -99,6 +105,25 @@ if %errorlevel%==0 (
 ) else (
   powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%~1' -OutFile '%~2' -UseBasicParsing } catch { exit 1 }"
 )
+goto :eof
+
+REM ==========================================================================
+:shortcut
+REM  Put (or refresh) a "Sangala Studio" icon on the Desktop, pointing at the
+REM  engine in THIS folder -- so the icon keeps working even after an update,
+REM  and gets corrected if the folder has been moved.
+REM  Pure convenience: it writes only to the user's own Desktop (no admin), and
+REM  if anything goes wrong the update itself is still good, so this never
+REM  changes the exit code. The paths travel as environment variables so folder
+REM  names with spaces or apostrophes cannot break the quoting, and
+REM  SpecialFolders finds the real Desktop even when OneDrive has redirected it.
+if not exist "%~dp0%EXE%" goto :eof
+set "SANGALA_HOME=%~dp0"
+set "SANGALA_TARGET=%~dp0%EXE%"
+powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $p = Join-Path $ws.SpecialFolders('Desktop') 'Sangala Studio.lnk'; $l = $ws.CreateShortcut($p); $l.TargetPath = $env:SANGALA_TARGET; $l.WorkingDirectory = $env:SANGALA_HOME.TrimEnd('\'); $l.Description = 'Sangala Studio - Digital Fabrication Tool'; $l.Save(); exit 0 } catch { exit 1 }" >nul 2>&1
+if errorlevel 1 goto :eof
+echo.
+echo   A "Sangala Studio" icon is on your Desktop, ready to use.
 goto :eof
 
 REM ==========================================================================
