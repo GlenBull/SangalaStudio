@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-20.62 -->
+<!-- SANGALA_VERSION: 2026-07-21.63 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1203,6 +1203,25 @@ function boxTris(x,y,w,h,z0,z1){   // 8 corners -> 12 triangles, outward winding
   const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
   return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
 }
+// A sloped BLOCK: a rectangular block whose top falls away toward the FRONT (low-Y) edge over `run` mm,
+// the rest of the top staying flat. This is the same wedge the Brick tool makes, but on an ordinary block -
+// so unlike a brick it can sit on a Base, stack on another body, and Fuse into a bigger one. That is what
+// makes a tapered animal buildable: slopes used to exist only inside brickTris, which is nailed to the plate.
+// Built from yzPrism, the side-view profile sweep that ALREADY draws the brick's slope, so this is the
+// proven geometry rather than a second implementation of it.
+// The front lip follows the brick's rule (lip = depth - run, floored at 0): run == depth gives exactly 45
+// degrees, a longer run gives a shallower ramp, and the lip keeps the front from tapering to a knife edge
+// that no printer can lay down.
+function slopedBoxTris(x,y,w,h,z0,z1,run){
+  const y0=y, y1=y+h, d=z1-z0;
+  run=Math.max(0, Math.min(run, h));
+  if(run<=0 || d<=0) return boxTris(x,y,w,h,z0,z1);
+  const yb=y0+run, lip=Math.max(0, d-run);
+  const prof=[[y0,z0],[y1,z0],[y1,z1]];          // front-bottom -> back-bottom -> back-top
+  if(yb < y1-1e-6) prof.push([yb,z1]);           // ...flat top back to where the slope starts
+  if(lip > 1e-6)   prof.push([y0,z0+lip]);       // ...down the ramp to the front lip (omitted = knife edge)
+  return yzPrism(prof, x, x+w);
+}
 function cylTris(cx,cy,r,z0,z1){   // triangle-fan caps + wall quads; outward winding, Z up; spans z0..z1
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), CB=[cx,cy,z0], CT=[cx,cy,z1], P=[], tris=[];
   for(let i=0;i<n;i++){const a=2*Math.PI*i/n; P.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
@@ -1706,6 +1725,19 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
     if(isRectRing(outer) && (!inner || isRectRing(inner))){
       const bh = o.el.hasAttribute("data-bore-h") ? +o.el.getAttribute("data-bore-h") : (z0+z1)/2;
       return boredBoxTris(outer, inner, z0, z1, bAxis, bD, bh);
+    }
+  }
+  // Sloped block: a rectangular block with its top ramped down toward the front edge (see slopedBoxTris).
+  // Gated to AXIS-ALIGNED rectangles exactly the way the axle bore above is - the profile is swept along one
+  // axis, so a rotated or freeform outline has no unambiguous direction to fall in. Skipped when the block
+  // has sockets or holes: both cut the body into shapes with flat tops, which a ramp would contradict. It
+  // returns here, so a sloped block carries no studs either - the top it would stand them on is not level.
+  const sRun=g("data-slope-run");
+  if(sRun>0 && (t==="rect"||t==="polygon") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length)){
+    const outer = t==="rect" ? [[g("x"),g("y")],[g("x")+g("width"),g("y")],[g("x")+g("width"),g("y")+g("height")],[g("x"),g("y")+g("height")]] : o.poly;
+    if(isRectRing(outer)){
+      const bb=bbox([outer]);
+      return slopedBoxTris(bb[0]-G, bb[1]-G, (bb[2]-bb[0])+2*G, (bb[3]-bb[1])+2*G, z0, z1, sRun);
     }
   }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
@@ -2501,7 +2533,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper color
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slope-run"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -2510,7 +2542,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slope-run"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -2789,7 +2821,8 @@ function dimText(o){
   let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]]; lockableWH=true;
     if(mode3D){ if(o.el.hasAttribute("data-brick")) rows.push([["Fit",R("data-fit"),"fit"],null]);   // brick: depth is parametric, only Fit (clutch clearance) is tunable
-                else rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } }
+                else { rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);
+                       rows.push([["Slope",R("data-slope-run"),"sloperun"],null]); } } }   // ramps the top down toward the front edge - 0 = flat
   else if(t==="circle"){ rows=[[["Diameter",2*R("r"),"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
   else if(t==="polygon"||t==="polyline"){   // freeform shape (drawn, traced, or Combine/Difference result): resize by its bounding box
@@ -2802,6 +2835,7 @@ function dimText(o){
       rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]]; lockableWH=true;
     }
     if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
+    if(mode3D && objClosed(o) && isRectRing(o.poly)) rows.push([["Slope",R("data-slope-run"),"sloperun"],null]);   // a Combine result that is still a rectangle can ramp too
   }
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
@@ -2843,6 +2877,7 @@ function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
+  if(dim==="sloperun"){ o.el.setAttribute("data-slope-run",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // sloped block: how far in from the front edge the top ramps down
   if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
