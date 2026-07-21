@@ -27,6 +27,10 @@ Houses/*.docx
 # originals in Dropbox; the documents carry their own embedded copies.
 Images/
 
+# Printable artifacts (sample inserts, doc exports for eyeballing) — output, not
+# source. The design that produced them is the .svg or .docx that IS tracked.
+*.pdf
+
 # OS / Dropbox / editor cruft
 .DS_Store
 Thumbs.db
