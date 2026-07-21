@@ -1,5 +1,7 @@
 # Sangala Studio Documentation — working conventions
 
+*Rev. 1.1 — 2026-07-20*
+
 Start here before editing the User Guide or the Technical Manual. This file records
 what lives in this folder and the conventions that keep both documents consistent
 with each other and with the *Design through Making: Art and Engineering* book, so
@@ -8,7 +10,7 @@ they read as one product.
 ## What's in this folder
 
 - **User Guide (Ver X.Y).docx** — the student-facing guide to Sangala Studio, organized
-  around the book's chapter activities. The `.docx` is the maintained, delivered artifact.
+  around the application's features and tools. The `.docx` is the maintained, delivered artifact.
 - **User Guide.md** — a markdown companion covering the Chapters 1–3 (2D) features. It's
   also the best worked example of the house voice; when in doubt about tone, read it.
 - **Tech Manual (Ver X.Y).docx** — the technical / engine manual.
@@ -30,9 +32,16 @@ are formatted. This is where "same look and feel" actually lives.
   (it collides with the Snap! programming language). Mat and page sizes shown in whole inches.
 - **Voice:** concise and direct; minimal formatting; prose over bullet lists unless a list is
   clearly warranted. Never write "honest / honestly / genuinely / straightforward."
-- **Structure:** built around the chapter **activities** — what a student does — not a
-  feature-by-feature UI tour, with jargon introduced in context the first time it's needed.
-  That mirrors the book's 2D → 3D → mechanisms arc and is why the two reinforce each other.
+- **Structure:** organized around the application's **features and tools** — one section per
+  tool or workflow (Getting Started, Cut/Fold Lines, Drawing, Editing, Snap!, Combining,
+  Aligning, Cutting Out, 3D mode, and so on), with jargon introduced in context the first time
+  it's needed. As the tool set has grown, this keeps each tool documented in exactly one place
+  rather than re-explained inside every activity that uses it. A short activity-framed opening
+  (what a student is trying to make) and a closing "Tool Sequences for Specific Designs"
+  appendix (mapping tools back to a Silhouette, a Collage, a Shadowbox Frame, etc.) bookend the
+  reference so a student can still find the path through a specific project. *(This supersedes
+  an earlier draft of this guidance that called for activity-first structure — the guide's own
+  growth made the feature-first approach the better fit.)*
 
 ## Typographic spec
 
@@ -79,5 +88,5 @@ and is **not** portable — a different tool or thread should use its own docume
 
 A shared style guide is being developed alongside the *Design through Making* book to unify it
 with these documents. Where a convention here differs from the book's, reconcile to one answer
-and apply it to both. The consistency layer above (voice, terminology, spelling, activity
-grounding) is non-negotiable; the typographic specifics can go either way but must be unified.
+and apply it to both. The consistency layer above (voice, terminology, spelling) is
+non-negotiable; structure and the typographic specifics can go either way but must be unified.
