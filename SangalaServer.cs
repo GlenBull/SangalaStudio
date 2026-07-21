@@ -474,6 +474,22 @@ namespace DieCutterApp
         class TrayContext : ApplicationContext
         {
             NotifyIcon _icon;
+            // The tray icon is the program's OWN icon -- the one /win32icon embeds from
+            // Sangala.ico at build time -- so it tracks the artwork automatically instead
+            // of showing the generic Windows program icon. Reading it back out of the
+            // running exe means no separate icon file has to ship alongside the program.
+            // Falls back to the stock icon if extraction ever fails, so a missing or odd
+            // icon can never stop the tray from appearing.
+            static System.Drawing.Icon OwnIcon()
+            {
+                try
+                {
+                    var ico = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                    if (ico != null) return ico;
+                }
+                catch { }
+                return System.Drawing.SystemIcons.Application;
+            }
             public TrayContext(int port)
             {
                 string url = "http://127.0.0.1:" + port + "/";
@@ -482,7 +498,7 @@ namespace DieCutterApp
                 menu.Items.Add("Quit Sangala Studio", null, (a, b) => { _icon.Visible = false; Application.Exit(); });
                 _icon = new NotifyIcon
                 {
-                    Icon = System.Drawing.SystemIcons.Application,
+                    Icon = OwnIcon(),
                     Text = "Sangala Studio (running)",
                     Visible = true,
                     ContextMenuStrip = menu
