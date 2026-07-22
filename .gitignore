@@ -44,3 +44,5 @@ desktop.ini
 
 # local sync bookkeeping for Sync with Dropbox.cmd
 tools/.publish-state.json
+tools/sync-log.txt
+SYNC CONFLICT.txt

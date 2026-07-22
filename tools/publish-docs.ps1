@@ -61,6 +61,7 @@ if (-not (Test-Path $target)) {
 }
 $archive = Join-Path $target 'Archive'
 $pushed = 0; $pulled = 0; $archived = 0; $same = 0; $conflicts = 0
+$conflictNames = @()
 $newstate = @{}
 
 foreach ($item in $managed) {
@@ -153,6 +154,7 @@ foreach ($item in $managed) {
         Write-Host "             Merge them by hand, then run this again."
         Write-Host ""
         $conflicts++
+        $conflictNames += $name
         $newstate[$name] = $last          # keep the old record so it stays flagged
     }
 }
@@ -168,3 +170,27 @@ if ($Apply) {
 }
 if ($conflicts -gt 0) { Write-Host "  Resolve the conflict(s) above before relying on this." }
 Write-Host ""
+
+# ---- leave a record, because this also runs unattended from Task Scheduler -----------------
+if ($Apply) {
+    $stamp  = Get-Date -Format 'yyyy-MM-dd HH:mm'
+    $logf   = Join-Path $PSScriptRoot 'sync-log.txt'
+    $marker = Join-Path $repo 'SYNC CONFLICT.txt'
+    Add-Content -Path $logf -Encoding utf8 -Value ("{0}  pushed {1}, pulled {2}, archived {3}, in step {4}, conflicts {5}" -f $stamp, $pushed, $pulled, $archived, $same, $conflicts)
+    $lines = @(Get-Content $logf)
+    if ($lines.Count -gt 500) { $lines[-500..-1] | Set-Content $logf -Encoding utf8 }
+
+    # A conflict during an unattended run would otherwise be invisible. Drop a file where it
+    # will be noticed, and clear it as soon as the conflict is resolved.
+    if ($conflicts -gt 0) {
+        $msg  = "Sangala document sync stopped on a conflict at $stamp.`r`n`r`n"
+        $msg += "These files were edited BOTH in the repository and in the Dropbox folder since`r`n"
+        $msg += "the last sync, so nothing was copied - copying either way would lose an edit:`r`n`r`n"
+        foreach ($n in $conflictNames) { $msg += "    $n`r`n" }
+        $msg += "`r`nOpen both copies, merge them by hand, then run 'Sync with Dropbox.cmd'.`r`n"
+        $msg += "This file disappears once the conflict is cleared.`r`n"
+        Set-Content -Path $marker -Value $msg -Encoding utf8
+    } elseif (Test-Path $marker) {
+        Remove-Item $marker -Force
+    }
+}
