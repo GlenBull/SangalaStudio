@@ -18,8 +18,8 @@
   it sits, so a stack of circles hangs one beneath another. Two things make it read as a tail:
 
     IT CURVES, RATHER THAN LEANING. This is the part that is easy to get wrong. An earlier
-    version stepped each segment sideways by almost the same amount - 3 mm, 3 mm, 2.5 mm - and a
-    near-constant step is a straight diagonal. It leaned; it did not curve. What the eye
+    version stepped each segment sideways by almost the same amount - 3 mm, 3 mm, 2.5 mm - and
+    a near-constant step is a straight diagonal. It leaned; it did not curve. What the eye
     reads as a curve is a change of DIRECTION, not a sideways displacement, so this tail is
     built from a heading instead: it leaves the rump 46 degrees off vertical and rotates steadily
     to 2 degrees by the tip - a turn of 45 degrees, which is a true arc. That is also why the
@@ -35,9 +35,14 @@
   Taper cannot come from Slope: Slope ramps the top face of a rectangle, which does nothing
   along a tail. It comes from simply using a smaller circle further down.
 
-  WHERE THE TAIL SITS, and why it matters. The tail leaves the rump near a corner and swings
-  clear of the block. Tuck it inside the block's footprint and it hides underneath; a tail that
-  is built perfectly and cannot be seen looks exactly like a broken one.
+  WHICH WAY IT SWINGS, and why that matters. The tail sweeps ACROSS the view rather than toward
+  you. That is not an arbitrary choice. The 3D View looks down on the model at an angle, so a
+  tail swinging toward the viewer has its bend pointing almost straight at the camera, where
+  perspective flattens it to nearly nothing: the curve is perfectly real and looks like a
+  straight line. Swinging it sideways instead spends the movement across the screen, where it
+  can be seen. The same trap catches the tail's POSITION - tuck it inside the block's footprint
+  and it hides underneath. A part that is built perfectly and cannot be seen looks exactly like
+  a broken one, so build it, then turn the model and check.
 
   PRINTING. The tail hangs in free air, so expect to turn support material on. The thinnest
   part is 3.5 mm, which survives handling in PLA; going much finer will snap. If it does give
@@ -54,46 +59,46 @@
   <rect   x="8" y="24" width="30" height="20"
           data-z="14" data-z0="46"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="35.08" cy="26.64" r="4.68"
+  <circle cx="35.14" cy="27" r="4.68"
           data-z="2.17" data-z0="46.83"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="37.17" cy="25.93" r="4.3"
+  <circle cx="37.34" cy="27" r="4.3"
           data-z="3.3" data-z0="44.52"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="39.14" cy="25.27" r="3.99"
+  <circle cx="39.41" cy="27" r="3.99"
           data-z="3.43" data-z0="42.1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="40.96" cy="24.65" r="3.71"
+  <circle cx="41.33" cy="27" r="3.71"
           data-z="3.54" data-z0="39.55"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="42.64" cy="24.09" r="3.45"
+  <circle cx="43.1" cy="27" r="3.45"
           data-z="3.65" data-z0="36.91"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="44.17" cy="23.57" r="3.21"
+  <circle cx="44.71" cy="27" r="3.21"
           data-z="3.74" data-z0="34.16"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="45.55" cy="23.11" r="2.99"
+  <circle cx="46.16" cy="27" r="2.99"
           data-z="3.83" data-z0="31.33"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="46.76" cy="22.7" r="2.77"
+  <circle cx="47.43" cy="27" r="2.77"
           data-z="3.91" data-z0="28.42"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="47.81" cy="22.35" r="2.56"
+  <circle cx="48.54" cy="27" r="2.56"
           data-z="3.97" data-z0="25.45"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="48.69" cy="22.05" r="2.35"
+  <circle cx="49.46" cy="27" r="2.35"
           data-z="4.03" data-z0="22.42"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="49.4" cy="21.81" r="2.15"
+  <circle cx="50.21" cy="27" r="2.15"
           data-z="4.07" data-z0="19.34"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="49.93" cy="21.63" r="1.96"
+  <circle cx="50.77" cy="27" r="1.96"
           data-z="4.11" data-z0="16.24"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="50.29" cy="21.51" r="1.77"
+  <circle cx="51.15" cy="27" r="1.77"
           data-z="4.13" data-z0="13.1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="50.47" cy="21.45" r="2.85"
+  <circle cx="51.33" cy="27" r="2.85"
           data-z="4.14" data-z0="9.96"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
@@ -101,46 +106,46 @@
   <rect   x="78" y="24" width="30" height="20"
           data-z="14" data-z0="46" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="105.08" cy="26.64" r="4.68"
+  <circle cx="105.14" cy="27" r="4.68"
           data-z="2.17" data-z0="46.83" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="107.17" cy="25.93" r="4.3"
+  <circle cx="107.34" cy="27" r="4.3"
           data-z="3.3" data-z0="44.52" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="109.14" cy="25.27" r="3.99"
+  <circle cx="109.41" cy="27" r="3.99"
           data-z="3.43" data-z0="42.1" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="110.96" cy="24.65" r="3.71"
+  <circle cx="111.33" cy="27" r="3.71"
           data-z="3.54" data-z0="39.55" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="112.64" cy="24.09" r="3.45"
+  <circle cx="113.1" cy="27" r="3.45"
           data-z="3.65" data-z0="36.91" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="114.17" cy="23.57" r="3.21"
+  <circle cx="114.71" cy="27" r="3.21"
           data-z="3.74" data-z0="34.16" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="115.55" cy="23.11" r="2.99"
+  <circle cx="116.16" cy="27" r="2.99"
           data-z="3.83" data-z0="31.33" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="116.76" cy="22.7" r="2.77"
+  <circle cx="117.43" cy="27" r="2.77"
           data-z="3.91" data-z0="28.42" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="117.81" cy="22.35" r="2.56"
+  <circle cx="118.54" cy="27" r="2.56"
           data-z="3.97" data-z0="25.45" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="118.69" cy="22.05" r="2.35"
+  <circle cx="119.46" cy="27" r="2.35"
           data-z="4.03" data-z0="22.42" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="119.4" cy="21.81" r="2.15"
+  <circle cx="120.21" cy="27" r="2.15"
           data-z="4.07" data-z0="19.34" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="119.93" cy="21.63" r="1.96"
+  <circle cx="120.77" cy="27" r="1.96"
           data-z="4.11" data-z0="16.24" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="120.29" cy="21.51" r="1.77"
+  <circle cx="121.15" cy="27" r="1.77"
           data-z="4.13" data-z0="13.1" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="120.47" cy="21.45" r="2.85"
+  <circle cx="121.33" cy="27" r="2.85"
           data-z="4.14" data-z0="9.96" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
