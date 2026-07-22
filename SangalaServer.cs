@@ -34,10 +34,70 @@ namespace DieCutterApp
         static double _jogX = 15.9, _jogY = 15.9;   // current manual-jog head position (mm)
         static bool _framed = false;                 // has the machine been Setup() since connect (for /raw debug)
         static readonly System.Globalization.CultureInfo INV = System.Globalization.CultureInfo.InvariantCulture;
+        static Mutex _onlyOne;                       // held for the life of the process; see Main
+
+        // The bridge takes the first free port in 8787-8807. That is what let copies pile up:
+        // launching it again simply grabbed the next port instead of noticing one was already
+        // running, so every use of the desktop shortcut added another tray icon. Before opening
+        // a port, ask whether one of ours is already answering, and if so just show its page.
+        static int FindRunningBridge()
+        {
+            for (int p = 8787; p <= 8807; p++)
+            {
+                try
+                {
+                    using (var c = new TcpClient())
+                    {
+                        var iar = c.BeginConnect(IPAddress.Loopback, p, null, null);
+                        if (!iar.AsyncWaitHandle.WaitOne(120)) continue;   // nothing listening
+                        c.EndConnect(iar);
+                        using (var ns = c.GetStream())
+                        {
+                            var req = Encoding.ASCII.GetBytes(
+                                "GET /status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                            ns.Write(req, 0, req.Length);
+                            ns.ReadTimeout = 700;
+                            // read past the headers - the marker we want is in the BODY, so a
+                            // single Read is not enough; it usually returns the headers alone.
+                            var sb = new StringBuilder();
+                            var buf = new byte[512];
+                            for (int i = 0; i < 8; i++)
+                            {
+                                int n;
+                                try { n = ns.Read(buf, 0, buf.Length); } catch { break; }
+                                if (n <= 0) break;
+                                sb.Append(Encoding.ASCII.GetString(buf, 0, n));
+                                if (sb.ToString().IndexOf("\"status\"", StringComparison.Ordinal) >= 0) break;
+                            }
+                            // only OUR bridge answers /status with a status object
+                            if (sb.ToString().IndexOf("\"status\"", StringComparison.Ordinal) >= 0) return p;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return 0;
+        }
 
         [STAThread]
         static void Main()
         {
+            // One bridge per user session. If this is not the first, hand the user the page the
+            // running instance is already serving and exit quietly - that is what they wanted
+            // when they double-clicked, and it leaves the machine connection undisturbed.
+            bool first;
+            _onlyOne = new Mutex(true, "SangalaStudioBridge", out first);
+            if (!first)
+            {
+                // Never put up a dialog here. A modal box keeps THIS process alive until someone
+                // clicks it, which is the same pile-up in another form. Open the page the running
+                // bridge is serving and get out. If it is still starting and has not answered yet,
+                // 8787 is the port it will take.
+                int running = FindRunningBridge();
+                try { Process.Start("http://127.0.0.1:" + (running > 0 ? running : 8787) + "/"); } catch { }
+                return;
+            }
+
             _htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SangalaStudio.html");
             _snapLibPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sangala for Snap.xml");
 
