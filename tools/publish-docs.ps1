@@ -2,9 +2,10 @@
 # Moses and the other testers can pick up a new User Guide without downloading the whole
 # repository as a zip.
 #
-# The folder is a team-space share, mounted one level ABOVE the personal Dropbox folder:
-#   %USERPROFILE%\UVa Lab School Dropbox\AI Sandbox\...     (team space)
-#   %USERPROFILE%\UVa Lab School Dropbox\Glen Bull\...      (personal)
+# Dropbox here is a business-licensed team account. AI Sandbox sits at the TOP level of it,
+# deliberately, because that is what makes access easy to control:
+#   %USERPROFILE%\UVa Lab School Dropbox\AI Sandbox\...     (top level - this folder)
+#   %USERPROFILE%\UVa Lab School Dropbox\Glen Bull\...      (Glen's own folder in the account)
 #
 # Rules this follows:
 #   - Only the files named below are touched. Anything else in the folder is left alone.
