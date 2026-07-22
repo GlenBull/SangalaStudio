@@ -220,7 +220,10 @@ The standard skill recipe's rezip step **does not work here: there is no `zip` c
 4. **Rezip with Python's `zipfile`** (`[Content_Types].xml` first, then walk the tree) — this is
    the established method here and has been used for every past doc edit.
 5. Validate with `scripts/office/validate.py out.docx --original <orig>`, and set
-   **`PYTHONIOENCODING=utf-8` first** or it crashes printing `→` to the cp1252 console.
+   **`PYTHONIOENCODING=utf-8` first** or it crashes printing `→` to the cp1252 console. Set
+   **`PYTHONUTF8=1`** as well: without it the validator READS the docx with the Windows locale codec and
+   reports a bogus `'charmap' codec can't decode byte 0x9d` as a NEW validation error, when the file is
+   perfectly good UTF-8. Confirm any such "error" against the bytes before believing it.
 6. **CHECK PAGINATION before delivering — MANDATORY. This is how the defects get caught; skipping it is how
    they shipped.** Orphaned headings live in the PAGINATION, not the XML, so `validate.py` passes while the
    page looks wrong. No LibreOffice/poppler here and the Read tool can't rasterize a PDF either — instead drive
