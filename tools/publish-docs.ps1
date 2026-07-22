@@ -11,7 +11,16 @@
 # the other side. This version records the hash of each file at the last successful sync, so it
 # can tell WHICH side changed and move the file the right way. If both sides changed, it refuses
 # to guess: it reports the conflict and changes nothing.
-param([switch]$Apply)
+param(
+    [switch]$Apply,
+    # Called from the post-commit hook. Documents move only when their VERSION NUMBER changes,
+    # which is the rule Glen asked for: a revision gets a new version number by convention, so
+    # the version is the signal that there is something new for the testers. Same-version edits
+    # are left for the manual two-way sync, which can tell which side changed. Runs quiet: it
+    # prints only when it does something, because it speaks after every commit.
+    [switch]$OnCommit
+)
+if ($OnCommit) { $Apply = $true }
 
 $ErrorActionPreference = 'Stop'
 $repo   = Split-Path -Parent $PSScriptRoot
@@ -47,13 +56,17 @@ if (Test-Path $statef) {
         ForEach-Object { $state[$_.Name] = $_.Value }
 }
 
-Write-Host ""
-Write-Host "  Repository : $repo"
-Write-Host "  Dropbox    : $target"
-if (-not $Apply) { Write-Host "  MODE       : preview only - nothing will be changed" }
-Write-Host ""
+if (-not $OnCommit) {
+    Write-Host ""
+    Write-Host "  Repository : $repo"
+    Write-Host "  Dropbox    : $target"
+    if (-not $Apply) { Write-Host "  MODE       : preview only - nothing will be changed" }
+    Write-Host ""
+}
 
 if (-not (Test-Path $target)) {
+    # After a commit this must never look like a failure: Dropbox may simply not be mounted.
+    if ($OnCommit) { exit 0 }
     Write-Host "  The shared folder was not found."
     Write-Host "  Expected: $target"
     Write-Host "  Check that the AI Sandbox folder is synced to this PC."
@@ -65,6 +78,7 @@ $conflictNames = @()
 $newstate = @{}
 
 foreach ($item in $managed) {
+    $isVersioned = [bool]$item.Stem
 
     # ---- locate the file on each side ------------------------------------------------------
     if ($item.Stem) {
@@ -119,29 +133,35 @@ foreach ($item in $managed) {
         $pushed++; $newstate[$name] = $hs
     }
     elseif ($hs -eq $hd) {
-        Write-Host "  in step    $name"
+        if (-not $OnCommit) { Write-Host "  in step    $name" }
         $same++; $newstate[$name] = $hs
+    }
+    elseif ($OnCommit -and $isVersioned) {
+        # Same version on both sides but the contents differ. The version number is the signal
+        # this hook acts on, so it leaves this alone; 'Sync with Dropbox.cmd' handles it, and it
+        # can tell which side was edited.
+        $newstate[$name] = $last
     }
     elseif ($last -eq $null) {
         # never synced by this tool, so there is no record of who changed: fall back to time
         $sNewer = (Get-Item $src).LastWriteTime -gt (Get-Item $dst).LastWriteTime
         if ($sNewer) {
-            Write-Host "  PUSH       $name   (differs; repository copy is newer - first sync, judged by time)"
+            if (-not $OnCommit) { Write-Host "  PUSH       $name   (differs; repository copy is newer - first sync, judged by time)" }
             if ($Apply) { Copy-Item $src $dst -Force }
             $pushed++; $newstate[$name] = $hs
         } else {
-            Write-Host "  PULL       $name   (differs; Dropbox copy is newer - first sync, judged by time)"
+            if (-not $OnCommit) { Write-Host "  PULL       $name   (differs; Dropbox copy is newer - first sync, judged by time)" }
             if ($Apply) { Copy-Item $dst $src -Force }
             $pulled++; $newstate[$name] = $hd
         }
     }
     elseif ($hs -eq $last) {
-        Write-Host "  PULL       $name   (edited in Dropbox)"
+        if (-not $OnCommit) { Write-Host "  PULL       $name   (edited in Dropbox)" }
         if ($Apply) { Copy-Item $dst $src -Force }
         $pulled++; $newstate[$name] = $hd
     }
     elseif ($hd -eq $last) {
-        Write-Host "  PUSH       $name   (edited in the repository)"
+        if (-not $OnCommit) { Write-Host "  PUSH       $name   (edited in the repository)" }
         if ($Apply) { Copy-Item $src $dst -Force }
         $pushed++; $newstate[$name] = $hs
     }

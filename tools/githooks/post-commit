@@ -1,0 +1,7 @@
+#!/bin/sh
+# After a commit, offer the testers anything new. It only acts when a document's VERSION
+# NUMBER has gone up, or when a tester script has changed - so ordinary commits are silent.
+# Never fails a commit: a post-commit hook's exit code is ignored, and Dropbox may not be
+# mounted anyway.
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+     -File "tools/publish-docs.ps1" -OnCommit 2>/dev/null
