@@ -40,9 +40,47 @@ function Get-Ver([string]$name) {
     if ($name -match '\(Ver\s+([0-9]+)\.([0-9]+)\)') { return [int]$matches[1] * 1000 + [int]$matches[2] }
     return 0
 }
-function Hash-Of($p) {
+# A .docx is a ZIP, and Word rewrites bookkeeping on every save - revision ids, timestamps,
+# the rsid table in settings.xml, docProps. Two files that read identically therefore hash
+# differently if they were saved at different moments. Hashing the whole file asks "are these
+# the same FILE", when what matters is "are these the same DOCUMENT". So: fingerprint only the
+# parts that carry content, with Word's revision noise stripped out.
+Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+function Get-ContentHash($p) {
     if (-not (Test-Path $p)) { return $null }
-    return (Get-FileHash $p -Algorithm SHA256).Hash
+    if ([IO.Path]::GetExtension($p) -ne '.docx') { return (Get-FileHash $p -Algorithm SHA256).Hash }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $sb  = New-Object Text.StringBuilder
+    $zip = $null
+    try {
+        $zip = [IO.Compression.ZipFile]::OpenRead($p)
+        $parts = $zip.Entries | Where-Object {
+            $_.FullName -eq 'word/document.xml' -or
+            $_.FullName -like 'word/header*.xml' -or
+            $_.FullName -like 'word/footer*.xml' -or
+            $_.FullName -like 'word/media/*'     -or
+            @('word/footnotes.xml','word/endnotes.xml','word/styles.xml','word/numbering.xml') -contains $_.FullName
+        } | Sort-Object FullName
+        foreach ($e in $parts) {
+            $ms = New-Object IO.MemoryStream
+            $st = $e.Open(); $st.CopyTo($ms); $st.Close()
+            $bytes = $ms.ToArray(); $ms.Dispose()
+            if ($e.FullName -like '*.xml') {
+                $txt = [Text.Encoding]::UTF8.GetString($bytes)
+                $txt = [Regex]::Replace($txt, '\s+w:rsid[A-Za-z]*="[^"]*"', '')
+                $txt = [Regex]::Replace($txt, '\s+w14:(paraId|textId)="[^"]*"', '')
+                $bytes = [Text.Encoding]::UTF8.GetBytes($txt)
+            }
+            [void]$sb.Append($e.FullName).Append('=')
+            [void]$sb.Append([BitConverter]::ToString($sha.ComputeHash($bytes)))
+        }
+    } catch {
+        # unreadable as a zip for any reason: fall back to the plain file hash
+        if ($zip) { $zip.Dispose(); $zip = $null }
+        return (Get-FileHash $p -Algorithm SHA256).Hash
+    } finally { if ($zip) { $zip.Dispose() } }
+    return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($sb.ToString()))).Replace('-','')
 }
 function Newest-Versioned($dir, $stem) {
     $f = Get-ChildItem -Path $dir -Filter "$stem (Ver *).docx" -File -ErrorAction SilentlyContinue |
@@ -103,12 +141,12 @@ foreach ($item in $managed) {
                 }
                 if ($dstFile) { $archived++ }
                 $pushed++
-                $newstate[$srcFile.Name] = Hash-Of $srcFile.FullName
+                $newstate[$srcFile.Name] = Get-ContentHash $srcFile.FullName
             } else {
                 Write-Host "  PULL       $($dstFile.Name)   (newer version than the repository)"
                 if ($Apply) { Copy-Item $dstFile.FullName (Join-Path $item.From $dstFile.Name) -Force }
                 $pulled++
-                $newstate[$dstFile.Name] = Hash-Of $dstFile.FullName
+                $newstate[$dstFile.Name] = Get-ContentHash $dstFile.FullName
             }
             continue
         }
@@ -123,8 +161,8 @@ foreach ($item in $managed) {
     }
 
     # ---- same version on both sides: decide by what changed since the last sync -------------
-    $hs = Hash-Of $src
-    $hd = Hash-Of $dst
+    $hs = Get-ContentHash $src
+    $hd = Get-ContentHash $dst
     $last = $state[$name]
 
     if ($hd -eq $null) {
