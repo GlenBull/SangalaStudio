@@ -34,7 +34,7 @@ if not exist "%SANGALA_TARGET%" (
 REM  The paths travel as environment variables, so folder names with
 REM  spaces or apostrophes cannot break the quoting. SpecialFolders
 REM  finds the real Desktop even when OneDrive has redirected it.
-powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $desktop = $ws.SpecialFolders('Desktop'); $path = Join-Path $desktop 'Sangala Studio.lnk'; $lnk = $ws.CreateShortcut($path); $lnk.TargetPath = $env:SANGALA_TARGET; $lnk.WorkingDirectory = $env:SANGALA_HOME.TrimEnd('\'); $lnk.Description = 'Sangala Studio - Digital Fabrication Tool'; $lnk.Save(); Write-Host ''; Write-Host ('   Shortcut created: ' + $path); exit 0 } catch { Write-Host ''; Write-Host ('   Could not create the shortcut: ' + $_.Exception.Message); exit 1 }"
+powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $desktop = $ws.SpecialFolders('Desktop'); $path = Join-Path $desktop 'Sangala Studio.lnk'; $lnk = $ws.CreateShortcut($path); $lnk.TargetPath = $env:SANGALA_TARGET; $lnk.WorkingDirectory = $env:SANGALA_HOME.TrimEnd('\'); $lnk.Description = 'Sangala Studio - Digital Fabrication tool'; $lnk.Save(); Write-Host ''; Write-Host ('   Shortcut created: ' + $path); exit 0 } catch { Write-Host ''; Write-Host ('   Could not create the shortcut: ' + $_.Exception.Message); exit 1 }"
 
 if errorlevel 1 (
   echo.

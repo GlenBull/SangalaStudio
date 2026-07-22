@@ -730,7 +730,7 @@ namespace DieCutterApp
             var header = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = Color.FromArgb(63, 107, 142) };
             header.Controls.Add(new Label { Text = "Sangala Studio", AutoSize = true, ForeColor = Color.White,
                 Left = 16, Top = 8, Font = new Font("Segoe Print", 22, FontStyle.Bold) });
-            header.Controls.Add(new Label { Text = "Digital Fabrication Tool", AutoSize = true,
+            header.Controls.Add(new Label { Text = "Digital Fabrication tool", AutoSize = true,
                 ForeColor = Color.FromArgb(205, 222, 236), Left = 20, Top = 46, Font = new Font("Segoe UI", 8) });
             _host = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(245, 236, 214) };
             Controls.Add(_host);

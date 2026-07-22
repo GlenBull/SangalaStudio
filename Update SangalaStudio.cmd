@@ -120,7 +120,7 @@ REM  SpecialFolders finds the real Desktop even when OneDrive has redirected it.
 if not exist "%~dp0%EXE%" goto :eof
 set "SANGALA_HOME=%~dp0"
 set "SANGALA_TARGET=%~dp0%EXE%"
-powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $p = Join-Path $ws.SpecialFolders('Desktop') 'Sangala Studio.lnk'; $l = $ws.CreateShortcut($p); $l.TargetPath = $env:SANGALA_TARGET; $l.WorkingDirectory = $env:SANGALA_HOME.TrimEnd('\'); $l.Description = 'Sangala Studio - Digital Fabrication Tool'; $l.Save(); exit 0 } catch { exit 1 }" >nul 2>&1
+powershell -NoProfile -Command "try { $ws = New-Object -ComObject WScript.Shell; $p = Join-Path $ws.SpecialFolders('Desktop') 'Sangala Studio.lnk'; $l = $ws.CreateShortcut($p); $l.TargetPath = $env:SANGALA_TARGET; $l.WorkingDirectory = $env:SANGALA_HOME.TrimEnd('\'); $l.Description = 'Sangala Studio - Digital Fabrication tool'; $l.Save(); exit 0 } catch { exit 1 }" >nul 2>&1
 if errorlevel 1 goto :eof
 echo.
 echo   A "Sangala Studio" icon is on your Desktop, ready to use.
