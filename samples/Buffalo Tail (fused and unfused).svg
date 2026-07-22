@@ -2,109 +2,146 @@
 <!--
   Buffalo tail - a worked example, built twice.
 
-  Open this in Sangala Studio, switch to 3D, and press 3D View. The two assemblies are
-  identical geometry; the only difference is that the right-hand one is FUSED.
+  Open this in Sangala Studio, switch to 3D, and press 3D View. The two tails are identical;
+  the only difference is that the right-hand one is FUSED.
 
-     LEFT   five separate pieces - the 3D View draws each in its own color
-                                   (rump red, tail blue / green / gold / purple)
-     RIGHT  one fused piece      - the 3D View draws the whole thing in ONE color
+     LEFT   15 separate pieces - the 3D View gives each piece its own color
+     RIGHT  one fused piece      - the whole assembly is drawn in a single color
 
-  That color difference IS the lesson: a fused group prints as one solid object, while
-  separate pieces are five objects that merely touch, and a slicer may treat them as five.
-  To fuse a set yourself: drag a box around the parts, then press "Fuse into one piece"
-  in the Selected object panel. Drag inside the 3D View to rotate - a hanging part is
-  always partly behind whatever it hangs from, so turning the model is how you inspect it.
+  That color difference IS the lesson: a fused group prints as one solid object, while separate
+  pieces are 15 objects that merely touch, and a slicer may treat them as 15. To fuse a set
+  yourself, drag a box around the parts and press "Fuse into one piece" in the Selected object
+  panel. Drag inside the 3D View to rotate - a hanging part is always partly behind whatever it
+  hangs from, so turning the model is how you inspect it.
 
-  HOW THE TAIL IS MADE. A circle becomes a cylinder, and Base decides how high off the
-  build plate it sits, so a stack of circles hangs one under another. Two things make it
-  read as a tail rather than a peg:
+  HOW THE TAIL IS MADE. A circle becomes a cylinder, and Base sets how high off the build plate
+  it sits, so a stack of circles hangs one beneath another. Two things make it read as a tail:
 
-    THIN AND LONG. The shaft is 4 to 6 mm across over a 42 mm drop - about eight times
-    longer than it is wide. A tail modelled as short fat discs looks like a plug.
+    IT CURVES, RATHER THAN LEANING. This is the part that is easy to get wrong. An earlier
+    version stepped each segment sideways by almost the same amount - 3 mm, 3 mm, 2.5 mm - and a
+    near-constant step is a straight diagonal. It leaned; it did not curve. What the eye
+    reads as a curve is a change of DIRECTION, not a sideways displacement, so this tail is
+    built from a heading instead: it leaves the rump 46 degrees off vertical and rotates steadily
+    to 2 degrees by the tip - a turn of 45 degrees, which is a true arc. That is also why the
+    sideways steps are biggest at the TOP (2.2 mm) and smallest at the tip: the tail is
+    thickest where it moves most, so every joint stays comfortably welded.
 
-    IT CURVES. Each segment sits a little further forward than the one above (cy 24, 21,
-    18, 15.5), so the tail sweeps outward as it falls instead of dropping like a plumb
-    line. Nothing rotates - each cylinder is still vertical - but stepping the centres
-    reads as a curve, and it is what makes the shape look alive.
+    IT TAPERS. The dock narrows without interruption, 9.4 mm across at the rump down to 3.5 mm,
+    a ratio of about 2.6 to 1. The earlier version failed here too - its tuft was FATTER than its
+    root, so the tail got wider towards the end. The switch of hair at the tip flares back out
+    to 5.7 mm, which is wider than the dock it hangs from, exactly as on the real animal,
+    but still far narrower than the root, so the taper survives.
 
-  Taper comes from using a smaller circle lower down. Slope cannot do it, because Slope
-  ramps the top face of a rectangle, which does nothing along a tail.
+  Taper cannot come from Slope: Slope ramps the top face of a rectangle, which does nothing
+  along a tail. It comes from simply using a smaller circle further down.
 
-     rump block   40 x 28 mm, Depth 20, Base 45           ->  Z 45 to 65
-     root          6 mm across at y 24, Depth 11, Base 34 ->  Z 34 to 45   (top meets the rump's Base)
-     mid         4.8 mm across at y 21, Depth 13, Base 22 ->  Z 22 to 35
-     lower         4 mm across at y 18, Depth 12, Base 11 ->  Z 11 to 23
-     switch      6.8 mm across at y 15.5, Depth 9, Base 3 ->  Z  3 to 12   (the bushy tip)
+  WHERE THE TAIL SITS, and why it matters. The tail leaves the rump near a corner and swings
+  clear of the block. Tuck it inside the block's footprint and it hides underneath; a tail that
+  is built perfectly and cannot be seen looks exactly like a broken one.
 
-  Each segment overlaps the one above it by a millimetre or two in Z AND across, so the
-  chain welds when fused - two solids that merely touch are a coin toss for the slicer.
-  The root overlaps the rump by 5 mm, and the rump's underside drops a hair into it when
-  fused, so the joint is solid.
+  PRINTING. The tail hangs in free air, so expect to turn support material on. The thinnest
+  part is 3.5 mm, which survives handling in PLA; going much finer will snap. If it does give
+  trouble, the sturdier answer is to stop making the tail a separate part: draw the rump
+  outline with the Pen so the tail is part of that same closed shape. It then prints flat,
+  fully supported, and cannot break off.
 
-  WHERE THE TAIL SITS, and why it matters. The tail hangs from the rump's NEAR edge and
-  sweeps toward you. Tuck it inside the block's footprint and it is hidden underneath;
-  hang it off the far edge and the block stands in front of it. Either way it builds
-  perfectly and you see nothing, and correct geometry you cannot see looks exactly like
-  broken geometry.
-
-  PRINTING. This tail hangs in free air, so its lowest point starts with nothing beneath
-  it, and the switch is wider than the shaft above it. Expect to switch support material
-  on. 4 mm is about the thinnest that survives handling in PLA, which is why the shaft
-  stops there rather than going finer. If it gives trouble, the sturdier answer is to stop
-  making the tail a separate part: draw the rump outline with the Pen so the tail is part
-  of that same closed shape. It then prints flat, fully supported, and cannot snap off.
-
-  Every shape is a red solid outline, which is what Sangala Studio itself writes, so this
-  file behaves exactly like one you saved yourself.
+  Tail: 39 mm long, 14 segments. Every shape is a red solid outline, which is what Sangala
+  Studio itself writes, so this file behaves exactly like one you saved yourself.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="150mm" height="80mm" viewBox="0 0 150 80">
+<svg xmlns="http://www.w3.org/2000/svg" width="130mm" height="50mm" viewBox="0 0 130 50">
 
-  <!-- ============================================================ LEFT: NOT fused.
-       No data-group, so these are five independent pieces, each drawn in its own color. -->
-
-  <rect   x="20" y="22" width="40" height="28"
-          data-z="20" data-z0="45"
+  <!-- NOT fused: no data-group, so these are independent pieces, each in its own color. -->
+  <rect   x="8" y="24" width="30" height="20"
+          data-z="14" data-z0="46"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="35.08" cy="26.64" r="4.68"
+          data-z="2.17" data-z0="46.83"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="37.17" cy="25.93" r="4.3"
+          data-z="3.3" data-z0="44.52"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="39.14" cy="25.27" r="3.99"
+          data-z="3.43" data-z0="42.1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="40.96" cy="24.65" r="3.71"
+          data-z="3.54" data-z0="39.55"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="42.64" cy="24.09" r="3.45"
+          data-z="3.65" data-z0="36.91"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="44.17" cy="23.57" r="3.21"
+          data-z="3.74" data-z0="34.16"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="45.55" cy="23.11" r="2.99"
+          data-z="3.83" data-z0="31.33"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="46.76" cy="22.7" r="2.77"
+          data-z="3.91" data-z0="28.42"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="47.81" cy="22.35" r="2.56"
+          data-z="3.97" data-z0="25.45"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="48.69" cy="22.05" r="2.35"
+          data-z="4.03" data-z0="22.42"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="49.4" cy="21.81" r="2.15"
+          data-z="4.07" data-z0="19.34"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="49.93" cy="21.63" r="1.96"
+          data-z="4.11" data-z0="16.24"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="50.29" cy="21.51" r="1.77"
+          data-z="4.13" data-z0="13.1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="50.47" cy="21.45" r="2.85"
+          data-z="4.14" data-z0="9.96"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
-  <circle cx="40" cy="24" r="3"
-          data-z="11" data-z0="34"
+  <!-- FUSED: same shapes, all carrying data-group="1", which is how Sangala Studio records a fuse. Drawn in ONE color; Export STL writes one solid. -->
+  <rect   x="78" y="24" width="30" height="20"
+          data-z="14" data-z0="46" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="40" cy="21" r="2.4"
-          data-z="13" data-z0="22"
+  <circle cx="105.08" cy="26.64" r="4.68"
+          data-z="2.17" data-z0="46.83" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="40" cy="18" r="2"
-          data-z="12" data-z0="11"
+  <circle cx="107.17" cy="25.93" r="4.3"
+          data-z="3.3" data-z0="44.52" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="40" cy="15.5" r="3.4"
-          data-z="9" data-z0="3"
+  <circle cx="109.14" cy="25.27" r="3.99"
+          data-z="3.43" data-z0="42.1" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <!-- ============================================================ RIGHT: FUSED.
-       The same five shapes, shifted 70 mm across, all carrying data-group="1" - which is
-       how Sangala Studio records a fuse when it saves. Drawn in ONE color, and Export STL
-       writes it as a single solid. -->
-
-  <rect   x="90" y="22" width="40" height="28"
-          data-z="20" data-z0="45" data-group="1"
+  <circle cx="110.96" cy="24.65" r="3.71"
+          data-z="3.54" data-z0="39.55" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="110" cy="24" r="3"
-          data-z="11" data-z0="34" data-group="1"
+  <circle cx="112.64" cy="24.09" r="3.45"
+          data-z="3.65" data-z0="36.91" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="110" cy="21" r="2.4"
-          data-z="13" data-z0="22" data-group="1"
+  <circle cx="114.17" cy="23.57" r="3.21"
+          data-z="3.74" data-z0="34.16" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="110" cy="18" r="2"
-          data-z="12" data-z0="11" data-group="1"
+  <circle cx="115.55" cy="23.11" r="2.99"
+          data-z="3.83" data-z0="31.33" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-
-  <circle cx="110" cy="15.5" r="3.4"
-          data-z="9" data-z0="3" data-group="1"
+  <circle cx="116.76" cy="22.7" r="2.77"
+          data-z="3.91" data-z0="28.42" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="117.81" cy="22.35" r="2.56"
+          data-z="3.97" data-z0="25.45" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="118.69" cy="22.05" r="2.35"
+          data-z="4.03" data-z0="22.42" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="119.4" cy="21.81" r="2.15"
+          data-z="4.07" data-z0="19.34" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="119.93" cy="21.63" r="1.96"
+          data-z="4.11" data-z0="16.24" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="120.29" cy="21.51" r="1.77"
+          data-z="4.13" data-z0="13.1" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+  <circle cx="120.47" cy="21.45" r="2.85"
+          data-z="4.14" data-z0="9.96" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
 </svg>
