@@ -21,9 +21,9 @@
     version stepped each segment sideways by almost the same amount - 3 mm, 3 mm, 2.5 mm - and
     a near-constant step is a straight diagonal. It leaned; it did not curve. What the eye
     reads as a curve is a change of DIRECTION, not a sideways displacement, so this tail is
-    built from a heading instead: it leaves the rump 46 degrees off vertical and rotates steadily
-    to 2 degrees by the tip - a turn of 45 degrees, which is a true arc. That is also why the
-    sideways steps are biggest at the TOP (2.2 mm) and smallest at the tip: the tail is
+    built from a heading instead: it leaves the rump 66 degrees off vertical and rotates steadily
+    to 2 degrees by the tip - a turn of 63 degrees, which is a true arc. That is also why the
+    sideways steps are biggest at the TOP (3.2 mm) and smallest at the tip: the tail is
     thickest where it moves most, so every joint stays comfortably welded.
 
     IT TAPERS. The dock narrows without interruption, 9.4 mm across at the rump down to 3.5 mm,
@@ -53,100 +53,100 @@
   Tail: 39 mm long, 14 segments. Every shape is a red solid outline, which is what Sangala
   Studio itself writes, so this file behaves exactly like one you saved yourself.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="130mm" height="50mm" viewBox="0 0 130 50">
+<svg xmlns="http://www.w3.org/2000/svg" width="145mm" height="50mm" viewBox="0 0 145 50">
 
   <!-- NOT fused: no data-group, so these are independent pieces, each in its own color. -->
   <rect   x="8" y="24" width="30" height="20"
           data-z="14" data-z0="46"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="35.14" cy="27" r="4.68"
-          data-z="2.17" data-z0="46.83"
+  <circle cx="32.66" cy="26.08" r="4.68"
+          data-z="1.48" data-z0="47.52"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="37.34" cy="27" r="4.3"
-          data-z="3.3" data-z0="44.52"
+  <circle cx="30.03" cy="24.28" r="4.3"
+          data-z="2.75" data-z0="45.78"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="39.41" cy="27" r="3.99"
-          data-z="3.43" data-z0="42.1"
+  <circle cx="27.53" cy="22.57" r="3.99"
+          data-z="3" data-z0="43.77"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="41.33" cy="27" r="3.71"
-          data-z="3.54" data-z0="39.55"
+  <circle cx="25.16" cy="20.95" r="3.71"
+          data-z="3.25" data-z0="41.52"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="43.1" cy="27" r="3.45"
-          data-z="3.65" data-z0="36.91"
+  <circle cx="22.95" cy="19.44" r="3.45"
+          data-z="3.47" data-z0="39.05"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="44.71" cy="27" r="3.21"
-          data-z="3.74" data-z0="34.16"
+  <circle cx="20.92" cy="18.05" r="3.21"
+          data-z="3.68" data-z0="36.37"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="46.16" cy="27" r="2.99"
-          data-z="3.83" data-z0="31.33"
+  <circle cx="19.07" cy="16.79" r="2.99"
+          data-z="3.87" data-z0="33.49"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="47.43" cy="27" r="2.77"
-          data-z="3.91" data-z0="28.42"
+  <circle cx="17.42" cy="15.66" r="2.77"
+          data-z="4.04" data-z0="30.45"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="48.54" cy="27" r="2.56"
-          data-z="3.97" data-z0="25.45"
+  <circle cx="15.99" cy="14.68" r="2.56"
+          data-z="4.19" data-z0="27.26"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="49.46" cy="27" r="2.35"
-          data-z="4.03" data-z0="22.42"
+  <circle cx="14.78" cy="13.85" r="2.35"
+          data-z="4.31" data-z0="23.94"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="50.21" cy="27" r="2.15"
-          data-z="4.07" data-z0="19.34"
+  <circle cx="13.8" cy="13.18" r="2.15"
+          data-z="4.42" data-z0="20.53"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="50.77" cy="27" r="1.96"
-          data-z="4.11" data-z0="16.24"
+  <circle cx="13.06" cy="12.67" r="1.96"
+          data-z="4.49" data-z0="17.04"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="51.15" cy="27" r="1.77"
-          data-z="4.13" data-z0="13.1"
+  <circle cx="12.56" cy="12.33" r="1.77"
+          data-z="4.54" data-z0="13.49"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="51.33" cy="27" r="2.85"
-          data-z="4.14" data-z0="9.96"
+  <circle cx="12.31" cy="12.16" r="2.85"
+          data-z="4.57" data-z0="9.93"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
   <!-- FUSED: same shapes, all carrying data-group="1", which is how Sangala Studio records a fuse. Drawn in ONE color; Export STL writes one solid. -->
   <rect   x="78" y="24" width="30" height="20"
           data-z="14" data-z0="46" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="105.14" cy="27" r="4.68"
-          data-z="2.17" data-z0="46.83" data-group="1"
+  <circle cx="102.66" cy="26.08" r="4.68"
+          data-z="1.48" data-z0="47.52" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="107.34" cy="27" r="4.3"
-          data-z="3.3" data-z0="44.52" data-group="1"
+  <circle cx="100.03" cy="24.28" r="4.3"
+          data-z="2.75" data-z0="45.78" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="109.41" cy="27" r="3.99"
-          data-z="3.43" data-z0="42.1" data-group="1"
+  <circle cx="97.53" cy="22.57" r="3.99"
+          data-z="3" data-z0="43.77" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="111.33" cy="27" r="3.71"
-          data-z="3.54" data-z0="39.55" data-group="1"
+  <circle cx="95.16" cy="20.95" r="3.71"
+          data-z="3.25" data-z0="41.52" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="113.1" cy="27" r="3.45"
-          data-z="3.65" data-z0="36.91" data-group="1"
+  <circle cx="92.95" cy="19.44" r="3.45"
+          data-z="3.47" data-z0="39.05" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="114.71" cy="27" r="3.21"
-          data-z="3.74" data-z0="34.16" data-group="1"
+  <circle cx="90.92" cy="18.05" r="3.21"
+          data-z="3.68" data-z0="36.37" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="116.16" cy="27" r="2.99"
-          data-z="3.83" data-z0="31.33" data-group="1"
+  <circle cx="89.07" cy="16.79" r="2.99"
+          data-z="3.87" data-z0="33.49" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="117.43" cy="27" r="2.77"
-          data-z="3.91" data-z0="28.42" data-group="1"
+  <circle cx="87.42" cy="15.66" r="2.77"
+          data-z="4.04" data-z0="30.45" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="118.54" cy="27" r="2.56"
-          data-z="3.97" data-z0="25.45" data-group="1"
+  <circle cx="85.99" cy="14.68" r="2.56"
+          data-z="4.19" data-z0="27.26" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="119.46" cy="27" r="2.35"
-          data-z="4.03" data-z0="22.42" data-group="1"
+  <circle cx="84.78" cy="13.85" r="2.35"
+          data-z="4.31" data-z0="23.94" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="120.21" cy="27" r="2.15"
-          data-z="4.07" data-z0="19.34" data-group="1"
+  <circle cx="83.8" cy="13.18" r="2.15"
+          data-z="4.42" data-z0="20.53" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="120.77" cy="27" r="1.96"
-          data-z="4.11" data-z0="16.24" data-group="1"
+  <circle cx="83.06" cy="12.67" r="1.96"
+          data-z="4.49" data-z0="17.04" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="121.15" cy="27" r="1.77"
-          data-z="4.13" data-z0="13.1" data-group="1"
+  <circle cx="82.56" cy="12.33" r="1.77"
+          data-z="4.54" data-z0="13.49" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
-  <circle cx="121.33" cy="27" r="2.85"
-          data-z="4.14" data-z0="9.96" data-group="1"
+  <circle cx="82.31" cy="12.16" r="2.85"
+          data-z="4.57" data-z0="9.93" data-group="1"
           fill="none" stroke="#ff0000" stroke-width="0.2"/>
 
 </svg>
