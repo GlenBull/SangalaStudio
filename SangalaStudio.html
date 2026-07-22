@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.70 -->
+<!-- SANGALA_VERSION: 2026-07-22.71 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -174,6 +174,11 @@
   <button id="aHorz" title="Line the shapes up on a horizontal axis (same up-down center)">↔ Horizontal</button>
   <button id="aBoth" title="Center the shapes on each other (both axes)">✛ Center (both)</button>
 </div>
+<div id="mirrormenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <div class="hint" id="mirrorhint" style="padding:.25rem .6rem;white-space:nowrap">Select one or more shapes to mirror.</div>
+  <button id="mFlipH" title="Flip left-right, about the selection's own center">↔ Flip Horizontal</button>
+  <button id="mFlipV" title="Flip top-bottom, about the selection's own center">↕ Flip Vertical</button>
+</div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test Square</button>
   <button id="mScan">🎯 Scan Test</button>
@@ -231,6 +236,7 @@
     <button class="ltbtn" id="tShapes" title="Draw a shape: Rectangle, Circle, or Line"><svg width="22" height="20" viewBox="0 0 26 22" style="display:block" aria-hidden="true"><rect x="2" y="5" width="12" height="12" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.9"/><circle cx="18" cy="14" r="6.2" fill="none" stroke="#7a3b12" stroke-width="1.9"/></svg><small>Shapes</small></button>
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
     <button class="ltbtn" id="tAlign" title="Align shapes: Vertical / Horizontal / Center"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><rect x="4.5" y="5" width="15" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/><rect x="7.5" y="14.4" width="9" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/></svg><small>Align</small></button>
+    <button class="ltbtn" id="tMirror" title="Mirror: flip the selection left-right or top-bottom, so a team can build one symmetric half and mirror the other"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><path d="M9.5 6 L4 9.5 L9.5 13" fill="none" stroke="#7a3b12" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M14.5 6 L20 9.5 L14.5 13" fill="none" stroke="#7a3b12" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg><small>Mirror</small></button>
     <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick" style="display:none">🧱<small>Brick</small></button>
     <button class="ltbtn" id="tSnap" title="Open Snap! - draw with its turtle and the drawing comes straight back to this mat"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><polygon points="12,1.8 20.2,22.2 12,17.6 3.8,22.2" fill="#2f7bd6" stroke="#16365f" stroke-width="1.2" stroke-linejoin="round"/></svg><small>Snap!</small></button>
     <button class="ltbtn" id="bRemoveBg" style="display:none" title="Remove the background from the selected photo to make a silhouette">🪄<small>Remove BG</small></button>
@@ -2489,6 +2495,86 @@ document.addEventListener("click",(e)=>{ const t=$("alignmenu");
 $("aVert").onclick=()=>{ alignSelection("v"); closeAlign(); };
 $("aHorz").onclick=()=>{ alignSelection("h"); closeAlign(); };
 $("aBoth").onclick=()=>{ alignSelection("both"); closeAlign(); };
+/* ---------- Mirror: flip the selection horizontally or vertically about its own combined center ---------- */
+// Reflects o.poly (and any holes) about a vertical or horizontal axis positioned at the SELECTION's combined
+// bounding-box center - so one selected shape flips about its own middle (an asymmetric outline becomes its
+// mirror image in place) and a multi-shape selection flips as one rigid group (a team's whole leg or wing,
+// built from several bricks or blocks, becomes the mirrored twin in a single move - duplicate it first with
+// Ctrl+C / Ctrl+V, then Mirror the copy, then drag it into place).
+//
+// This needs no triangle-winding fix-up, unlike a naive mirror of a finished 3D mesh. prismTris/prismThruTris -
+// the extrusion behind every freeform, traced, or Combine-result shape - derive outward-facing winding FRESH
+// from the polygon's own signed area every time and independently check each triangle's normal before
+// accepting it; they never trust the incoming point order, so a reflected (order-reversed) ring still extrudes
+// with correct outward normals. Plain rect/circle bodies (boxTris/cylTris) and bricks are built from
+// x/y/width/height or cols/rows, not from polygon winding, and an axis-aligned rectangle reflected about any
+// axis-aligned line keeps the same width and height - only its position changes - so there is no shape to get
+// wrong there either. The one place direction genuinely matters is a sloped block's "Slope faces"
+// (front/right/back/left): it is REMAPPED below rather than reflected, because slopedBoxDirTris only ever
+// rotates its wedge in 90-degree steps (rotation preserves winding; reflecting the finished mesh would not,
+// per the note on slopedBoxDirTris itself). A brick's own Slope has no direction control - it always ramps
+// from the same edge - so it is deliberately left untouched by Mirror.
+function mirrorTargets(){   // the selection, expanded to whole fused/brick groups - a group mirrors as one piece, exactly like Export STL treats it
+  const ids=selectedIds(); if(!ids.length) return [];
+  const set=new Set(ids), groups=new Set();
+  objects.forEach(o=>{ if(set.has(o.id) && o.group!=null) groups.add(o.group); });
+  objects.forEach(o=>{ if(o.group!=null && groups.has(o.group)) set.add(o.id); });
+  return objects.filter(o=>set.has(o.id));
+}
+const MIRROR_TAGS=new Set(["rect","circle","polygon","polyline"]);   // an imported design (<path>, from a Silhouette-file import) can't be mirrored yet - its geometry is opaque, not points
+function remapSlopeDir(o,axis){   // "Slope faces" is a direction, not a shape - swap the enum instead of reflecting the ramp mesh
+  if(!o.el.hasAttribute||!o.el.hasAttribute("data-slope-dir")) return;
+  const d=((Math.round(+o.el.getAttribute("data-slope-dir"))%4)+4)%4;   // 0 front, 1 right, 2 back, 3 left (see slopedBoxDirTris)
+  const swap = axis==="h" ? {0:0,1:3,2:2,3:1} : {0:2,1:1,2:0,3:3};      // horizontal flip swaps right<->left; vertical flip swaps front<->back
+  o.el.setAttribute("data-slope-dir", String(swap[d]));
+}
+function mirrorObj(o,axis,ax,ay){   // reflect one object about the vertical line x=ax (axis "h") or horizontal line y=ay (axis "v"); false = could not mirror this one
+  if(!o||!o.el||!o.poly) return true;
+  const t=o.el.tagName.toLowerCase();
+  if(!MIRROR_TAGS.has(t)) return false;
+  const flip = axis==="h" ? (p=>[2*ax-p[0], p[1]]) : (p=>[p[0], 2*ay-p[1]]);
+  o.poly=o.poly.map(flip);
+  if(o.holes) o.holes=o.holes.map(h=>h.map(flip));   // a hole reflects with its frame
+  if(t==="rect"){
+    const x=+o.el.getAttribute("x")||0, y=+o.el.getAttribute("y")||0, w=+o.el.getAttribute("width")||0, h=+o.el.getAttribute("height")||0;
+    if(axis==="h") o.el.setAttribute("x", fmtn(2*ax-x-w)); else o.el.setAttribute("y", fmtn(2*ay-y-h));
+    remapSlopeDir(o,axis);
+  } else if(t==="circle"){
+    const cx=+o.el.getAttribute("cx")||0, cy=+o.el.getAttribute("cy")||0;
+    if(axis==="h") o.el.setAttribute("cx", fmtn(2*ax-cx)); else o.el.setAttribute("cy", fmtn(2*ay-cy));
+  } else {   // polygon or polyline: o.poly is the source of truth, so just rewrite the element's points from it
+    placeEl(o);
+    remapSlopeDir(o,axis);   // a Combine result that is still an axis-aligned rectangle can carry Slope too
+  }
+  syncHolesToEl(o);
+  return true;
+}
+function mirrorSelection(axis){
+  const targets=mirrorTargets();
+  if(!targets.length){ say("Select one or more shapes, then Mirror."); return; }
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9, any=false;
+  targets.forEach(o=>{ if(!o.poly) return; any=true; o.poly.forEach(p=>{ mnx=Math.min(mnx,p[0]); mxx=Math.max(mxx,p[0]); mny=Math.min(mny,p[1]); mxy=Math.max(mxy,p[1]); }); });
+  if(!any) return;
+  const ax=(mnx+mxx)/2, ay=(mny+mxy)/2;
+  let ok=0, skipped=0;
+  targets.forEach(o=>{ if(mirrorObj(o,axis,ax,ay)) ok++; else skipped++; });
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();
+  clearTimeout(histTimer); histTimer=null; commit();
+  const verb=axis==="h"?"horizontally":"vertically";
+  say(skipped ? "Flipped "+ok+" "+verb+" - "+skipped+" imported shape"+(skipped!==1?"s":"")+" could not be mirrored." : "Flipped "+verb+".");
+}
+function updateMirror(){ const ok=mirrorTargets().length>=1;
+  ["mFlipH","mFlipV"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
+  const h=$("mirrorhint"); if(h) h.style.display=ok?"none":"block"; }
+function closeMirror(){ $("mirrormenu").style.display="none"; }
+$("tMirror").onclick=(e)=>{ e.stopPropagation(); const t=$("mirrormenu"), r=$("tMirror").getBoundingClientRect();
+  const open=t.style.display!=="flex";
+  if(open){ updateMirror(); t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; }
+  t.style.display=open?"flex":"none"; };
+document.addEventListener("click",(e)=>{ const t=$("mirrormenu");
+  if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tMirror").contains(e.target)) t.style.display="none"; });
+$("mFlipH").onclick=()=>{ mirrorSelection("h"); closeMirror(); };
+$("mFlipV").onclick=()=>{ mirrorSelection("v"); closeMirror(); };
 // begin drawing: create a zero-size shape at the start point, then the resize drag grows it
 // Tab tool, step 1: the drag must START on the edge of a shape. Find the nearest edge under the
 // pointer; the fold hinge will lie along that edge, between where the drag starts and ends.
