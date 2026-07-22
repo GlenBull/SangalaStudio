@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Buffalo tail - a worked example, built twice.
+
+  Open this in Sangala Studio, switch to 3D, and press 3D View. The two assemblies are
+  identical geometry; the only difference is that the right-hand one is FUSED.
+
+     LEFT   four separate pieces  - the 3D View draws each in its own color
+     RIGHT  one fused piece       - the 3D View draws it all in a single color
+
+  That color difference IS the lesson: a fused group prints as one solid object, while
+  separate pieces are four objects that happen to touch, and a slicer may treat them as
+  four. To fuse a set yourself: drag a box around the parts, then press "Fuse into one
+  piece" in the Selected object panel.
+
+  How the tail is made. A circle becomes a cylinder, and Base decides how high off the
+  build plate it sits, so a stack of circles with different Base values hangs one under
+  another. Taper comes from using a smaller circle lower down - Slope cannot do it,
+  because Slope ramps the top face of a rectangle, which does nothing along a tail.
+
+     rump block   40 x 30 mm, Depth 20, Base 30   ->  occupies Z 30 to 50
+     upper tail   6 mm across, Depth 12, Base 18  ->  Z 18 to 30   (its top meets the rump's Base)
+     lower tail   4 mm across, Depth 10, Base 8   ->  Z  8 to 18
+     tuft         6 mm across, Depth  5, Base 3   ->  Z  3 to  8
+
+  The upper tail's Base + Depth equals the rump's Base exactly. Fusing then welds them:
+  a fused body sitting above another has its underside dropped a hair into the part below,
+  so the two overlap instead of merely touching - and faces that merely touch are a coin
+  toss for the slicer.
+
+  PRINTING. This tail hangs in free air, so its lowest point starts with nothing beneath
+  it. Expect to switch support material on, and keep the tail thick - 4 mm is about the
+  minimum that survives handling in PLA. If it gives trouble, the sturdier answer is to
+  stop making the tail a separate part: draw the rump outline with the Pen so the tail is
+  part of that same closed shape. It then prints flat, fully supported, and cannot snap off.
+
+  Every shape is a red solid outline, which is what Sangala Studio itself writes, so this
+  file behaves exactly like one you saved yourself.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="150mm" height="80mm" viewBox="0 0 150 80">
+
+  <!-- ============================================================ LEFT: NOT fused.
+       No data-group, so these are four independent pieces. The 3D View gives each one
+       its own color, and Export STL would treat them as separate parts. -->
+
+  <rect   x="20" y="20" width="40" height="30"
+          data-z="20" data-z0="30"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="40" cy="46" r="3"
+          data-z="12" data-z0="18"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="40" cy="46" r="2"
+          data-z="10" data-z0="8"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="40" cy="46" r="3"
+          data-z="5" data-z0="3"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <!-- ============================================================ RIGHT: FUSED.
+       Same four shapes, shifted 70 mm across, all carrying data-group="1" - which is how
+       Sangala Studio records a fuse when it saves. The 3D View draws the whole assembly
+       in ONE color, and Export STL writes it as a single solid. -->
+
+  <rect   x="90" y="20" width="40" height="30"
+          data-z="20" data-z0="30" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="110" cy="46" r="3"
+          data-z="12" data-z0="18" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="110" cy="46" r="2"
+          data-z="10" data-z0="8" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+  <circle cx="110" cy="46" r="3"
+          data-z="5" data-z0="3" data-group="1"
+          fill="none" stroke="#ff0000" stroke-width="0.2"/>
+
+</svg>
