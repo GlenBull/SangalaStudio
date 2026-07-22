@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.73 -->
+<!-- SANGALA_VERSION: 2026-07-22.74 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -857,6 +857,14 @@ function draw(){
           ctx.beginPath(); ctx.moveTo(rh.ax*k,rh.ay*k); ctx.lineTo(rh.x*k,rh.y*k); ctx.stroke();
           ctx.beginPath(); ctx.arc(rh.x*k,rh.y*k,5,0,6.2832); ctx.fill(); ctx.stroke(); ctx.restore(); } }
       }}
+  if(activeTool==="select"){ const bh=boxHandles();   // resize box around the selection: dashed frame + square handles
+    if(bh){ const pp=placeParams(), D=(x,y)=>[(x*pp.s+pp.ox)*k,(y*pp.s+pp.oy)*k];
+      const a=D(bh.x0,bh.y0), b=D(bh.x1,bh.y1);
+      ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+      ctx.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]); ctx.setLineDash([]);
+      ctx.fillStyle="#fff"; ctx.lineWidth=1.5;   // square handles, to read as "resize" against the round rotate knob
+      bh.handles.forEach(h=>{ const q=D(h.x,h.y); ctx.beginPath(); ctx.rect(q[0]-4,q[1]-4,8,8); ctx.fill(); ctx.stroke(); });
+      ctx.restore(); } }
   if(drag&&drag.mode==="tab"&&drag.preview){   // Tab tool: live preview - red cut sides, blue dashed hinge
     const pp=placeParams(), pv=drag.preview, P=q=>[(pp.ox+q[0]*pp.s)*k,(pp.oy+q[1]*pp.s)*k];
     const a=P(pv.P1), b=P(pv.Q1), c=P(pv.Q2), d2=P(pv.P2);
@@ -3535,6 +3543,36 @@ function rotHandleGroup(ids,k){   // same idea for a multi-object selection: top
   if(!any) return null;
   const ax=(minx+maxx)/2, ay=miny, off=22/k; return { ax:ax, ay:ay, x:ax, y:ay-off };
 }
+/* ---------- Bounding-box resize: drag a handle to scale the whole selection ----------
+   Requested by Elaine Wolfe, and it fills a real gap. Her designs arrive as imported paths, and a path
+   had numeric Width/Height in the Selected object panel but NOTHING to grab on the mat; a multi-object
+   selection had no resize at all, numeric or otherwise - which is exactly what fitting a whole design to
+   the page needs. A lone rect or circle already carries its own parametric corner handles, so it is left
+   alone rather than given a second, competing set on top of them.
+     CORNER = uniform scale. It cannot shear a shape and cannot ask a circle to become an ellipse, so a
+     papercraft design keeps every fold meeting where it did. This is the everyday handle.
+     EDGE   = one axis - the deliberate "wider, not bigger" move, the same thing typing into Width alone
+     already does. Withheld when the selection holds a circle, since there is no ellipse in this app. */
+function boxResizeSel(){   // the objects a box resize would act on, or null if the selection is not eligible
+  const ids=selectedIds(); if(!ids.length) return null;
+  const objs=ids.map(id=>objects.find(x=>x.id===id)).filter(o=>o&&o.el&&o.el.tagName&&o.poly&&o.poly.length>1);
+  if(!objs.length) return null;
+  if(objs.some(o=>o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart")))) return null;   // bricks are parametric - the Brick size panel owns them
+  if(objs.length===1){ const t=objs[0].el.tagName.toLowerCase(); if(t==="rect"||t==="circle") return null; }
+  return objs;
+}
+function boxHandles(){   // in RAW design mm - the same frame o.poly lives in, so scaling needs no unmapping
+  const objs=boxResizeSel(); if(!objs) return null;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  objs.forEach(o=>o.poly.forEach(q=>{ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }));
+  if(x1-x0<0.2 && y1-y0<0.2) return null;
+  const round=objs.some(o=>o.el.tagName.toLowerCase()==="circle");   // a circle can only scale uniformly
+  const hs=[{ix:-1,iy:-1,c:"nwse-resize"},{ix:1,iy:-1,c:"nesw-resize"},{ix:1,iy:1,c:"nwse-resize"},{ix:-1,iy:1,c:"nesw-resize"}];
+  if(!round) hs.push({ix:0,iy:-1,c:"ns-resize"},{ix:1,iy:0,c:"ew-resize"},{ix:0,iy:1,c:"ns-resize"},{ix:-1,iy:0,c:"ew-resize"});
+  const X=t=>t<0?x0:t>0?x1:(x0+x1)/2, Y=t=>t<0?y0:t>0?y1:(y0+y1)/2;
+  hs.forEach(h=>{ h.x=X(h.ix); h.y=Y(h.iy); });
+  return {x0:x0,y0:y0,x1:x1,y1:y1,objs:objs,handles:hs,round:round};
+}
 /* ---------- drag a shape: a handle resizes, the body moves ---------- */
 // rect: corner handle resizes (opposite corner anchored), body moves.
 // circle: cardinal handle changes radius (center fixed), body moves the center.
@@ -3573,6 +3611,24 @@ cv.addEventListener("mousedown",(e)=>{
       drag={mode:"grouprotate",members:members,cx:cx,cy:cy,a0:Math.atan2(py-cy,px-cx),moved:false};
       cv.style.cursor="grabbing"; e.preventDefault(); return;
     }
+  }
+  if(activeTool==="select"){   // resize-box handle. After the rotate knobs (which sit outside the box) and before
+    const bh=boxHandles();     // the body-drag tests below, since a handle sits ON the outline it would otherwise move.
+    if(bh){ const {mx,my,k}=evtMM(e), pp=placeParams();
+      let hit=null,bd=9;
+      bh.handles.forEach(h=>{ const d=Math.hypot((h.x*pp.s+pp.ox)-mx,(h.y*pp.s+pp.oy)-my)*k; if(d<bd){bd=d;hit=h;} });
+      if(hit){
+        // Anchor = the far side, which stays put. A mid-edge handle pins only the opposite EDGE, so the
+        // other axis keeps its own center and the shape grows one way instead of drifting sideways.
+        const ax=hit.ix<0?bh.x1:hit.ix>0?bh.x0:(bh.x0+bh.x1)/2;
+        const ay=hit.iy<0?bh.y1:hit.iy>0?bh.y0:(bh.y0+bh.y1)/2;
+        drag={mode:"boxresize",h:hit,ax:ax,ay:ay,x0:bh.x0,y0:bh.y0,x1:bh.x1,y1:bh.y1,moved:false,warned:false,
+          members:bh.objs.map(o=>{ const N=s=>+o.el.getAttribute(s)||0;
+            return { o:o, t:o.el.tagName.toLowerCase(),
+                     poly:o.poly.map(p=>[p[0],p[1]]),
+                     holes:o.holes?o.holes.map(h2=>h2.map(p=>[p[0],p[1]])):null,
+                     cx:N("cx"), cy:N("cy"), r:N("r"), x:N("x"), y:N("y"), w:N("width"), hh:N("height") }; })};
+        cv.style.cursor=hit.c; e.preventDefault(); return; } }
   }
   if(mode3D && selId!=null && !selMulti.length){   // click a LEGO cell on the selected shape to clear it; click its dotted ghost to put it back
     const co=objects.find(x=>x.id===selId), ga=s=>co&&co.el&&co.el.getAttribute?co.el.getAttribute(s):null;
@@ -3654,6 +3710,47 @@ window.addEventListener("mousemove",(e)=>{
     if(e.shiftKey && penPts.length){ const pp=placeParams(), a=penPts[penPts.length-1], s=snap45(pp.ox+a[0]*pp.s,pp.oy+a[1]*pp.s,mx,my); mx=s[0]; my=s[1]; }   // Shift locks the preview segment to 45 deg
     penHover=[mx,my]; draw(); return; }
   if(!drag) return;
+  if(drag.mode==="boxresize"){
+    const {mx,my}=evtMM(e), pp=placeParams(), h=drag.h;
+    const px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
+    const w0=drag.x1-drag.x0, h0=drag.y1-drag.y0;
+    const hx=h.ix<0?drag.x0:drag.x1, hy=h.iy<0?drag.y0:drag.y1;   // where the grabbed handle started
+    let sx=1, sy=1;
+    if(h.ix&&h.iy){   // corner: uniform. Taken as the projection of the pointer onto the original diagonal,
+      const vx=hx-drag.ax, vy=hy-drag.ay, L2=vx*vx+vy*vy;   // so drifting off the diagonal does not make the scale wobble.
+      if(L2>1e-9) sx=sy=((px-drag.ax)*vx+(py-drag.ay)*vy)/L2;
+    } else if(h.ix){ const d=hx-drag.ax; if(Math.abs(d)>1e-9) sx=(px-drag.ax)/d; }
+    else            { const d=hy-drag.ay; if(Math.abs(d)>1e-9) sy=(py-drag.ay)/d; }
+    // Floor the scale instead of letting it pass through zero. Dragging a handle back through the anchor
+    // would mirror the design, and a silent flip mid-drag is a nasty surprise - Mirror is its own tool.
+    const loX=w0>1e-6?1/w0:0.01, loY=h0>1e-6?1/h0:0.01;
+    if(h.ix&&h.iy){ const lo=Math.max(loX,loY); if(sx<lo) sx=sy=lo; }
+    else { if(sx<loX) sx=loX; if(sy<loY) sy=loY; }
+    drag.members.forEach(m=>{
+      const o=m.o, S=p=>[drag.ax+(p[0]-drag.ax)*sx, drag.ay+(p[1]-drag.ay)*sy];
+      if(m.t==="circle" && Math.abs(sx-sy)<1e-9){          // uniform -> it stays a circle, and keeps its Diameter field
+        const c=S([m.cx,m.cy]), r=Math.max(0.25,m.r*sx);
+        o.el.setAttribute("cx",fmtn(c[0])); o.el.setAttribute("cy",fmtn(c[1])); o.el.setAttribute("r",fmtn(r));
+        o.poly=circlePoly(c[0],c[1],r);
+      } else if(m.t==="rect"){                              // a rect scales on both axes natively
+        const a=S([m.x,m.y]), w=Math.max(0.5,m.w*sx), hgt=Math.max(0.5,m.hh*sy);
+        o.el.setAttribute("x",fmtn(a[0])); o.el.setAttribute("y",fmtn(a[1]));
+        o.el.setAttribute("width",fmtn(w)); o.el.setAttribute("height",fmtn(hgt));
+        o.poly=[[a[0],a[1]],[a[0]+w,a[1]],[a[0]+w,a[1]+hgt],[a[0],a[1]+hgt],[a[0],a[1]]];
+      } else {
+        ensurePolygon(o);                                   // an imported <path> can only be TRANSLATED, never re-pointed,
+        o.poly=m.poly.map(S);                               // so swap it for an editable polygon first - the same step rotate takes
+        if(m.holes) o.holes=m.holes.map(hh=>hh.map(S));     // a window travels with its frame, at the frame's scale
+        placeEl(o);
+      }
+    });
+    drag.moved=true; draw();
+    if(drag.members.length===1) showDims(drag.members[0].o);
+    const U=unit2D();
+    say("Resizing: "+U.f((drag.x1-drag.x0)*sx)+" x "+U.f((drag.y1-drag.y0)*sy)+" "+U.lab
+        +(h.ix&&h.iy?" - corner keeps the proportions.":" - edge stretches this way only."));
+    return;
+  }
   if(drag.mode==="groupmove"){ const {mx,my,k}=evtMM(e), pp=placeParams(); let ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
     snapHint=null;
     if(!e.altKey && drag.snap && drag.self.length){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
@@ -3785,6 +3882,15 @@ window.addEventListener("mouseup",()=>{
   if(drag.mode==="tab"){ const d=drag; drag=null; suppressClick=true;
     if(!d.preview){ say("Tab: press on an edge and drag ALONG it - the stretch you cover becomes the fold hinge."); draw(); return; }
     makeTab(d); return; }
+  if(drag.mode==="boxresize"){ const d=drag; drag=null; cv.style.cursor="default";
+    if(d.moved){ suppressClick=true;
+      const bh=boxHandles(), U=unit2D();   // report the size it actually ended at, not the last live figure
+      const n=d.members.length;
+      say(bh ? ((n===1?"Resized to ":"Resized "+n+" objects to ")+U.f(bh.x1-bh.x0)+" x "+U.f(bh.y1-bh.y0)+" "+U.lab
+                +". Ctrl-Z undoes it.")
+             : "Resized.");
+    }
+    draw(); refreshEditPanel(); return; }
   if(drag.mode==="groupmove"){ const moved=drag.moved; drag=null; cv.style.cursor="default"; if(moved){ suppressClick=true; say(selMulti.length+" object"+(selMulti.length!==1?"s":"")+" moved."); } draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
