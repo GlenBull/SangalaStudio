@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.71 -->
+<!-- SANGALA_VERSION: 2026-07-22.72 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2556,12 +2556,40 @@ function mirrorSelection(axis){
   targets.forEach(o=>{ if(!o.poly) return; any=true; o.poly.forEach(p=>{ mnx=Math.min(mnx,p[0]); mxx=Math.max(mxx,p[0]); mny=Math.min(mny,p[1]); mxy=Math.max(mxy,p[1]); }); });
   if(!any) return;
   const ax=(mnx+mxx)/2, ay=(mny+mxy)/2;
+  // Snapshot the geometry so the message can say what ACTUALLY changed. A symmetric selection -
+  // a single plain block, the commonest 3D case - mirrors onto itself, so the shape does not move
+  // and the flip looks like it did nothing. Saying "Flipped." there reads as a broken button; a
+  // tester reported exactly that. Compare before and after, and tell the truth either way.
+  // Compare at 0.1 mm, not at full precision: reflecting about a computed center leaves a ~0.01 mm
+  // rounding wobble that is far below print resolution but would otherwise read as "it moved".
+  // ...and compare the points as an unordered SET. Reflecting a rectangle maps its corners onto the
+  // same four positions in a different order, so comparing them in sequence would report a move that
+  // did not happen. Sorting answers the question actually being asked: did the shape end up anywhere
+  // different?
+  // ...and compare the corners as an unordered SET. Reflecting a rectangle maps its corners onto the
+  // same four positions, so comparing them in sequence reports a move that did not happen; and a ring
+  // carries a closing duplicate of its first point, which reflection re-attaches to a DIFFERENT corner,
+  // so even a sorted list still differs. The set answers the question actually being asked: did this
+  // shape end up occupying anywhere different?
+  const r1=v=>Math.round(v*10)/10;
+  const snap=()=>targets.map(o=>(o.poly?[...new Set(o.poly.map(p=>r1(p[0])+","+r1(p[1])))].sort().join(" "):"")
+                +"|"+(o.el&&o.el.getAttribute?(o.el.getAttribute("data-slope-dir")||""):"")).join(";");
+  const was=snap();
   let ok=0, skipped=0;
   targets.forEach(o=>{ if(mirrorObj(o,axis,ax,ay)) ok++; else skipped++; });
+  const moved = snap()!==was;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();
   clearTimeout(histTimer); histTimer=null; commit();
   const verb=axis==="h"?"horizontally":"vertically";
-  say(skipped ? "Flipped "+ok+" "+verb+" - "+skipped+" imported shape"+(skipped!==1?"s":"")+" could not be mirrored." : "Flipped "+verb+".");
+  const DIRNAME=["front","right","back","left"];
+  let note="";
+  const dirs=new Set();   // name the new ramp direction: on a plain sloped block that is the ONLY visible change, and it shows in the 3D preview
+  targets.forEach(o=>{ if(o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-slope-dir")&&(+o.el.getAttribute("data-slope-run")||0)>0)
+    dirs.add(((Math.round(+o.el.getAttribute("data-slope-dir"))%4)+4)%4); });
+  if(dirs.size===1) note=" Slope now faces "+DIRNAME[[...dirs][0]]+".";
+  if(skipped) say("Flipped "+ok+" "+verb+" - "+skipped+" imported shape"+(skipped!==1?"s":"")+" could not be mirrored."+note);
+  else if(!moved) say("Flipped "+verb+", but this selection is symmetric, so nothing moved. Mirror shows its effect on an asymmetric shape, or on a copy (Ctrl+C, Ctrl+V) placed beside the original.");
+  else say("Flipped "+verb+"."+note);
 }
 function updateMirror(){ const ok=mirrorTargets().length>=1;
   ["mFlipH","mFlipV"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
