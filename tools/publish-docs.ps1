@@ -1,27 +1,26 @@
-# Publish the current documents and the beta-tester scripts to the shared Dropbox folder, so
-# Moses and the other testers can pick up a new User Guide without downloading the whole
-# repository as a zip.
+# Keep the repository's documents and the shared Dropbox folder in step, in EITHER direction.
 #
 # Dropbox here is a business-licensed team account. AI Sandbox sits at the TOP level of it,
-# deliberately, because that is what makes access easy to control:
+# deliberately, because that placement is what makes access control straightforward:
 #   %USERPROFILE%\UVa Lab School Dropbox\AI Sandbox\...     (top level - this folder)
 #   %USERPROFILE%\UVa Lab School Dropbox\Glen Bull\...      (Glen's own folder in the account)
 #
-# Rules this follows:
-#   - Only the files named below are touched. Anything else in the folder is left alone.
-#   - Documents are versioned in the filename, and the folder shows ONE current version of
-#     each. When a newer version is published, the superseded one MOVES to Archive - the same
-#     convention the repository's own Documents folder uses. Nothing is ever deleted.
-#   - A file that is already identical is skipped, so running this twice does nothing.
+# WHY TWO-WAY. An earlier version only pushed repo -> Dropbox. If a document was edited in the
+# Dropbox copy - which happens, because that is where it is convenient to open it - a push would
+# have silently overwritten the newer work, and the only remedy was to redo the edit by hand on
+# the other side. This version records the hash of each file at the last successful sync, so it
+# can tell WHICH side changed and move the file the right way. If both sides changed, it refuses
+# to guess: it reports the conflict and changes nothing.
 param([switch]$Apply)
 
 $ErrorActionPreference = 'Stop'
 $repo   = Split-Path -Parent $PSScriptRoot
 $docs   = Join-Path $repo 'Documents'
 $target = Join-Path $env:USERPROFILE 'UVa Lab School Dropbox\AI Sandbox\Design through Making\Sangala Studio Files'
+$statef = Join-Path $PSScriptRoot '.publish-state.json'
 
-# ---- what the testers get. Add a line here to publish something else. ----------------------
-$publish = @(
+# ---- what the testers get. Add a line here to sync something else. --------------------------
+$managed = @(
     @{ Stem = 'User Guide';  From = $docs }      # newest "User Guide (Ver N.N).docx"
     @{ Stem = 'Tech Manual'; From = $docs }
     @{ Name = 'Update SangalaStudio.cmd';    From = $repo }
@@ -29,84 +28,143 @@ $publish = @(
 )
 
 function Get-Ver([string]$name) {
-    if ($name -match '\(Ver\s+([0-9]+)\.([0-9]+)\)') {
-        return [double]("{0}.{1}" -f $matches[1], $matches[2].PadRight(3,'0'))
-    }
-    return 0.0
+    if ($name -match '\(Ver\s+([0-9]+)\.([0-9]+)\)') { return [int]$matches[1] * 1000 + [int]$matches[2] }
+    return 0
+}
+function Hash-Of($p) {
+    if (-not (Test-Path $p)) { return $null }
+    return (Get-FileHash $p -Algorithm SHA256).Hash
+}
+function Newest-Versioned($dir, $stem) {
+    $f = Get-ChildItem -Path $dir -Filter "$stem (Ver *).docx" -File -ErrorAction SilentlyContinue |
+         Sort-Object { Get-Ver $_.Name } -Descending
+    if ($f) { return $f[0] } else { return $null }
 }
 
-function Same-File($a, $b) {
-    if (-not (Test-Path $b)) { return $false }
-    if ((Get-Item $a).Length -ne (Get-Item $b).Length) { return $false }
-    return (Get-FileHash $a -Algorithm SHA256).Hash -eq (Get-FileHash $b -Algorithm SHA256).Hash
+$state = @{}
+if (Test-Path $statef) {
+    (Get-Content $statef -Raw | ConvertFrom-Json).PSObject.Properties |
+        ForEach-Object { $state[$_.Name] = $_.Value }
 }
 
 Write-Host ""
-Write-Host "  Source : $repo"
-Write-Host "  Target : $target"
-if (-not $Apply) { Write-Host "  MODE   : preview only - nothing will be changed (run with -Apply to publish)" }
+Write-Host "  Repository : $repo"
+Write-Host "  Dropbox    : $target"
+if (-not $Apply) { Write-Host "  MODE       : preview only - nothing will be changed" }
 Write-Host ""
 
 if (-not (Test-Path $target)) {
     Write-Host "  The shared folder was not found."
     Write-Host "  Expected: $target"
-    Write-Host "  Check that the AI Sandbox team folder is synced to this PC."
+    Write-Host "  Check that the AI Sandbox folder is synced to this PC."
     exit 1
 }
 $archive = Join-Path $target 'Archive'
+$pushed = 0; $pulled = 0; $archived = 0; $same = 0; $conflicts = 0
+$newstate = @{}
 
-$copied = 0; $archived = 0; $skipped = 0
-foreach ($item in $publish) {
+foreach ($item in $managed) {
 
-    # ---- pick the file to publish ----------------------------------------------------------
+    # ---- locate the file on each side ------------------------------------------------------
     if ($item.Stem) {
-        $found = Get-ChildItem -Path $item.From -Filter "$($item.Stem) (Ver *).docx" -File |
-                 Sort-Object { Get-Ver $_.Name } -Descending
-        if (-not $found) { Write-Host "  MISSING   $($item.Stem) (Ver *).docx  - not in Documents"; continue }
-        if ($found.Count -gt 1) {
-            Write-Host "  NOTE      several versions of '$($item.Stem)' in Documents; publishing $($found[0].Name)"
-        }
-        $src = $found[0]
-    } else {
-        $p = Join-Path $item.From $item.Name
-        if (-not (Test-Path $p)) { Write-Host "  MISSING   $($item.Name)"; continue }
-        $src = Get-Item $p
-    }
-    $dest = Join-Path $target $src.Name
-
-    # ---- retire any older version of the same document, so one current copy is visible -----
-    if ($item.Stem) {
-        Get-ChildItem -Path $target -Filter "$($item.Stem) (Ver *).docx" -File |
-          Where-Object { $_.Name -ne $src.Name } | ForEach-Object {
-            Write-Host "  ARCHIVE   $($_.Name)  ->  Archive\"
-            if ($Apply) {
-                if (-not (Test-Path $archive)) { New-Item -ItemType Directory $archive | Out-Null }
-                $to = Join-Path $archive $_.Name
-                if (Test-Path $to) { Remove-Item $to -Force }   # same version already archived
-                Move-Item $_.FullName $to -Force
+        $srcFile = Newest-Versioned $item.From $item.Stem
+        $dstFile = Newest-Versioned $target    $item.Stem
+        if (-not $srcFile -and -not $dstFile) { Write-Host "  MISSING    $($item.Stem) - on neither side"; continue }
+        # a higher version number on either side wins outright
+        $sv = if ($srcFile) { Get-Ver $srcFile.Name } else { -1 }
+        $dv = if ($dstFile) { Get-Ver $dstFile.Name } else { -1 }
+        if ($sv -ne $dv) {
+            if ($sv -gt $dv) {
+                Write-Host "  PUSH       $($srcFile.Name)   (newer version than Dropbox)"
+                if ($Apply) {
+                    if ($dstFile) {
+                        if (-not (Test-Path $archive)) { New-Item -ItemType Directory $archive | Out-Null }
+                        $to = Join-Path $archive $dstFile.Name
+                        if (Test-Path $to) { Remove-Item $to -Force }
+                        Move-Item $dstFile.FullName $to -Force
+                        Write-Host "  ARCHIVE    $($dstFile.Name)  ->  Archive\"
+                    }
+                    Copy-Item $srcFile.FullName (Join-Path $target $srcFile.Name) -Force
+                }
+                if ($dstFile) { $archived++ }
+                $pushed++
+                $newstate[$srcFile.Name] = Hash-Of $srcFile.FullName
+            } else {
+                Write-Host "  PULL       $($dstFile.Name)   (newer version than the repository)"
+                if ($Apply) { Copy-Item $dstFile.FullName (Join-Path $item.From $dstFile.Name) -Force }
+                $pulled++
+                $newstate[$dstFile.Name] = Hash-Of $dstFile.FullName
             }
-            $archived++
+            continue
         }
+        $name = $srcFile.Name
+        $src  = $srcFile.FullName
+        $dst  = Join-Path $target $name
+    } else {
+        $name = $item.Name
+        $src  = Join-Path $item.From $name
+        $dst  = Join-Path $target $name
+        if (-not (Test-Path $src)) { Write-Host "  MISSING    $name"; continue }
     }
 
-    # ---- copy if it differs ----------------------------------------------------------------
-    if (Same-File $src.FullName $dest) {
-        Write-Host "  current   $($src.Name)"
-        $skipped++
-    } else {
-        $verb = if (Test-Path $dest) { "UPDATE " } else { "NEW    " }
-        Write-Host "  $verb   $($src.Name)"
-        if ($Apply) { Copy-Item $src.FullName $dest -Force }
-        $copied++
+    # ---- same version on both sides: decide by what changed since the last sync -------------
+    $hs = Hash-Of $src
+    $hd = Hash-Of $dst
+    $last = $state[$name]
+
+    if ($hd -eq $null) {
+        Write-Host "  PUSH       $name   (not in Dropbox yet)"
+        if ($Apply) { Copy-Item $src $dst -Force }
+        $pushed++; $newstate[$name] = $hs
+    }
+    elseif ($hs -eq $hd) {
+        Write-Host "  in step    $name"
+        $same++; $newstate[$name] = $hs
+    }
+    elseif ($last -eq $null) {
+        # never synced by this tool, so there is no record of who changed: fall back to time
+        $sNewer = (Get-Item $src).LastWriteTime -gt (Get-Item $dst).LastWriteTime
+        if ($sNewer) {
+            Write-Host "  PUSH       $name   (differs; repository copy is newer - first sync, judged by time)"
+            if ($Apply) { Copy-Item $src $dst -Force }
+            $pushed++; $newstate[$name] = $hs
+        } else {
+            Write-Host "  PULL       $name   (differs; Dropbox copy is newer - first sync, judged by time)"
+            if ($Apply) { Copy-Item $dst $src -Force }
+            $pulled++; $newstate[$name] = $hd
+        }
+    }
+    elseif ($hs -eq $last) {
+        Write-Host "  PULL       $name   (edited in Dropbox)"
+        if ($Apply) { Copy-Item $dst $src -Force }
+        $pulled++; $newstate[$name] = $hd
+    }
+    elseif ($hd -eq $last) {
+        Write-Host "  PUSH       $name   (edited in the repository)"
+        if ($Apply) { Copy-Item $src $dst -Force }
+        $pushed++; $newstate[$name] = $hs
+    }
+    else {
+        Write-Host ""
+        Write-Host "  CONFLICT   $name"
+        Write-Host "             both copies changed since the last sync. Nothing was touched."
+        Write-Host "             repository : $((Get-Item $src).LastWriteTime)  $((Get-Item $src).Length) bytes"
+        Write-Host "             Dropbox    : $((Get-Item $dst).LastWriteTime)  $((Get-Item $dst).Length) bytes"
+        Write-Host "             Merge them by hand, then run this again."
+        Write-Host ""
+        $conflicts++
+        $newstate[$name] = $last          # keep the old record so it stays flagged
     }
 }
+
+if ($Apply) { $newstate | ConvertTo-Json | Set-Content $statef -Encoding utf8 }
 
 Write-Host ""
 if ($Apply) {
-    Write-Host "  Published $copied file(s), archived $archived, $skipped already current."
-    Write-Host "  Dropbox will sync them out; testers see the new file in the shared folder."
+    Write-Host "  Pushed $pushed, pulled $pulled, archived $archived, $same already in step, $conflicts conflict(s)."
 } else {
-    Write-Host "  Would publish $copied file(s) and archive $archived. $skipped already current."
-    Write-Host "  Run 'Publish to Dropbox.cmd' to do it."
+    Write-Host "  Would push $pushed, pull $pulled, archive $archived. $same in step, $conflicts conflict(s)."
+    Write-Host "  Run 'Sync with Dropbox.cmd' to do it."
 }
+if ($conflicts -gt 0) { Write-Host "  Resolve the conflict(s) above before relying on this." }
 Write-Host ""

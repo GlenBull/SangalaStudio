@@ -41,3 +41,6 @@ desktop.ini
 
 # Claude Code: commit shared settings.json, ignore machine-specific local settings
 .claude/settings.local.json
+
+# local sync bookkeeping for Sync with Dropbox.cmd
+tools/.publish-state.json
