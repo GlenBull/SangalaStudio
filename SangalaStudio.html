@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.72 -->
+<!-- SANGALA_VERSION: 2026-07-22.73 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -573,6 +573,11 @@ function loadSVG(text){
   if(!silo) normalize();
   bgImg=null; renderBg();
   draw(); refreshEditPanel();
+  if(pvOn){                                  // opening a design while the 3D View is up must REPLACE what it shows: the
+    const b=buildTris();                     // preview is an overlay canvas, so otherwise it keeps drawing the previous
+    if(!b.n) closePreview();                 // model and the new file looks as though it failed to load. Re-frame as well
+    else { pvSetTris(b); pvBounds(); renderPreview(); }   // (pvBounds) - a different model needs the camera fitted to it,
+  }                                          // not left where the old one put it. No 3D in the new file -> leave the preview.
   const nc=cutObjs().length, ns=scoreObjs().length;
   say(silo ? ("Loaded "+nc+" cut + "+ns+" score line"+(ns!==1?"s":"")+". Ready when you are.")
            : ("Loaded "+nc+" shape"+(nc!==1?"s":"")+". Ready when you are."));
