@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.84 -->
+<!-- SANGALA_VERSION: 2026-07-23.85 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -248,10 +248,10 @@
   </div>
 
   <div class="panel" id="fab">
-    <h2 class="marker">Fabricate</h2>
+    <h2 class="marker" id="fabHead">Fabricate</h2>
     <div class="conn" id="conn">Not connected</div>
     <button class="go" id="make" disabled>Make It!</button>
-    <h2 class="marker" style="margin-top:.6rem">Material</h2>
+    <h2 class="marker" id="matHead" style="margin-top:.6rem">Material</h2>
     <select id="material" style="width:100%;border:none;box-shadow:inset 0 0 0 1px #cbb78f">
       <option>Paper</option><option>Sticker Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Custom</option>
       <option disabled>– – – – – – – – – – – – –</option>
@@ -2063,6 +2063,7 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   $("tBrick").style.display=on?"":"none";                         // Brick is a 3D/LEGO feature: hide it until 3D is enabled
   $("tSnap").style.display=on?"none":"";                          // Snap! draws with a turtle - a 2D drawing tool, so hide it in 3D
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
+  ["fabHead","make","matHead","material","bar"].forEach(id=>$(id).style.display=on?"none":"");   // Fabricate/Make It + Material picker + its progress bar are die-cutter (2D) controls; 3D exports an STL instead
   say(on?"Design in 3D, then Export STL for the 3D printer."      // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
        :(connected?"Connected. Open a design or load the test square.":"Connect to the Die Cutter to begin."));
   if(!on && activeTool==="brick") setTool("select");             // don't leave a hidden tool active
