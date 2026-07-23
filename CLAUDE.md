@@ -234,7 +234,12 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     (solids merge, holes carve), validated by the oracle (`union_hole_test.js`, mism=0). **Menu is
     mode-specific:** 2D = Union / Difference / Intersect; **3D = Union / Intersect only** (`pDiff` hidden when
     `mode3D` — Difference is unneeded because Hole + Union carves). Combine bakes one mesh, keeps Depth/Base,
-    and is destructive (undo/redo to reposition). A bar bores a hole by being marked Hole and Combined.
+    and is destructive (undo/redo to reposition). A bar bores a hole by being marked Hole and Combined. The BSP
+    CSG (`mesh3D`) leaves T-junctions on subtract/intersect (a face split against one solid's plane but not the
+    neighbor's shared edge → edges shared by ≠2 faces → slicers flag "non-manifold"), so `bool3D` runs the
+    result through **`cleanMesh`** (weld coincident verts + split each straddled edge at the vertices on it,
+    winding preserved) → manifold STL, volume unchanged. Validated `cleanmesh.js` (nm→0, vol diff ~1e-14).
+    Cleaning is at bake time; a part combined before this fix needs a re-Combine to clean up.
   - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
     `#1a5fb4`, `data-role="hole"`) only produces an effect inside Combine — a bundled/ungrouped hole shows
     nothing in 3D until Combined.
