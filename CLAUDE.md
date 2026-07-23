@@ -19,10 +19,11 @@ USB only, user-mode.** This constraint is absolute.
   I have drifted into British spelling repeatedly and had to sweep it back out, including shipping "Paper
   color" in a panel while its own tooltips said "colour".
 - **One change at a time, then let the user test on the physical machine, then commit.** Do not batch many untested changes — that already cost a multi-hour unrecoverable break once. Commit (or tag) after each verified-good state so any regression is a `git diff` away, not a guess.
-- Terminology: the machine is a **die cutter** / **Digital Fabrication tool**. Always write the full term **"die cutter"** — never abbreviate or truncate to "cutter" (or use "cutting"). In schools the bare word "cutter" can evoke self-harm (a teen who slashes their arms); the full "die cutter" keeps the meaning unambiguous. Applies to UI text, code comments, and chat. Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication tool** — the case is deliberate:
-  "Digital Fabrication" is capitalized for prominence, but "tool" stays lowercase as an ordinary
-  noun rather than part of the emphasized term. Do NOT "correct" it to "Tool"; Glen confirmed the
-  lowercase form on 2026-07-22, and it is also the rule in `Documents/README.md`. Show the mat/page in inches as whole numbers. The drag-snapping function is **"Snap to Fit"** — never bare "Snap", which collides with the **Snap!** programming language (which has its own button in the app); in UI status text and the docs, set *Snap to Fit* in italics to mark it as a function.
+- Terminology: the machine is a **die cutter** / **Digital Fabrication Tool**. Always write the full term **"die cutter"** — never abbreviate or truncate to "cutter" (or use "cutting"). In schools the bare word "cutter" can evoke self-harm (a teen who slashes their arms); the full "die cutter" keeps the meaning unambiguous. Applies to UI text, code comments, and chat. Prefer **"Make It"** over "Cut It". Product = **Sangala Studio**; subtitle **Digital Fabrication Tool** — Title Case, every word
+  capitalized INCLUDING "Tool". Glen changed this on 2026-07-23 (it was formerly lowercase "tool",
+  and this file long said to keep it lowercase — that rule is now REVERSED). It matches Sangala
+  Mosaic's "Mosaic Design Tool". Keep "Tool" capitalized; do NOT revert it to lowercase. The same
+  rule lives in `Documents/README.md`. Show the mat/page in inches as whole numbers. The drag-snapping function is **"Snap to Fit"** — never bare "Snap", which collides with the **Snap!** programming language (which has its own button in the app); in UI status text and the docs, set *Snap to Fit* in italics to mark it as a function.
 
 ## Document formatting standards (User Guide & Tech Manual .docx)
 - **Never regenerate a doc to revise it — edit the user's actual file IN PLACE** (surgical

@@ -27,10 +27,10 @@ are formatted. This is where "same look and feel" actually lives.
 - **American spelling everywhere** — color, center, gray, canceled, behavior, millimeters.
 - **Terminology, exact:** always "**die cutter**" in full — never "cutter" or "cutting,"
   because in a school setting the bare word can read as self-harm. "**Make it!**" for the
-  green button. Product is **Sangala Studio**; subtitle **Digital Fabrication tool** — note
-  the deliberate case: "Digital Fabrication" is capitalized for emphasis/prominence, but
-  "tool" stays lowercase as an ordinary noun, not part of the emphasized term. Don't
-  "correct" this to "Tool" — it's intentional, not a slip. The drag-snap feature is
+  green button. Product is **Sangala Studio**; subtitle **Digital Fabrication Tool** — Title Case,
+  every word capitalized including "Tool" (Glen changed this on 2026-07-23; it was formerly
+  lowercase "tool"). It matches Sangala Mosaic's "Mosaic Design Tool". Keep "Tool"
+  capitalized — do not revert. The drag-snap feature is
   "*Snap to Fit*," set in italics, never bare "Snap" (it collides with the Snap!
   programming language). Mat and page sizes shown in whole inches.
 - **Voice:** concise and direct; minimal formatting; prose over bullet lists unless a list is
