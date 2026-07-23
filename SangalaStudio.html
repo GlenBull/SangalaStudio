@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.88 -->
+<!-- SANGALA_VERSION: 2026-07-23.89 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3283,6 +3283,13 @@ function dimText(o){
   return html;
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
+// Lock ratio in 3D: the object's Depth (thickness) tracks its Width/Height by the same factor, so a locked
+// resize scales it uniformly in all three dimensions. Base (elevation) is a position, not a size, so it stays.
+// Skipped for a brick, whose height is parametric.
+function scaleDepth(o,s){
+  if(!o.el||!o.el.getAttribute||o.el.hasAttribute("data-brick")||!(s>0)||Math.abs(s-1)<1e-9) return;
+  const z=+o.el.getAttribute("data-z")||0; if(z>0) o.el.setAttribute("data-z", fmtn(Math.max(0.1, z*s)));
+}
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
@@ -3309,8 +3316,8 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     const locked=o.el.getAttribute("data-lockratio")==="1";   // Lock ratio: the OTHER side follows so Width:Height holds
-    if(dim==="width"){ const nw=Math.max(1,v); if(locked&&w>1e-6) h=fmtn(h*(nw/w)); w=nw; }
-    else if(dim==="height"){ const nh=Math.max(1,v); if(locked&&h>1e-6) w=fmtn(w*(nh/h)); h=nh; }
+    if(dim==="width"){ const nw=Math.max(1,v); if(locked&&w>1e-6){ const s=nw/w; h=fmtn(h*s); if(mode3D) scaleDepth(o,s); } w=nw; }
+    else if(dim==="height"){ const nh=Math.max(1,v); if(locked&&h>1e-6){ const s=nh/h; w=fmtn(w*s); if(mode3D) scaleDepth(o,s); } h=nh; }
     else if(dim==="x")x=v; else if(dim==="y")y=v;
     o.el.setAttribute("x",fmtn(x));o.el.setAttribute("y",fmtn(y));o.el.setAttribute("width",fmtn(w));o.el.setAttribute("height",fmtn(h));
     o.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
@@ -3347,6 +3354,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
     if(dim==="width"  && curW>1e-6) sx=Math.max(1,v)/curW;
     if(dim==="height" && curH>1e-6) sy=Math.max(1,v)/curH;
     if(locked){ if(dim==="width") sy=sx; else sx=sy; }
+    if(locked && mode3D) scaleDepth(o, dim==="width"?sx:sy);   // uniform 3D scale: Depth tracks the locked Width/Height
     if(sx!==1||sy!==1){
       let angled=false;
       if(o.poly.length<=9 && Math.abs(sx-sy)>1e-6){   // few points (a drawn/rotated shape, not a dense trace) + a non-uniform edit
