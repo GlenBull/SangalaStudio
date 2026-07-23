@@ -250,11 +250,13 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
   save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,
   and RESIZED — the drag handlers carry the mesh through the same transform as the footprint (rotate spins
-  the mesh about the vertical axis; box-resize scales its x/y, `rotMeshTris` + the boxresize scale). **Base
-  (elevation) is editable**: the details panel shows a *Base* field for a baked part (`data-dim="meshbase"`,
-  `mode3D` only) that rigidly shifts every triangle's z so the lowest point sits at the given height (footprint
-  x/y unchanged). Remaining limit: a footprint resize scales x/y only — **height/thickness (z-extent) stays
-  fixed**; scaling the part's thickness would still need its own control (distinct from Base elevation).
+  the mesh about the vertical axis; box-resize scales its x/y, `rotMeshTris` + the boxresize scale). **Full
+  z control in the details panel** (`mode3D` only): a baked part shows **Depth** (`data-dim="meshdepth"` —
+  scales every triangle's z about the base so the lowest point stays put and thickness grows upward, like a
+  shape's Depth extruding up from z0) and **Base** (`data-dim="meshbase"` — rigidly shifts all z so the lowest
+  point sits at the given height). Both leave footprint x/y untouched, update the preview live, persist via
+  `data-mesh-tris`, and carry through Undo/Redo. A z-scale about the base is a positive affine, so the mesh
+  stays watertight. (Footprint x/y still resize only via box-resize; the z fields cover thickness + elevation.)
 
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**

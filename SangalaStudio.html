@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.81 -->
+<!-- SANGALA_VERSION: 2026-07-23.82 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3203,13 +3203,15 @@ const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;
 function dimText(o){
   if(!o||!o.el) return "";
   if(o.mesh){   // a baked 3D part: footprint size is baked in, but Base (how high its lowest point sits above the plate) is a rigid vertical shift of the whole mesh
-    const msg='<div style="color:#8a7350;line-height:1.5">3D part (combined). Move it on the mat, Combine it again with another bar or part, or export it. Its footprint size is baked in'+(mode3D?' - but you can set how high it sits:':'.')+'</div>';
+    const msg='<div style="color:#8a7350;line-height:1.5">3D part (combined). Move it on the mat, Combine it again with another bar or part, or export it. Its footprint size is baked in'+(mode3D?' - but you can set its thickness and how high it sits:':'.')+'</div>';
     if(!mode3D) return msg;
-    const base=o.mesh.reduce((m,t)=>Math.min(m,t[0][2],t[1][2],t[2][2]),Infinity), b=isFinite(base)?base:0;
+    let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
+    const b=isFinite(lo)?lo:0, d=isFinite(hi)?hi-b:0;
+    const fld=(lab,key,val)=>'<td style="text-align:left">'+lab+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+MM_UNIT.step+'" data-dim="'+key+'" value="'+MM_UNIT.f(val)+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">'+MM_UNIT.lab+'</td>';
     return msg+'<table style="border-collapse:collapse;margin-top:.35rem"><tr>'
-      +'<td style="text-align:left">Base:</td>'
-      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+MM_UNIT.step+'" data-dim="meshbase" value="'+MM_UNIT.f(b)+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">'+MM_UNIT.lab+'</td></tr></table>';
+      +fld("Depth","meshdepth",d)+'<td style="width:1.2rem"></td>'+fld("Base","meshbase",b)+'</tr></table>';
   }
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
   let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
@@ -3289,6 +3291,11 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   if(dim==="meshbase"){ if(o.mesh&&o.mesh.length){   // baked part: set how high the lowest point sits by shifting every triangle's z rigidly (footprint x/y unchanged)
       const cur=o.mesh.reduce((m,t)=>Math.min(m,t[0][2],t[1][2],t[2][2]),Infinity), d=Math.max(0,v)-(isFinite(cur)?cur:0);
       if(d){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],p[2]+d])); if(!live) syncMeshToEl(o); } }
+    if(!live)showDims(o); pvRefresh(); return; }
+  if(dim==="meshdepth"){ if(o.mesh&&o.mesh.length){   // baked part: set thickness by scaling every triangle's z about the base (lowest point fixed, grows upward - footprint x/y unchanged)
+      let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
+      const cur=hi-lo, s=cur>1e-6 ? Math.max(0.1,v)/cur : 1;
+      if(s!==1){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],lo+(p[2]-lo)*s])); if(!live) syncMeshToEl(o); } }
     if(!live)showDims(o); pvRefresh(); return; }
   if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
