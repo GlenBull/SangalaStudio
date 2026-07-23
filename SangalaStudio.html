@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.83 -->
+<!-- SANGALA_VERSION: 2026-07-23.84 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3579,7 +3579,7 @@ function refreshEditPanel(){
   $("eScore").classList.toggle("on", o.kind==="score");
   $("ePrint").classList.toggle("on", o.kind==="print");
   const tag = o.el && o.el.tagName ? o.el.tagName.toLowerCase() : "";
-  const isPoly = tag==="polygon";   // Simplify only applies to node-built paths
+  const isPoly = tag==="polygon" && !mode3D;   // Simplify only applies to node-built paths, and only in 2D - a 3D part's nodes are not edited that way
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = ([o.poly].concat(o.holes||[]).reduce((n,r)=>n+(r.length-1),0))+" nodes";   // total across the outline AND every hole
   $("eBreak").style.display = (activeTool==="node" && selNode!=null && (tag==="polygon"||tag==="polyline")
