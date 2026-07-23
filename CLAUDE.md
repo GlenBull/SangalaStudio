@@ -219,13 +219,24 @@ hole through a curved or sloped part — has no flat 2D stand-in. Difference bor
 adds a peg, Intersect keeps the overlap. Validated by an independent point-membership +
 watertightness oracle (dev harness in the scratchpad). Bars and combined parts are **3D-only**:
 excluded from the die cutter, drawn on the plan as a teal line (bar) or gray outline (part).
-- **FOR LATER — reconcile Fuse/Separate vs the Combine tool** (Glen flagged 2026-07-23). They are
-  two different mechanisms with overlapping wording: *Fuse/Separate* is non-destructive grouping so
-  bodies print as one welded piece (additive only, reversible; selection = marquee `selMulti`);
-  *Combine* (Union/Difference/Intersect) bakes a new shape (destructive; selection = Shift-click
-  pair `selId2`, or a marquee of two). A Shift-click shows Combine but NOT Fuse, since they read
-  different selection variables — confusing. Reconcile the labels and/or unify the selection gesture.
-  Leave as-is until then (Glen's call).
+- **3D grouping = TinkerCAD Solid/Hole model (DONE, validated 2026-07-23).** In 3D mode each shape
+  carries a Solid/Hole flag (Stage 1: the *Hole* checkbox in the shape details; a hole draws blue-dotted,
+  `#1a5fb4`). Grouping (the marquee `selMulti` + **Group**/**Ungroup** buttons — the old *Fuse/Separate*
+  labels are retired) drives a live boolean build (`evalGroupTree`/`evalNonBrick`, no baked mesh): a
+  group's solids union and its holes carve a void. Grouping **nests** — the newest group is the OUTERMOST
+  level (`gpath = [outermost..innermost]`, `o.group` = `gpath[0]`), so **Ungroup peels one level** and any
+  inner group survives (stepwise, per Glen's preference). Ungrouped: a solid stands alone, a lone hole is
+  invisible. Persists through Save SVG (`data-gpath`, space-joined; legacy `data-group` loads as one level),
+  Undo/Redo (`serializeState` carries `gpath`), and copy. The build is cached per top-level group
+  (`_groupCache`, keyed by `geomStamp`) so dragging one part doesn't recompute the rest. Bricks keep the old
+  weld-by-group path (`FUSE_GROW`/`offsetRing` via `bodyTris(o,fuse)`). Validated against the independent
+  point-membership oracle (scratchpad `nestgroup.js`/`evalfns_test.js`): stepwise, flat, lone-hole, and
+  two-solid cases all mism=0. **2D mode is unchanged** — Group/Ungroup is plain move-together grouping.
+- **The Combine tool (Union/Difference/Intersect) still coexists** with 3D grouping, by design: it bakes a
+  new shape destructively (selection = Shift-click pair `selId2`, or a marquee of two), and remains the path
+  for a bar/baked-part 3D boolean (`bool3D`). Group/Ungroup is the non-destructive path. The old
+  Fuse-vs-Combine label overlap Glen flagged is resolved for 3D (Fuse/Separate gone); Combine-vs-Group is
+  now the two-mechanism split — leave as-is unless Glen asks to unify the gesture.
 - A 3D-Combine result is a **baked mesh**. It PERSISTS: `syncMeshToEl`/`parseMeshRel` store the
   triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
   save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,
