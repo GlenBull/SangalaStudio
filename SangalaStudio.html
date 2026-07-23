@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.74 -->
+<!-- SANGALA_VERSION: 2026-07-23.75 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -562,9 +562,11 @@ function loadSVG(text){
     // silo files classify by line style; a plain (no-red) design cuts every shape (old behavior).
     const kind = silo ? classifyKind(el) : "cut";
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
-    const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
-    let grp=null; if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; grp=gmap[dg]; }
-    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp};
+    const dgp = el.getAttribute && el.getAttribute("data-gpath"), dg = el.getAttribute && el.getAttribute("data-group");   // restore (nested) grouping saved by Save SVG
+    let gpath=[];
+    if(dgp) gpath = dgp.trim().split(/\s+/).filter(Boolean).map(id=>{ if(!(id in gmap)) gmap[id]=++groupSeq; return gmap[id]; });   // remap each level, preserving which objects share which level
+    else if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; gpath=[gmap[dg]]; }   // legacy flat group -> one-level path
+    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:gpath.length?gpath[0]:null, gpath:gpath.length?gpath:null};
     const hs=parseHoles(el);                                     // a frame saved by Sangala carries its inner loops in data-holes,
     if(hs){ const m=el.getCTM();                                 // in the element's OWN user units - so map them through the SAME
       o.holes=hs.map(ring=>ring.map(p=>{                         // transform sample() gives the outer. Without this, Save SVG's cropped
@@ -1198,7 +1200,8 @@ async function saveSVG(){
   const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
   const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
   objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
-    if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group");
+    const gp=gpathOf(o); if(gp.length){ o.el.setAttribute("data-group", gp[0]); o.el.setAttribute("data-gpath", gp.join(" ")); }   // full nesting path (outermost..innermost) so stepwise ungroup survives reopen
+    else if(o.el.removeAttribute){ o.el.removeAttribute("data-group"); o.el.removeAttribute("data-gpath"); }
     syncHolesToEl(o); syncMeshToEl(o); });
   const clone=svgEl.cloneNode(true);
   clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
@@ -1867,27 +1870,59 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
   return tris;
 }
+// ---- nested Solid/Hole grouping (TinkerCAD-style): a group's solids union and its holes carve, evaluated
+// bottom-up so a hole is scoped to the level it was grouped at. gpath = [outermost .. innermost] group ids;
+// a plain (flat) group is a one-link path. Ungrouped: a solid stands alone, a lone hole is invisible. ----
+function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[o.group]:[]); }
+function geomStamp(o){ const g=a=>o.el.getAttribute(a), t=o.el.tagName?o.el.tagName.toLowerCase():"";   // cheap change-signature to key the group cache
+  let s=o.id+"|"+(isHole(o)?"H":"S")+"|"+gpathOf(o).join(",")+"|";
+  if(o.mesh) return s+"m"+o.mesh.length+"|"+o.mesh[0].join(",")+"|"+o.mesh[o.mesh.length-1].join(",");
+  if(t==="rect") return s+"r"+["x","y","width","height","data-z","data-z0","data-slope-run","data-slope-dir","data-studs","data-sockets","data-fit"].map(g).join(",");
+  if(t==="circle") return s+"c"+["cx","cy","r","data-z","data-z0"].map(g).join(",");
+  return s+"p"+(o.poly?o.poly.map(p=>p[0]+","+p[1]).join(";"):"")+"|"+["data-z","data-z0","data-bar","data-bar-shape","data-bar-d","data-bar-w","data-bar-h"].map(g).join(",");
+}
+let _groupCache=new Map();
+function evalGroupTree(members,d){   // members share gpath[0..d-1]; returns one mesh: solids unioned, holes subtracted, subgroups resolved first
+  const leaves=members.filter(o=>gpathOf(o).length===d+1), sub=members.filter(o=>gpathOf(o).length>d+1);
+  const bySub=new Map(); sub.forEach(o=>{const k=gpathOf(o)[d+1]; if(!bySub.has(k))bySub.set(k,[]); bySub.get(k).push(o);});
+  const solids=[], holes=[];
+  leaves.forEach(o=>{ const m=bodyTris(o,false); if(m.length)(isHole(o)?holes:solids).push(m); });
+  bySub.forEach(sm=>{ const m=evalGroupTree(sm,d+1); if(m.length) solids.push(m); });   // a subgroup is a solid (a shape that may contain voids)
+  let acc = solids.length ? solids.reduce((a,m)=> a? mesh3D("union",a,m) : m, null) : [];
+  holes.forEach(h=>{ if(acc.length) acc=mesh3D("subtract",acc,h); });
+  return acc||[];
+}
+function evalNonBrick(bodies){   // -> list of piece meshes (one per top-level group / ungrouped solid), cached per group so unrelated drags don't recompute
+  const pieces=[], seen=new Set();
+  bodies.filter(o=>gpathOf(o).length===0 && !isHole(o)).forEach(o=>{ const m=bodyTris(o,false); if(m.length)pieces.push(m); });   // ungrouped solid stands alone; a lone hole cuts nothing -> invisible
+  const byTop=new Map(); bodies.filter(o=>gpathOf(o).length>0).forEach(o=>{const k=gpathOf(o)[0]; if(!byTop.has(k))byTop.set(k,[]); byTop.get(k).push(o);});
+  byTop.forEach(members=>{ const sig=members.map(geomStamp).sort().join("~"); seen.add(sig);
+    let m=_groupCache.get(sig); if(!m){ m=evalGroupTree(members,0); _groupCache.set(sig,m); }
+    if(m.length)pieces.push(m); });
+  if(_groupCache.size>200) for(const key of [..._groupCache.keys()]) if(!seen.has(key)) _groupCache.delete(key);
+  return pieces;
+}
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
-  // onlyIds (optional Set) limits the build to a selection, for exporting ONE piece at a time. Selecting any
-  // member of a fused group pulls in the WHOLE group, because a fused group IS one printed piece - exporting
-  // half of one would write a part that cannot print.
+  // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
   const bars=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1"&&o.poly&&o.poly.length>=2);   // lines extruded as rods/sticks
   const meshes=objects.filter(o=>o.mesh&&o.el);   // baked parts from a 3D Combine
-  let bodies=bricks.concat(plain).concat(bars).concat(meshes);
+  let all=bricks.concat(plain).concat(bars).concat(meshes);
   if(onlyIds && onlyIds.size){
-    const grp=new Set(); bodies.forEach(o=>{ if(onlyIds.has(o.id) && o.group!=null) grp.add(o.group); });
-    bodies=bodies.filter(o=> onlyIds.has(o.id) || (o.group!=null && grp.has(o.group)) );   // whole groups, never a fragment
+    const grp=new Set(); all.forEach(o=>{ if(onlyIds.has(o.id)){ const p=gpathOf(o); if(p.length)grp.add(p[0]); } });
+    all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group, never a fragment
   }
-  const per={}; bodies.forEach(o=>{ if(o.group!=null) per[o.group]=(per[o.group]||0)+1; });   // bodies per group; 2+ = fused into one printed piece
-  const parts=new Map();                                                                      // a PART is one printed piece: a fused group, or a body on its own
-  bodies.forEach(o=>{ const fuse=o.group!=null && per[o.group]>1, key=o.group!=null ? "g"+o.group : "o"+o.id;
-    if(!parts.has(key)) parts.set(key,[]);
-    parts.get(key).push(...bodyTris(o,fuse)); });
-  const list=Array.from(parts.values());
-  return {tris:[].concat.apply([],list), n:bodies.length, bricks:bricks.length, parts:list};
+  const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
+  const parts=[];
+  const bper={}; brickBodies.forEach(o=>{ if(o.group!=null)bper[o.group]=(bper[o.group]||0)+1; });   // bricks keep the old weld-by-group; their hollow meshes do not go through the boolean
+  const bmap=new Map();
+  brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
+  bmap.forEach(t=>parts.push(t));
+  evalNonBrick(nonBrick).forEach(m=>parts.push(m));   // solids union, holes carve, nested/stepwise
+  const list=parts.filter(p=>p.length);
+  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -2099,7 +2134,7 @@ function serializeState(){
       attrs: (o.el&&o.el.attributes)? Array.from(o.el.attributes).map(a=>[a.name,a.value]):[],
       kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null,
       holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
-      mesh: o.mesh? o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:o.group })) };   // a baked 3D-Combine part carries its mesh through Undo/Redo too
+      mesh: o.mesh? o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:o.group, gpath:o.gpath?o.gpath.slice():null })) };   // mesh + nesting path carry through Undo/Redo
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
   if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
@@ -2113,7 +2148,7 @@ function restoreState(st){
     if(so.tag){ el=document.createElementNS(SVGNS,so.tag); so.attrs.forEach(a=>el.setAttribute(a[0],a[1])); svgEl.appendChild(el); }
     return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null,
              holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
-             mesh: so.mesh? so.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:so.group }; });
+             mesh: so.mesh? so.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:so.group, gpath:so.gpath?so.gpath.slice():null }; });
   objSeq=st.objSeq; groupSeq=st.groupSeq; printFile=st.printFile;
   selId=null; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();
@@ -3560,20 +3595,22 @@ function fuseIslands(bs){   // how many separate clumps of touching bodies? 1 = 
       bs.forEach(x=>{ if(!seen.has(x.id) && bodiesTouch(c,x)){ seen.add(x.id); q.push(x); } }); } });
   return islands;
 }
-function groupSel(){
-  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Fuse":"Group")+"."); return; }
-  groupSeq++; const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.group=groupSeq; });
+function groupSel(){   // NEST: the new group becomes the OUTERMOST level, so a later ungroup peels just this step (TinkerCAD-style)
+  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Group":"Group")+"."); return; }
+  groupSeq++; const set=new Set(selMulti);
+  objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); p.unshift(groupSeq); o.gpath=p; o.group=groupSeq; } });
   refreshEditPanel(); draw(); pvRefresh();
-  if(!mode3D){ say("Grouped "+selMulti.length+" objects - they now select and move as one. Ungroup to separate them."); return; }
-  const bs=fusedBodies(selMulti), islands=bs.length?fuseIslands(bs):0;
-  say(bs.length<2 ? "Fused, but only "+bs.length+" of these has a Depth - give the others one and they will print as a single piece."
-    : islands>1   ? "Fused "+bs.length+" shapes, but they sit in "+islands+" separate clumps - they will still print as "+islands+" pieces. Move them until they touch or overlap."
-    : "Fused "+bs.length+" shapes into one printed piece - Export STL writes it as a single STL. Unfuse to separate them.");
+  if(!mode3D){ say("Grouped "+selMulti.length+" objects - they select and move as one. Ungroup to separate them."); return; }
+  const holes=selMulti.filter(id=>{const o=objects.find(x=>x.id===id);return o&&isHole(o);}).length;
+  say("Grouped "+selMulti.length+" shapes - solids merge and "+(holes?holes+" hole"+(holes!==1?"s":"")+" carve":"holes would carve")
+    +" a void. Ungroup steps back one level.");
 }
-function ungroupSel(){
-  const set=new Set(selMulti); let n=0; objects.forEach(o=>{ if(set.has(o.id)&&o.group!=null){ o.group=null; n++; } });
+function ungroupSel(){   // PEEL one level: remove the outermost group id from each selected member; the inner grouping (if any) survives
+  const set=new Set(selMulti); let n=0;
+  objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); if(p.length){ p.shift(); o.gpath=p; o.group=p.length?p[0]:null; n++; } } });
+  selMulti=[]; selId=null;   // the loose set is no longer one selection; click to pick the inner group or a shape
   refreshEditPanel(); draw(); pvRefresh();
-  say(mode3D ? "Separated into "+n+" pieces - each prints on its own again." : "Ungrouped "+n+" objects.");
+  say(mode3D ? "Ungrouped one level - "+n+" item"+(n!==1?"s":"")+" stepped out. Any inner group stays; click it to select." : "Ungrouped "+n+" objects.");
 }
 $("eGroup").onclick=groupSel;
 $("eUngroup").onclick=ungroupSel;
