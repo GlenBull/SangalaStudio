@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.75 -->
+<!-- SANGALA_VERSION: 2026-07-23.76 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3516,19 +3516,16 @@ function refreshEditPanel(){
     const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
     const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
     setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
-    $("editinfo").textContent = mode3D ? (isGroup?"Fused: ":"")+selMulti.length+" objects selected"+(isGroup?" - one printed piece.":".")
+    $("editinfo").textContent = mode3D ? (isGroup?"Grouped: ":"")+selMulti.length+" shapes selected"+(isGroup?" - solids merge, any hole carves.":".")
                                        : (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none"; $("eBreak").style.display="none";
     $("groupsrow").style.display="block";
-    $("eGroup").textContent   = mode3D ? "⛓ Fuse into one piece" : "▦ Group";       // in 3D a group IS the printed piece
-    // "Unfuse" reads as its own opposite at a glance, so say what it does. fusedBodies counts the members that
-    // actually carry volume - a brick's stud circles ride along in the selection but are not pieces.
-    const sepN = mode3D ? fusedBodies(selMulti).length : 0;
-    $("eUngroup").textContent = mode3D ? (sepN>1 ? "⛓ Separate into "+sepN+" pieces" : "⛓ Separate the pieces") : "▤ Ungroup";
-    $("eUngroup").title = mode3D ? "Split this back into separate printed pieces - each exports as its own STL again." : "";
-    $("eGroup").title = mode3D ? "Print these as a single solid: they grow a hair so they overlap, and the slicer welds them. They must touch." : "";
+    $("eGroup").textContent   = "▦ Group";                                            // in 3D a group's solids union and holes carve; grouping nests
+    $("eUngroup").textContent = "▤ Ungroup";
+    $("eUngroup").title = mode3D ? "Step back one grouping level - any inner group stays grouped (click it to select)." : "";
+    $("eGroup").title = mode3D ? "Group these in 3D: solids merge into one part and any shape marked Hole carves a void. Groups can nest." : "";
     $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     const mbrk=selectedBrick();                               // a grouped brick: offer its size controls too
     if(mode3D && mbrk){ $("editinfo").textContent="LEGO brick selected — adjust its size below."; }
@@ -3579,22 +3576,9 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
-// Group: bind the current multi-selection into one unit (shared .group id) so it moves/selects together.
-// In 3D the same binding means MORE: the group is one printed piece. Its members grow a hair (FUSE_GROW) so they
-// overlap, and the slicer welds them into a single solid - the same fusion that sticks a stud to a brick's roof.
-// No 3D boolean is involved: a slicer only ever ADDS volume, which is why Fuse can union but could never subtract.
-function fusedBodies(ids){   // the members that carry 3D volume (a brick's stud circles ride along but aren't bodies)
-  const set=new Set(ids);
-  return objects.filter(o=>set.has(o.id) && o.el && o.poly && !(o.el.getAttribute&&o.el.getAttribute("data-brickpart")) && (+o.el.getAttribute("data-z")||0)>0);
-}
-function fuseIslands(bs){   // how many separate clumps of touching bodies? 1 = they really will print as one piece
-  const seen=new Set(); let islands=0;
-  bs.forEach(b=>{ if(seen.has(b.id)) return;
-    islands++; const q=[b]; seen.add(b.id);
-    while(q.length){ const c=q.pop();
-      bs.forEach(x=>{ if(!seen.has(x.id) && bodiesTouch(c,x)){ seen.add(x.id); q.push(x); } }); } });
-  return islands;
-}
+// Group: bind the current multi-selection into one unit (shared .group / gpath id) so it moves/selects together.
+// In 3D the same binding drives the boolean build (evalGroupTree): the group's solids union and its holes carve
+// a void. Grouping nests, so Ungroup peels one level at a time (see groupSel/ungroupSel).
 function groupSel(){   // NEST: the new group becomes the OUTERMOST level, so a later ungroup peels just this step (TinkerCAD-style)
   if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Group":"Group")+"."); return; }
   groupSeq++; const set=new Set(selMulti);
