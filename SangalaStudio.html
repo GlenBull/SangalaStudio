@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.78 -->
+<!-- SANGALA_VERSION: 2026-07-23.79 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -810,7 +810,9 @@ function draw(){
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
   const meshParts=objects.filter(o=>o.mesh);   // baked 3D parts: show the footprint (gray) so they can be picked and moved; not a cut
   if(meshParts.length){ ctx.save(); ctx.strokeStyle="#8a8a8a"; ctx.lineWidth=1.5; ctx.setLineDash([]);
-    meshParts.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); });
+    meshParts.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke();
+      (o.holes||[]).forEach(h=>{ const hp=placePoly(h); ctx.setLineDash([4,3]); ctx.beginPath(); hp.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); });   // carved openings: dashed, same gray, so a hole stays visible with 3D off
+    });
     ctx.restore(); }
   const barLines=objects.filter(isBar);   // 3D bars are shown on the plan (so you can place and aim them) but never cut - a distinct teal, not the red of a cut
   if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
@@ -2463,11 +2465,23 @@ function operandMesh(o){
   return null;
 }
 // A baked 3D part: carries its mesh directly and a flat footprint (the part's outline) for the 2D canvas.
-function makeMeshObj(footprint, mesh, kind){
+function makeMeshObj(footprint, mesh, kind, holes){
   let r=footprint.map(p=>[p[0],p[1]]); while(r.length>1 && _samePt(r[0],r[r.length-1])) r.pop();
   const el=svgNode("polygon",{points:r.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "),"data-mesh":"1"});
   const o={id:++objSeq, el:el, kind:kind||"cut", orig:"cut", poly:r.concat([[r[0][0],r[0][1]]]), mesh:mesh};
+  if(holes&&holes.length){   // carved openings, drawn dashed on the 2D plan so a hole stays visible with 3D View off (annotation only - the mesh already has them baked in)
+    o.holes=holes.map(h=>{ let g=h.map(p=>[p[0],p[1]]); if(g.length>1&&_samePt(g[0],g[g.length-1]))g.pop(); return g.concat([[g[0][0],g[0][1]]]); }).filter(h=>h.length>=4);
+    if(o.holes.length) syncHolesToEl(o); else delete o.holes; }
   objects.push(o); return o;
+}
+// The flat outline of a hole operand, for annotating a combined part's opening on the 2D plan. A shape -> its
+// own footprint; a bar -> the rectangle its cross-section sweeps along the line (its center line has no area).
+function holeFootprint(o){
+  if(!isBar(o)) return (o.poly&&o.poly.length>=3) ? o.poly.map(p=>[p[0],p[1]]) : null;
+  const a=o.poly[0], b=o.poly[o.poly.length-1], dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
+  const rect=o.el.getAttribute("data-bar-shape")==="rect";
+  const w=(rect?+o.el.getAttribute("data-bar-w"):+o.el.getAttribute("data-bar-d"))||4, hx=-dy/L*w/2, hy=dx/L*w/2;
+  return [[a[0]+hx,a[1]+hy],[b[0]+hx,b[1]+hy],[b[0]-hx,b[1]-hy],[a[0]-hx,a[1]-hy],[a[0]+hx,a[1]+hy]];
 }
 function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar or an already-baked part)
   const mA=operandMesh(o1), mB=operandMesh(o2);
@@ -2485,9 +2499,13 @@ function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar
   if(isBar(o1)||isBar(o2)){ const part=isBar(o1)?(isBar(o2)?o1:o2):o1; fp=part.poly.map(p=>[p[0],p[1]]); }
   else { const u=nestRings(boolShapes("union",{outer:o1.poly,holes:o1.holes||[]},{outer:o2.poly,holes:o2.holes||[]}));
     fp=(u[0]&&u[0].outer)?u[0].outer.map(p=>[p[0],p[1]]):o1.poly.map(p=>[p[0],p[1]]); }
+  const solidOps=[o1,o2].filter(o=>!isHole(o));
+  let openings=[];
+  solidOps.forEach(o=>{ if(o.mesh&&o.holes) openings.push(...o.holes.map(h=>h.map(p=>[p[0],p[1]]))); });   // carry forward openings already cut into a baked-part operand
+  if(carved){ const hf=holeFootprint(isHole(o1)?o1:o2); if(hf) openings.push(hf); }                        // the new opening this carve makes
   [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });
   objects=objects.filter(o=>o!==o1&&o!==o2);
-  makeMeshObj(fp, mesh, o1.kind);
+  makeMeshObj(fp, mesh, (solidOps[0]||o1).kind, openings);
   selId=null; selId2=null; selMulti=[]; selNode=null;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
   say((carved?"Union (3D): the hole cut out of the solid"
