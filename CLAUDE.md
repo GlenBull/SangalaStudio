@@ -257,10 +257,12 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   one-axis `slopedBoxTris` wedge (removed; `yzPrism` stays for bricks, which keep their own slope path).
   **Data:** `data-slopes` = per-edge angles aligned to the footprint's own edge order; legacy single
   `data-slope-run`/`data-slope-dir` is read as a fallback and migrated on first edit. Persists via Save/Undo/copy.
-  **Gate:** axis-aligned rects (canonical Front -Y / Right +X / Back +Y / Left -X) OR any `rfConvex` polygon;
-  concave falls back to no slope (Stage C); skipped with sockets/holes (a non-level top). **UI:** rects show
-  named sides, other convex shapes show numbered Side 1..N; focusing/hovering a field green-highlights that edge
-  on the plan (`slopeHi`). Validated against the point-membership + watertightness oracle across square/triangle/
+  **Gate:** axis-aligned rects (canonical Front -Y / Right +X / Back +Y / Left -X) OR any `rfConvex` polygon OR a
+  **circle → cone** (`data-cone` = one rim taper angle; `rfConeBase` gives a moderate-facet ring, roofed with a
+  uniform run — moderate = truncated cone, steep = full cone/apex); concave falls back to no slope (Stage C);
+  skipped with sockets/holes (a non-level top). **UI:** rects show named sides, other convex shapes show numbered
+  Side 1..N (focusing/hovering a field green-highlights that edge on the plan, `slopeHi`), a circle shows one
+  Cone taper field. Validated against the point-membership + watertightness oracle across square/triangle/
   pentagon, uniform/asymmetric, truncated + ridge + apex, and clockwise inputs (scratchpad `roof.js`/`roofB.js`);
   the ported app code reproduces the oracle volumes exactly (`app_roofB.js` check). **Next:** Stage C (concave
   via straight skeleton), and possibly a circle → cone.

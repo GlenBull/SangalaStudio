@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.94 -->
+<!-- SANGALA_VERSION: 2026-07-23.95 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1306,6 +1306,10 @@ function roofTris(baseIn,z0,z1,runsIn,lip){
   (top.length?top:[base[0]]).forEach(p=>pts.push([p[0],p[1],z1]));
   return rfHull(pts);
 }
+// A moderate-resolution circle ring for a CONE base (open). The cut circle's own poly is ~2 pts/mm, which is
+// far more than a smooth cone needs and would slow the hull - so cap the facet count here.
+function rfConeBase(cx,cy,r){ const n=Math.max(24,Math.min(96,Math.round(Math.PI*Math.max(1,r)))), p=[];
+  for(let i=0;i<n;i++){ const a=2*Math.PI*i/n; p.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]); } return p; }
 // Per-edge slope ANGLES (deg from vertical, 0 = vertical wall) aligned to a shape's footprint edges. Reads
 // data-slopes ("a0,a1,..."); falls back to the legacy single data-slope-run/data-slope-dir so old designs
 // still slope (dir 0/1/2/3 = the edge whose outward normal faces front -Y / right +X / back +Y / left -X).
@@ -1908,6 +1912,13 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
       const angles=rfEdgeAngles(o, base);
       if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP);
     }
+  }
+  // Cone: a circle whose rim tapers inward toward the top (one angle for the whole rim). Moderate taper -> a
+  // truncated cone; steep -> a full cone (apex). Same roof engine, uniform run on every facet. No studs.
+  if(t==="circle" && o.el.getAttribute("data-sockets")!=="1"){
+    const cone=Math.max(0,Math.min(80,+o.el.getAttribute("data-cone")||0));
+    if(cone>0){ const base=rfConeBase(g("cx"),g("cy"),g("r")+G), run=rfRuns([cone],z1-z0,ROOF_LIP)[0];
+      return roofTris(base, z0, z1, base.map(()=>run), ROOF_LIP); }
   }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
   let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
@@ -2971,7 +2982,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-cone","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -2980,7 +2991,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-cone","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -3305,6 +3316,13 @@ function dimText(o){
       +'<div class="hint" style="margin-bottom:.25rem" title="Ramp each side of the top inward. 0 = flat (a vertical wall). The angle is measured from vertical.">Slope each side (0 = flat)</div>'
       +'<table style="border-collapse:collapse">'+body+'</table></div>';
   }
+  if(mode3D && t==="circle" && o.el.getAttribute("data-sockets")!=="1"){   // a circle can taper to a cone (one angle for the whole rim)
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +'<div class="hint" style="margin-bottom:.25rem" title="Taper the rim inward toward the top. 0 = a straight cylinder; a moderate taper gives a truncated cone, a steep one a full cone (apex). Angle from vertical.">Cone taper (0 = straight)</div>'
+      +'<table style="border-collapse:collapse"><tr><td style="text-align:left">Taper:</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="1" min="0" max="80" data-dim="cone" value="'+Math.round(R("data-cone"))+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td></tr></table></div>';
+  }
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
     html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
       "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
@@ -3363,6 +3381,7 @@ function scaleFootprint(o,s){
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
+  if(dim==="cone"){ o.el.setAttribute("data-cone",fmtn(Math.max(0,Math.min(80,v)))); if(!live)showDims(o); pvRefresh(); return; }   // circle rim taper -> cone
   if(/^slope\d+$/.test(dim)){   // per-side roof: set one edge's slope angle (deg from vertical, 0 = flat) in data-slopes (aligned to the footprint edges)
     const idx=+dim.slice(5), ang=rfEdgeAngles(o, rfOpen(o.poly)); ang[idx]=Math.max(0,Math.min(80,v));
     o.el.setAttribute("data-slopes", ang.map(a=>fmtn(a)).join(","));
