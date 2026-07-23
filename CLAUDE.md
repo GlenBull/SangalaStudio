@@ -226,11 +226,12 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   pair `selId2`, or a marquee of two). A Shift-click shows Combine but NOT Fuse, since they read
   different selection variables — confusing. Reconcile the labels and/or unify the selection gesture.
   Leave as-is until then (Glen's call).
-- Other follow-ups from this work: a 3D-Combine result is a **baked mesh held in memory only** — it
-  is NOT written into the saved SVG, so it is lost on save/reopen (bars survive, rebuilt from the
-  line + `data-bar*`). Persisting combined parts needs mesh serialization. A baked part can be MOVED
-  but not resized or rotated (rotation not wired — would desync footprint from mesh). Verify Undo
-  steps cleanly across a 3D combine.
+- A 3D-Combine result is a **baked mesh**. It now PERSISTS: `syncMeshToEl`/`parseMeshRel` store the
+  triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
+  save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED (drag
+  and Undo carry the mesh). **Still open:** a baked part cannot be **resized or rotated** — rotation
+  isn't wired and would desync the footprint from the mesh; either wire it (rotate/scale the mesh with
+  the footprint) or block it on a baked part.
 
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
