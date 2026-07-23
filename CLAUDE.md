@@ -238,6 +238,14 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
     `#1a5fb4`, `data-role="hole"`) only produces an effect inside Combine — a bundled/ungrouped hole shows
     nothing in 3D until Combined.
+  - **Plan-view (2D) footprint of a baked part is operation-matched** so it reads true with 3D View off
+    (`bool3D` computes it via `boolShapes` to mirror the op): a shape carve = solid **minus** cutter — the
+    outline **notches** where the cutter bit an edge and shows a **dashed interior hole** where it was inside,
+    existing holes carried; union/intersect show the merged/overlap outline. The part draws gray, its openings
+    dashed-gray (distinct from a not-yet-combined hole's blue dots). Stored in `o.holes` (`data-holes`),
+    persisted, and moved/rotated/resized with the part; `bodyTris` ignores them (the mesh already has them).
+    A **bar** bore is the exception: it keeps the solid outline + a dashed swept-rectangle marker (an internal
+    bore does not breach the top face, so it must not notch the outline). Validated: `footprint_test2.js`.
 - A 3D-Combine result is a **baked mesh**. It PERSISTS: `syncMeshToEl`/`parseMeshRel` store the
   triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
   save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,

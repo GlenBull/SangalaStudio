@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.79 -->
+<!-- SANGALA_VERSION: 2026-07-23.80 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2495,17 +2495,33 @@ function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar
       : mesh3D("union",mA,mB) )                                 // both solid (or both hole) -> merge
     : mesh3D(op==="diff"?"subtract":op, mA, mB);
   if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":carved?"The hole covers the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
-  let fp;   // the flat outline shown on the mat (a pick target): the part's own outline when a bar is involved, else the union of the two footprints so it covers the whole result
-  if(isBar(o1)||isBar(o2)){ const part=isBar(o1)?(isBar(o2)?o1:o2):o1; fp=part.poly.map(p=>[p[0],p[1]]); }
-  else { const u=nestRings(boolShapes("union",{outer:o1.poly,holes:o1.holes||[]},{outer:o2.poly,holes:o2.holes||[]}));
-    fp=(u[0]&&u[0].outer)?u[0].outer.map(p=>[p[0],p[1]]):o1.poly.map(p=>[p[0],p[1]]); }
-  const solidOps=[o1,o2].filter(o=>!isHole(o));
-  let openings=[];
-  solidOps.forEach(o=>{ if(o.mesh&&o.holes) openings.push(...o.holes.map(h=>h.map(p=>[p[0],p[1]]))); });   // carry forward openings already cut into a baked-part operand
-  if(carved){ const hf=holeFootprint(isHole(o1)?o1:o2); if(hf) openings.push(hf); }                        // the new opening this carve makes
+  // ---- 2D footprint for the plan view: computed to MATCH the operation so it reads true with 3D View off.
+  // A shape carve uses the 2D region difference (solid minus cutter): the outline notches where the cutter bit
+  // an edge and shows a dashed hole where the cutter was interior - the cutter's own outline never survives. A
+  // bar carve keeps the solid's outline and marks the bore as a dashed swept-rectangle (an internal bore does
+  // not breach the top face, so it must not notch the outline). Union/Intersect take the merged / overlap outline.
+  const region=o=> isBar(o) ? {outer:holeFootprint(o)||[], holes:[]} : {outer:o.poly, holes:o.holes||[]};
+  const ringArea=r=>{ const p=pbOpen(r); let a=0; for(let i=0;i<p.length;i++){ const b=p[(i+1)%p.length]; a+=p[i][0]*b[1]-b[0]*p[i][1]; } return Math.abs(a); };
+  const largest=list=> list.length ? list.slice().sort((x,y)=>ringArea(y.outer)-ringArea(x.outer))[0] : null;
+  const openRing=h=>{ let r=simplify(dedupePoly(pbOpen(h)),0.08); if(r.length<3) r=pbOpen(h); return r.map(p=>[p[0],p[1]]); };
+  let fp, openings=[];
+  const barCut = carved && isBar(isHole(o1)?o1:o2);   // a bar hole = an internal bore; keep the solid outline, annotate the bore
+  if(carved && !barCut){                              // shape carve -> true 2D difference (notch or interior hole); a solid's existing holes ride through the region boolean
+    const solid=isHole(o1)?o2:o1, cutter=isHole(o1)?o1:o2;
+    const n=largest(nestRings(boolShapes("diff", region(solid), {outer:region(cutter).outer, holes:[]})));
+    if(n&&n.outer){ fp=n.outer.map(p=>[p[0],p[1]]); openings=(n.holes||[]).map(openRing); } else fp=region(solid).outer.map(p=>[p[0],p[1]]);
+  } else if(barCut){                                  // bar bore -> solid outline (with its holes) + a dashed swept rectangle marking the bore
+    const solid=isHole(o1)?o2:o1, bar=isHole(o1)?o1:o2;
+    fp=region(solid).outer.map(p=>[p[0],p[1]]); openings=(solid.holes||[]).map(h=>h.map(p=>[p[0],p[1]]));
+    const hf=holeFootprint(bar); if(hf) openings.push(hf);
+  } else {                                            // union of solids, or intersect -> the merged / overlap outline, any enclosed voids preserved
+    const n=largest(nestRings(boolShapes(op==="intersect"?"intersect":"union", region(o1), region(o2))));
+    if(n&&n.outer){ fp=n.outer.map(p=>[p[0],p[1]]); openings=(n.holes||[]).map(openRing); } else fp=region(o1).outer.map(p=>[p[0],p[1]]);
+  }
+  const kind=([o1,o2].find(o=>!isHole(o))||o1).kind;
   [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });
   objects=objects.filter(o=>o!==o1&&o!==o2);
-  makeMeshObj(fp, mesh, (solidOps[0]||o1).kind, openings);
+  makeMeshObj(fp, mesh, kind, openings);
   selId=null; selId2=null; selMulti=[]; selNode=null;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
   say((carved?"Union (3D): the hole cut out of the solid"
