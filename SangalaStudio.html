@@ -3703,6 +3703,8 @@ cv.addEventListener("click",(e)=>{
 /* ---------- in-plane rotation: a handle above the shape spins it about its center ---------- */
 function rotatePts(pts,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // rotate points around (cx,cy) by ang radians
   return pts.map(p=>{ const dx=p[0]-cx,dy=p[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c]; }); }
+function rotMeshTris(mesh,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // spin a baked part's mesh about the vertical axis at (cx,cy); z (height) unchanged
+  return mesh.map(t=>t.map(v=>{ const dx=v[0]-cx,dy=v[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c, v[2]]; })); }
 function rotHandle(o,k){   // handle anchored to the first-edge midpoint (which rotates WITH the shape), offset outward from center; null when N/A
   const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
   if(!(t==="rect"||t==="polygon")) return null;                                   // circles are symmetric
@@ -3770,7 +3772,7 @@ cv.addEventListener("mousedown",(e)=>{
       if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){ ensurePolygon(ro);
         let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9; ro.poly.forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];});
         const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
-        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),startHoles:ro.holes?ro.holes.map(h=>h.map(p=>[p[0],p[1]])):null,a0:Math.atan2(py-cy,px-cx),moved:false};
+        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),startHoles:ro.holes?ro.holes.map(h=>h.map(p=>[p[0],p[1]])):null,startMesh:ro.mesh?ro.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,a0:Math.atan2(py-cy,px-cx),moved:false};
         cv.style.cursor="grabbing"; e.preventDefault(); return; } }
   }
   if(selMulti.length){   // group rotate handle - same idea, spins every member around the shared bounding-box center
@@ -3785,6 +3787,7 @@ cv.addEventListener("mousedown",(e)=>{
         const tag=o.el.tagName.toLowerCase();
         return { o:o, tag:tag, startPoly:o.poly?o.poly.map(p=>[p[0],p[1]]):null,
                  startHoles: o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+                 startMesh: o.mesh?o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,
                  cx0: tag==="circle"?(+o.el.getAttribute("cx")||0):null, cy0: tag==="circle"?(+o.el.getAttribute("cy")||0):null };
       }).filter(Boolean);
       drag={mode:"grouprotate",members:members,cx:cx,cy:cy,a0:Math.atan2(py-cy,px-cx),moved:false};
@@ -3806,6 +3809,7 @@ cv.addEventListener("mousedown",(e)=>{
             return { o:o, t:o.el.tagName.toLowerCase(),
                      poly:o.poly.map(p=>[p[0],p[1]]),
                      holes:o.holes?o.holes.map(h2=>h2.map(p=>[p[0],p[1]])):null,
+                     mesh:o.mesh?o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,
                      cx:N("cx"), cy:N("cy"), r:N("r"), x:N("x"), y:N("y"), w:N("width"), hh:N("height") }; })};
         cv.style.cursor=hit.c; e.preventDefault(); return; } }
   }
@@ -3922,6 +3926,7 @@ window.addEventListener("mousemove",(e)=>{
         ensurePolygon(o);                                   // an imported <path> can only be TRANSLATED, never re-pointed,
         o.poly=m.poly.map(S);                               // so swap it for an editable polygon first - the same step rotate takes
         if(m.holes) o.holes=m.holes.map(hh=>hh.map(S));     // a window travels with its frame, at the frame's scale
+        if(o.mesh && m.mesh) o.mesh=m.mesh.map(t=>t.map(v=>[drag.ax+(v[0]-drag.ax)*sx, drag.ay+(v[1]-drag.ay)*sy, v[2]]));   // a baked part scales its mesh footprint to match; height (z) is unchanged
         placeEl(o);
       }
     });
@@ -3983,6 +3988,7 @@ window.addEventListener("mousemove",(e)=>{
     drag.members.forEach(m=>{ const o=m.o; if(!m.startPoly) return;
       o.poly=rotatePts(m.startPoly,drag.cx,drag.cy,delta);
       if(m.startHoles) o.holes=m.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
+      if(m.startMesh) o.mesh=rotMeshTris(m.startMesh,drag.cx,drag.cy,delta);   // a baked part in the group spins its mesh too
       if(m.tag==="circle"){ const c=rotatePts([[m.cx0,m.cy0]],drag.cx,drag.cy,delta)[0];
         o.el.setAttribute("cx",fmtn(c[0])); o.el.setAttribute("cy",fmtn(c[1])); }
       else placeEl(o); });
@@ -4017,6 +4023,7 @@ window.addEventListener("mousemove",(e)=>{
     if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }   // Shift snaps to 15 deg (45 / 90 for square fits)
     o.poly=rotatePts(drag.startPoly,drag.cx,drag.cy,delta);
     if(drag.startHoles) o.holes=drag.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
+    if(drag.startMesh) o.mesh=rotMeshTris(drag.startMesh,drag.cx,drag.cy,delta);   // a baked part spins its mesh with the footprint
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
   if(drag.shape==="line"){ const a=drag.anchor;                       // the fixed end; the other end tracks the cursor
@@ -4072,7 +4079,7 @@ window.addEventListener("mouseup",()=>{
                 +". Ctrl-Z undoes it.")
              : "Resized.");
     }
-    draw(); refreshEditPanel(); return; }
+    draw(); refreshEditPanel(); if(d.moved) pvRefresh(); return; }   // pvRefresh: a resized baked part updates in the 3D view / STL too
   if(drag.mode==="groupmove"){ const moved=drag.moved; drag=null; cv.style.cursor="default"; if(moved){ suppressClick=true; say(selMulti.length+" object"+(selMulti.length!==1?"s":"")+" moved."); } draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
