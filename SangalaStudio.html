@@ -802,6 +802,10 @@ function draw(){
   ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  const barLines=objects.filter(isBar);   // 3D bars are shown on the plan (so you can place and aim them) but never cut - a distinct teal, not the red of a cut
+  if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
+    barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
+    ctx.restore(); }
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
     const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
