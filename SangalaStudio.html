@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.86 -->
+<!-- SANGALA_VERSION: 2026-07-23.87 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -244,7 +244,7 @@
   <div class="board cork">
     <canvas id="cv" width="560" height="760"></canvas>
     <canvas id="pv" width="560" height="760" style="display:none"></canvas>
-    <div id="pvhint" style="display:none">3D Preview: Drag to rotate. Scroll to zoom. Press <b>3D View</b> again to edit.</div>
+    <div id="pvhint" style="display:none">Drag to rotate &middot; Scroll to zoom &middot; press <b>3D View</b> again to edit</div>
   </div>
 
   <div class="panel" id="fab">
@@ -2030,6 +2030,7 @@ function openPreview(){
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
   $("plateRow").style.display="flex";                  // the build-plate toggle only makes sense while the 3D View is up
   pvBounds(); renderPreview();
+  say('3D Preview: Drag to rotate. Scroll to zoom. Press "3D View" again to edit.');   // panel top text (above the build-plate toggle) while the view is open
 }
 function sizePvToCv(){   // match #pv's box + drawing buffer to the design canvas's current on-screen rectangle
   const pv=$("pv"), board=cv.parentElement;
@@ -2040,7 +2041,7 @@ function sizePvToCv(){   // match #pv's box + drawing buffer to the design canva
   pv.width=Math.max(1,Math.round(cr.width)); pv.height=Math.max(1,Math.round(cr.height));   // square-pixel buffer at the shown size
 }
 function closePreview(){ pvOn=false; $("pv").style.display="none"; $("pvhint").style.display="none"; $("plateRow").style.display="none"; $("bPreview").classList.remove("on"); }
-function togglePreview(){ pvOn?closePreview():openPreview(); }
+function togglePreview(){ if(pvOn){ closePreview(); if(mode3D) say('Design in 3D. Then "Export STL" to 3D print.'); } else openPreview(); }   // closing the view (still in 3D) restores the mode's top text
 $("bPreview").onclick=togglePreview;
 $("showPlate").onchange=e=>{ pvPlate=e.target.checked; if(pvPlate && pvPitch<0.05) pvPitch=0.05;   // re-frame (bed in/out of view) and re-render if the preview is up
   if(pvOn){ pvBounds(); renderPreview(); } };
