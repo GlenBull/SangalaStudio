@@ -384,8 +384,9 @@ const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
 const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
-const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !isBar(o));
-const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !isBar(o));
+const is3DOnly  =o=>isBar(o)||!!o.mesh;   // a 3D bar, or a baked mesh from a 3D Combine: 3D-print only, never sent to the die cutter
+const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
+const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
 const printObjs =()=>objects.filter(o=>o.kind==="print");
 const cutPolys  =()=>cutObjs().flatMap(o=>(o.holes&&o.holes.length)?[o.poly].concat(o.holes):[o.poly]);   // a holed shape cuts as its outline PLUS each inner loop - a frame
 const scorePolys=()=>scoreObjs().map(o=>o.poly);
@@ -802,6 +803,10 @@ function draw(){
   ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  const meshParts=objects.filter(o=>o.mesh);   // baked 3D parts: show the footprint (gray) so they can be picked and moved; not a cut
+  if(meshParts.length){ ctx.save(); ctx.strokeStyle="#8a8a8a"; ctx.lineWidth=1.5; ctx.setLineDash([]);
+    meshParts.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); });
+    ctx.restore(); }
   const barLines=objects.filter(isBar);   // 3D bars are shown on the plan (so you can place and aim them) but never cut - a distinct teal, not the red of a cut
   if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
     barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
@@ -1799,6 +1804,7 @@ function barTris(o){
 }
 function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
+  if(o.mesh) return o.mesh;                                    // a baked 3D part (result of a 3D Combine) - render its mesh as-is
   if(o.el.getAttribute("data-bar")==="1") return barTris(o);   // a line extruded as a rod / stick (3D-only; combine with parts to bore or add)
   if(o.el.hasAttribute("data-brick")){
     const bz=g("data-z0");   // Base: how far the brick sits above the build plate
@@ -1848,7 +1854,8 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
   const bars=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1"&&o.poly&&o.poly.length>=2);   // lines extruded as rods/sticks
-  let bodies=bricks.concat(plain).concat(bars);
+  const meshes=objects.filter(o=>o.mesh&&o.el);   // baked parts from a 3D Combine
+  let bodies=bricks.concat(plain).concat(bars).concat(meshes);
   if(onlyIds && onlyIds.size){
     const grp=new Set(); bodies.forEach(o=>{ if(onlyIds.has(o.id) && o.group!=null) grp.add(o.group); });
     bodies=bodies.filter(o=> onlyIds.has(o.id) || (o.group!=null && grp.has(o.group)) );   // whole groups, never a fragment
@@ -2359,10 +2366,92 @@ function makePolyObj(ring, kind){
   const o={id:++objSeq, el:el, kind:kind||"cut", orig:kind||"cut", poly:r.concat([[r[0][0],r[0][1]]])};
   objects.push(o); return o;
 }
+/* ---------- 3D mesh boolean (BSP CSG) - combine true SOLIDS, e.g. bore a bar through a part ----------
+   Used when a Combine operand is a 3D bar or an already-baked 3D part: the flat 2D boolean cannot express
+   a horizontal rod cutting through a solid, or a hole through a curved / sloped shape. Subtract bores a
+   hole, Union adds a peg, Intersect keeps the overlap. csg.js-style: build a BSP of each mesh, clip one
+   against the other, recombine. Validated (dev harness) by point-membership over box / cylinder / wedge
+   parts with through / blind / angled / rectangular holes - watertight, outward normals. */
+const mesh3D=(function(){
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+        mul=(a,s)=>[a[0]*s,a[1]*s,a[2]*s], dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+        cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+        len=a=>Math.hypot(a[0],a[1],a[2]), norm=a=>{const l=len(a)||1e-30;return[a[0]/l,a[1]/l,a[2]/l];},
+        lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+  const EPS=1e-5, planeOf=vs=>{const n=norm(cross(sub(vs[1],vs[0]),sub(vs[2],vs[0])));return{n,w:dot(n,vs[0])};};
+  const poly=vs=>({vs,pl:planeOf(vs)}), clonePoly=p=>({vs:p.vs.map(v=>v.slice()),pl:{n:p.pl.n.slice(),w:p.pl.w}});
+  function split(pl,p,cf,cb,fr,bk){ let ty=0; const t=[];
+    for(const v of p.vs){const d=dot(pl.n,v)-pl.w;const c=d<-EPS?2:d>EPS?1:0;ty|=c;t.push(c);}
+    if(ty===0){(dot(pl.n,p.pl.n)>0?cf:cb).push(p);}
+    else if(ty===1){fr.push(p);} else if(ty===2){bk.push(p);}
+    else{const f=[],b=[];
+      for(let i=0;i<p.vs.length;i++){const j=(i+1)%p.vs.length,ti=t[i],tj=t[j],vi=p.vs[i],vj=p.vs[j];
+        if(ti!==2)f.push(vi); if(ti!==1)b.push(vi.slice());
+        if((ti|tj)===3){const tt=(pl.w-dot(pl.n,vi))/dot(pl.n,sub(vj,vi));const v=lerp(vi,vj,tt);f.push(v);b.push(v.slice());}}
+      if(f.length>=3)fr.push(poly(f)); if(b.length>=3)bk.push(poly(b));}}
+  class Node{
+    constructor(polys){this.pl=null;this.f=null;this.b=null;this.polys=[];if(polys)this.build(polys);}
+    invert(){for(const p of this.polys){p.vs.reverse();p.pl={n:mul(p.pl.n,-1),w:-p.pl.w};}
+      if(this.pl)this.pl={n:mul(this.pl.n,-1),w:-this.pl.w};if(this.f)this.f.invert();if(this.b)this.b.invert();
+      const t=this.f;this.f=this.b;this.b=t;}
+    clip(polys){if(!this.pl)return polys.slice();let fr=[],bk=[];
+      for(const p of polys)split(this.pl,p,fr,bk,fr,bk);
+      if(this.f)fr=this.f.clip(fr);if(this.b)bk=this.b.clip(bk);else bk=[];return fr.concat(bk);}
+    clipTo(n){this.polys=n.clip(this.polys);if(this.f)this.f.clipTo(n);if(this.b)this.b.clipTo(n);}
+    all(){let r=this.polys.slice();if(this.f)r=r.concat(this.f.all());if(this.b)r=r.concat(this.b.all());return r;}
+    build(polys){if(!polys.length)return;if(!this.pl)this.pl=polys[0].pl;const fr=[],bk=[];
+      for(const p of polys)split(this.pl,p,this.polys,this.polys,fr,bk);
+      if(fr.length){if(!this.f)this.f=new Node();this.f.build(fr);}
+      if(bk.length){if(!this.b)this.b=new Node();this.b.build(bk);}}
+  }
+  const toPolys=tris=>tris.map(t=>poly([t[0].slice(),t[1].slice(),t[2].slice()]));
+  const toTris=polys=>{const out=[];for(const p of polys)for(let i=2;i<p.vs.length;i++)out.push([p.vs[0],p.vs[i-1],p.vs[i]]);return out;};
+  return function(op,trisA,trisB){
+    if(!trisA.length) return op==='union'?trisB.slice():[];
+    if(!trisB.length) return (op==='subtract'||op==='union')?trisA.slice():[];
+    const a=new Node(toPolys(trisA).map(clonePoly)), b=new Node(toPolys(trisB).map(clonePoly));
+    if(op==='union'){a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.all());}
+    else if(op==='subtract'){a.invert();a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.all());a.invert();}
+    else{a.invert();b.clipTo(a);b.invert();a.clipTo(b);b.clipTo(a);a.build(b.all());a.invert();}
+    return toTris(a.all());
+  };
+})();
+// The 3D solid mesh for a Combine operand: a baked mesh as-is, a bar swept from its line, or an extruded
+// shape (rect/circle/polygon with a Depth). A flat shape with no Depth is not a solid -> null.
+function operandMesh(o){
+  if(o.mesh) return o.mesh;
+  if(isBar(o)) return barTris(o);
+  const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
+  if(/^(rect|circle|polygon)$/.test(t) && (+o.el.getAttribute("data-z")||0)>0) return bodyTris(o,false);
+  return null;
+}
+// A baked 3D part: carries its mesh directly and a flat footprint (the part's outline) for the 2D canvas.
+function makeMeshObj(footprint, mesh, kind){
+  let r=footprint.map(p=>[p[0],p[1]]); while(r.length>1 && _samePt(r[0],r[r.length-1])) r.pop();
+  const el=svgNode("polygon",{points:r.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "),"data-mesh":"1"});
+  const o={id:++objSeq, el:el, kind:kind||"cut", orig:"cut", poly:r.concat([[r[0][0],r[0][1]]]), mesh:mesh};
+  objects.push(o); return o;
+}
+function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar or an already-baked part)
+  const mA=operandMesh(o1), mB=operandMesh(o2);
+  if(!mA||!mB){ say("To combine in 3D, give the solid part a Depth first - the 3D bar already has its own thickness."); return; }
+  const mesh=mesh3D(op==="diff"?"subtract":op, mA, mB);
+  if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
+  const part = isBar(o1) ? (isBar(o2)?o1:o2) : o1;   // footprint from the solid part (not the bar), so the 2D outline reads sensibly
+  const fp = part.poly.map(p=>[p[0],p[1]]);
+  [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });
+  objects=objects.filter(o=>o!==o1&&o!==o2);
+  makeMeshObj(fp, mesh, o1.kind);
+  selId=null; selId2=null; selMulti=[]; selNode=null;
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
+  say({union:"Union",diff:"Difference",intersect:"Intersect"}[op]+" (3D): made a solid part"
+      +(op==="diff"?" with the bar bored out":op==="union"?" with the bar added on":"")+" - see it in the 3D view.");
+}
 function applyBool(op){
   const [o1,o2]=combineOperands();
   if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
   if(!o1||!o2||o1===o2){ say("Pick two shapes: Shift+click a 2nd, or sweep a box around both."); return; }
+  if(isBar(o1)||isBar(o2)||o1.mesh||o2.mesh){ ensureDoc(); bool3D(op,o1,o2); return; }   // a 3D bar or baked part -> true 3D boolean, not the flat one
   ensureDoc();
   const rings=boolShapes(op, {outer:o1.poly, holes:o1.holes}, {outer:o2.poly, holes:o2.holes});
   if(!rings.length){ say(op==="intersect"?"The two shapes don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
@@ -2431,6 +2520,7 @@ function placeEl(o){
 function translateObj(o,dx,dy){
   if(!o||!o.el||!o.poly||(!dx&&!dy)) return;
   o.poly=o.poly.map(p=>[p[0]+dx,p[1]+dy]);
+  if(o.mesh) o.mesh=o.mesh.map(t=>t.map(p=>[p[0]+dx,p[1]+dy,p[2]]));   // a baked 3D part carries its own mesh - move it with the footprint
   if(o.holes) o.holes=o.holes.map(h=>h.map(p=>[p[0]+dx,p[1]+dy]));   // a hole travels with its frame
   const t=o.el.tagName.toLowerCase();
   if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
@@ -3030,6 +3120,7 @@ const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;
   +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
 function dimText(o){
   if(!o||!o.el) return "";
+  if(o.mesh) return '<div style="color:#8a7350;line-height:1.5">3D part (combined). Move it on the mat, Combine it again with another bar or part, or export it. Its size is baked in - to change it, rebuild from the pieces.</div>';
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
   let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]]; lockableWH=true;
