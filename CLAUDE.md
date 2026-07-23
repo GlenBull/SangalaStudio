@@ -210,6 +210,28 @@ blade 7, 2 passes.
   (no scaling); prepare a CAD Library entry (open SVG + metadata + instructions);
   a "Open from Library" linkage that fetches a design SVG by URL.
 
+## 3D bars and line-driven holes (feature branch `claude/repo-review-det4qo`)
+A straight line can be turned into a solid 3D **bar** (round or rectangular cross-section,
+placed by the line's XY + angle, height set by Base). Combining a bar with a part via
+**Difference / Union / Intersect** runs a true **3D boolean** (`mesh3D` — an inlined BSP CSG,
+plus `bool3D` / `operandMesh` / `makeMeshObj`), because a horizontal rod through a solid — or a
+hole through a curved or sloped part — has no flat 2D stand-in. Difference bores a hole, Union
+adds a peg, Intersect keeps the overlap. Validated by an independent point-membership +
+watertightness oracle (dev harness in the scratchpad). Bars and combined parts are **3D-only**:
+excluded from the die cutter, drawn on the plan as a teal line (bar) or gray outline (part).
+- **FOR LATER — reconcile Fuse/Separate vs the Combine tool** (Glen flagged 2026-07-23). They are
+  two different mechanisms with overlapping wording: *Fuse/Separate* is non-destructive grouping so
+  bodies print as one welded piece (additive only, reversible; selection = marquee `selMulti`);
+  *Combine* (Union/Difference/Intersect) bakes a new shape (destructive; selection = Shift-click
+  pair `selId2`, or a marquee of two). A Shift-click shows Combine but NOT Fuse, since they read
+  different selection variables — confusing. Reconcile the labels and/or unify the selection gesture.
+  Leave as-is until then (Glen's call).
+- Other follow-ups from this work: a 3D-Combine result is a **baked mesh held in memory only** — it
+  is NOT written into the saved SVG, so it is lost on save/reopen (bars survive, rebuilt from the
+  line + `data-bar*`). Persisting combined parts needs mesh serialization. A baked part can be MOVED
+  but not resized or rotated (rotation not wired — would desync footprint from mesh). Verify Undo
+  steps cleanly across a 3D combine.
+
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
 `unzip` exists; `zip` does not. Do not run `zip -Xr` and rediscover this again.
