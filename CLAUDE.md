@@ -246,6 +246,22 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     persisted, and moved/rotated/resized with the part; `bodyTris` ignores them (the mesh already has them).
     A **bar** bore is the exception: it keeps the solid outline + a dashed swept-rectangle marker (an internal
     bore does not breach the top face, so it must not notch the outline). Validated: `footprint_test2.js`.
+- **Sloped tops = per-edge "roof" (`roofTris`, Stage A DONE, validated 2026-07-23).** Any side of a CONVEX
+  extruded top can ramp inward independently, set by ANGLE (deg from vertical, 0 = flat), uniform or asymmetric.
+  The top face is the base clipped inward by each sloped edge's offset line (`rfClip`); every ramp keeps a short
+  vertical **lip** (`ROOF_LIP` = 0.6 mm) so it never tapers to an unprintable feather edge; over-sloping is
+  clamped (`rfClamp`) to keep all edges present with a printable top (Stage A never collapses to a ridge/apex —
+  that's Stage B). Winding-agnostic (normals via centroid; whole mesh flipped if signed volume < 0). Replaces
+  the old one-axis `slopedBoxTris` wedge (removed; `yzPrism` stays for bricks, which keep their own slope path).
+  **Data:** `data-slopes` = per-edge angles aligned to the footprint's own edge order; legacy single
+  `data-slope-run`/`data-slope-dir` is read as a fallback and migrated on first edit. Persists via Save/Undo/copy.
+  **Gate:** axis-aligned rects (canonical Front -Y / Right +X / Back +Y / Left -X) OR any `rfConvex` polygon;
+  concave falls back to no slope (Stage C); skipped with sockets/holes (a non-level top). **UI:** rects show
+  named sides, other convex shapes show numbered Side 1..N; focusing/hovering a field green-highlights that edge
+  on the plan (`slopeHi`). Validated against the point-membership + watertightness oracle across square/triangle/
+  pentagon, uniform/asymmetric, clamped, and clockwise inputs (scratchpad `roof.js`); the ported app code
+  reproduces the oracle volumes exactly (`app_roof_cmp.js`). **Next:** Stage B (ridge/apex collapse), Stage C
+  (concave via straight skeleton), and possibly a circle → cone.
 - A 3D-Combine result is a **baked mesh**. It PERSISTS: `syncMeshToEl`/`parseMeshRel` store the
   triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
   save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,
