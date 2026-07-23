@@ -3843,10 +3843,12 @@ cv.addEventListener("mousedown",(e)=>{
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
-  if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, or any stroke from an imported design (a Snap! drawing arrives as
-    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);   // polylines, a Silhouette file as paths): no parametric resize, but drag the body to move it
-    if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys))
-      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),origHoles:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,sh0:elShift(o),moved:false,
+  if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, an imported stroke, or an open line/bar: no parametric resize, but drag the body to move it
+    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);
+    let grab = mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys);
+    if(!grab) for(let i=0;i+1<disp.length;i++) if(segDist(mx,my,disp[i][0],disp[i][1],disp[i+1][0],disp[i+1][1])*k<=8){ grab=true; break; }   // an open line/bar has no interior - grab it near the stroke, the same 8 px that clicking uses
+    if(grab)
+      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),origHoles:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,origMesh:o.mesh?o.mesh.map(tr=>tr.map(p=>[p[0],p[1],p[2]])):null,sh0:elShift(o),moved:false,
             snap:snapTargets(new Set([o.id])),self:snapSample(o.poly)},cv.style.cursor="move",e.preventDefault();
     return; }
   const N=s=>+o.el.getAttribute(s)||0;
@@ -3988,6 +3990,7 @@ window.addEventListener("mousemove",(e)=>{
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
     if(drag.origHoles) o.holes=drag.origHoles.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
+    if(drag.origMesh) o.mesh=drag.origMesh.map(tr=>tr.map(p=>[p[0]+ddx,p[1]+ddy,p[2]]));   // a baked 3D part carries its own mesh - move it with the footprint
     o.el.setAttribute("data-shx",fmtn(drag.sh0[0]+ddx)); o.el.setAttribute("data-shy",fmtn(drag.sh0[1]+ddy));
     placeEl(o);
     drag.moved=true; draw(); return; }
@@ -4070,7 +4073,7 @@ window.addEventListener("mouseup",()=>{
     draw(); refreshEditPanel(); return;
   }
   if(drag.mode==="node"){ suppressClick=true; if(drag.moved) say("Moved a node."); drag=null; cv.style.cursor="default"; draw(); return; }   // keep the node selected (filled)
-  if(drag.mode==="polymove"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; return; }
+  if(drag.mode==="polymove"){ if(drag.moved){ suppressClick=true; pvRefresh(); } drag=null; cv.style.cursor="default"; return; }   // pvRefresh: a moved bar or baked part shifts in 3D too
   if(drag.mode==="rotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated the shape."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.mode==="grouprotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated "+drag.members.length+" objects."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
