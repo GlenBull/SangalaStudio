@@ -250,9 +250,11 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
   save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,
   and RESIZED — the drag handlers carry the mesh through the same transform as the footprint (rotate spins
-  the mesh about the vertical axis; box-resize scales its x/y, `rotMeshTris` + the boxresize scale). One
-  limit left: a footprint resize scales x/y only — **height (z) stays fixed**; scaling height would need
-  its own control.
+  the mesh about the vertical axis; box-resize scales its x/y, `rotMeshTris` + the boxresize scale). **Base
+  (elevation) is editable**: the details panel shows a *Base* field for a baked part (`data-dim="meshbase"`,
+  `mode3D` only) that rigidly shifts every triangle's z so the lowest point sits at the given height (footprint
+  x/y unchanged). Remaining limit: a footprint resize scales x/y only — **height/thickness (z-extent) stays
+  fixed**; scaling the part's thickness would still need its own control (distinct from Base elevation).
 
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
