@@ -3090,7 +3090,7 @@ function dimText(o){
   if(mode3D && t==="polyline" && o.poly && o.poly.length===2){   // a straight line can become a 3D BAR (rod / stick): a hole when subtracted from a part, a peg when added
     const barOn=o.el.getAttribute("data-bar")==="1", shp=o.el.getAttribute("data-bar-shape")||"round";
     html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
-      +flag("bar","3D bar (rod / stick)",barOn,"Turn this line into a solid 3D bar running along its length, at the Base height. Combine it with a part: Difference bores a hole, Union adds a peg.");
+      +flag("bar","3D bar",barOn,"Turn this line into a solid 3D bar running along its length, at the Base height. Combine it with a part: Difference bores a hole, Union adds a peg.");
     if(barOn){
       const opt=(v,l,val)=>'<option value="'+v+'"'+(shp===val?' selected':'')+'>'+l+'</option>';
       const rowc=(a,b)=>'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(a)+'<td style="width:1rem"></td>'+cell(b)+'</tr></table>';
@@ -3098,7 +3098,7 @@ function dimText(o){
         +opt(0,"round","round")+opt(1,"rectangle","rect")+'</select></div>';
       html+= shp==="rect" ? rowc(["Width",R("data-bar-w")||4,"barw"],["Thickness",R("data-bar-h")||4,"barh"])
                           : rowc(["Diameter",R("data-bar-d")||4,"bard"],null);
-      html+= rowc(["Base (height)",R("data-z0"),"z0"],null);   // Base sets the bar's height above the plate
+      html+= rowc(["Base",R("data-z0"),"z0"],null);   // Base sets the bar's height above the plate
     }
     html+='</div>';
   }
