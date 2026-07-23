@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.93 -->
+<!-- SANGALA_VERSION: 2026-07-23.94 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1251,11 +1251,13 @@ function boxTris(x,y,w,h,z0,z1){   // 8 corners -> 12 triangles, outward winding
   const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
   return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
 }
-// ---- Sloped top ("roof"): per-edge slopes on a CONVEX footprint (Stage A). Each edge may ramp its share of
-// the top inward; the top face is the base clipped inward by each sloped edge's offset line, and every edge
-// gets a short vertical LIP (printability - no feather edge) then a ramp up to the inset top. Uniform or
-// per-edge, any convex outline. Winding-agnostic. Validated against an independent point-membership +
-// watertightness oracle (dev harness: scratchpad roof.js). Replaces the old one-axis slopedBox wedge. ----
+// ---- Sloped top ("roof"): per-edge slopes on a CONVEX footprint. Each edge may ramp its share of the top
+// inward; every edge gets a short vertical LIP (printability - no feather edge) then a ramp up to the inset
+// top. Uniform or per-edge, any convex outline. An inward-sloped solid on a convex base is itself convex, so
+// it is the 3D CONVEX HULL (rfHull) of the base ring (z0), the lip ring (zL) and the top vertices (z1) - which
+// lets slopes fully collapse into a RIDGE (top = segment) or an APEX (top = point), a true gable/hip roof, as
+// well as a truncated top, all watertight and winding-agnostic. Replaces the old one-axis slopedBox wedge.
+// Validated against a point-membership + watertightness oracle (dev harness: scratchpad roof.js / roofB.js). ----
 const ROOF_LIP=0.6;   // mm vertical rim at the foot of every ramp so a slope never tapers to a knife edge
 function rfOpen(p){ let r=p.map(q=>[q[0],q[1]]); while(r.length>1&&Math.abs(r[0][0]-r[r.length-1][0])<1e-9&&Math.abs(r[0][1]-r[r.length-1][1])<1e-9) r.pop(); return r; }
 function rfNormals(p){ let cx=0,cy=0; p.forEach(q=>{cx+=q[0]/p.length;cy+=q[1]/p.length;});   // INWARD unit normal per edge (toward centroid), any winding
@@ -1267,29 +1269,42 @@ function rfClipHalf(poly,a,n,c){ const out=[],N=poly.length;   // keep { p : dot
     if((fs>1e-9&&fe<-1e-9)||(fs<-1e-9&&fe>1e-9)){ const t=fs/(fs-fe); out.push([s[0]+(e[0]-s[0])*t, s[1]+(e[1]-s[1])*t]); } }
   const d=[]; for(const q of out){ const l=d[d.length-1]; if(!l||Math.hypot(l[0]-q[0],l[1]-q[1])>1e-7) d.push(q); }
   while(d.length>1&&Math.hypot(d[0][0]-d[d.length-1][0],d[0][1]-d[d.length-1][1])<1e-7) d.pop(); return d; }
-function rfClip(base,norms,runs){ let poly=base; for(let i=0;i<base.length;i++){ if(runs[i]>1e-9) poly=rfClipHalf(poly,base[i],norms[i],runs[i]); if(poly.length<3) return poly; } return poly; }
-function rfMinEdge(p){ let m=Infinity; for(let i=0;i<p.length;i++){ const b=p[(i+1)%p.length]; m=Math.min(m,Math.hypot(b[0]-p[i][0],b[1]-p[i][1])); } return m; }
-function rfClamp(base,norms,runs){ const N=base.length, ok=l=>{ const t=rfClip(base,norms,runs.map(x=>x*l)); return t.length===N&&rfMinEdge(t)>=0.5; };   // keep all N edges >= 0.5 mm (truncated, no collapse)
-  if(ok(1)) return runs.slice(); let lo=0,hi=1; for(let i=0;i<40;i++){ const m=(lo+hi)/2; if(ok(m))lo=m; else hi=m; } return runs.map(x=>x*lo); }
-function rfMapTop(base,norms,runs,top){ const N=base.length, map=new Array(top.length).fill(-1);   // which base edge each top edge lies on
-  for(let j=0;j<top.length;j++){ const a=top[j],b=top[(j+1)%top.length],mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
-    for(let i=0;i<N;i++){ const d=(mx-base[i][0])*norms[i][0]+(my-base[i][1])*norms[i][1]; if(Math.abs(d-runs[i])<1e-4){ map[j]=i; break; } } } return map; }
-function rfFan(poly,z,up){ const t=[]; for(let i=1;i+1<poly.length;i++){ const A=[poly[0][0],poly[0][1],z],B=[poly[i][0],poly[i][1],z],C=[poly[i+1][0],poly[i+1][1],z]; t.push(up?[A,B,C]:[A,C,B]); } return t; }
-function rfVol(tris){ let s=0; for(const t of tris) s+=(t[0][0]*(t[1][1]*t[2][2]-t[1][2]*t[2][1])-t[0][1]*(t[1][0]*t[2][2]-t[1][2]*t[2][0])+t[0][2]*(t[1][0]*t[2][1]-t[1][1]*t[2][0]))/6; return s; }
-// base = footprint ring (mm), runs = per-edge TOP INSET (mm; 0 = a vertical wall on that edge). lip = rim height.
+function rfClip(base,norms,runs){ let poly=base; for(let i=0;i<base.length;i++){ if(runs[i]>1e-9){ poly=rfClipHalf(poly,base[i],norms[i],runs[i]); if(poly.length<1) return []; } } return poly; }
+// Top vertices at z1: base clipped inward by each edge's offset. runs are capped so the feasible top is at
+// least a point (never empty) - which is what lets a slope collapse to a RIDGE (segment) or an APEX (point).
+function rfTopVerts(base,norms,runs){ const feasible=l=>rfClip(base,norms,runs.map(x=>x*l)).length>=1;
+  let R=runs; if(!feasible(1)){ let lo=0,hi=1; for(let i=0;i<50;i++){ const m=(lo+hi)/2; if(feasible(m))lo=m; else hi=m; } R=runs.map(x=>x*lo); }
+  return {top:rfClip(base,norms,R), runs:R}; }
+// Small-set 3D convex hull (incremental). The sloped solid on a CONVEX base IS convex, so hulling the base
+// ring (z0), the lip ring (zL) and the top vertices (z1) builds truncated / ridge / apex uniformly, watertight.
+function rfHull(ptsIn){
+  const S=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], X=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]], D=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2], L=a=>Math.hypot(a[0],a[1],a[2]);
+  const pts=[]; for(const p of ptsIn){ if(!pts.some(q=>L(S(q,p))<1e-6)) pts.push(p); }
+  const n=pts.length; if(n<4) return [];
+  let i0=0; for(let i=1;i<n;i++) if(pts[i][0]<pts[i0][0]) i0=i;
+  let i1=0,best=-1; for(let i=0;i<n;i++){ const d=L(S(pts[i],pts[i0])); if(d>best){best=d;i1=i;} }
+  let i2=0; best=-1; for(let i=0;i<n;i++){ const d=L(X(S(pts[i],pts[i0]),S(pts[i],pts[i1]))); if(d>best){best=d;i2=i;} }
+  const nr=X(S(pts[i1],pts[i0]),S(pts[i2],pts[i0])); let i3=0; best=-1;
+  for(let i=0;i<n;i++){ const d=Math.abs(D(nr,S(pts[i],pts[i0]))); if(d>best){best=d;i3=i;} }
+  if(best<1e-9) return [];   // all coplanar - no volume
+  const cen=[0,1,2].map(k=>(pts[i0][k]+pts[i1][k]+pts[i2][k]+pts[i3][k])/4);
+  const fn=f=>X(S(pts[f[1]],pts[f[0]]),S(pts[f[2]],pts[f[0]]));
+  let faces=[[i0,i1,i2],[i0,i2,i3],[i0,i3,i1],[i1,i3,i2]].map(f=>D(fn(f),S(cen,pts[f[0]]))>0?[f[0],f[2],f[1]]:f);
+  const used=new Set([i0,i1,i2,i3]);
+  for(let i=0;i<n;i++){ if(used.has(i)) continue; const p=pts[i];
+    const vis=faces.filter(f=>D(fn(f),S(p,pts[f[0]]))>1e-9); if(!vis.length) continue;
+    const ed=new Map(); for(const f of vis) for(let e=0;e<3;e++) ed.set(f[e]+","+f[(e+1)%3],[f[e],f[(e+1)%3]]);
+    const hor=[]; for(const [k,ab] of ed) if(!ed.has(ab[1]+","+ab[0])) hor.push(ab);
+    faces=faces.filter(f=>!vis.includes(f)); for(const ab of hor) faces.push([ab[0],ab[1],i]); used.add(i); }
+  return faces.map(f=>[pts[f[0]].slice(),pts[f[1]].slice(),pts[f[2]].slice()]);
+}
+// base = footprint ring (mm), runs = per-edge TOP INSET (mm; 0 = a vertical wall). lip = printable rim height.
 function roofTris(baseIn,z0,z1,runsIn,lip){
-  const base=rfOpen(baseIn), N=base.length, H=z1-z0;
-  lip=Math.max(0,Math.min(lip||0,H*0.9)); const zL=z0+lip;
-  const norms=rfNormals(base), runs=rfClamp(base,norms,runsIn.map(r=>Math.max(0,Math.min(r||0,H*20))));
-  const top=rfClip(base,norms,runs); let tris=[];
-  tris.push(...rfFan(base,z0,false)); if(top.length>=3) tris.push(...rfFan(top,z1,true));
-  const map=rfMapTop(base,norms,runs,top);
-  for(let i=0;i<N;i++){ const a=base[i], b=base[(i+1)%N];
-    if(lip>0) tris.push([[a[0],a[1],z0],[b[0],b[1],z0],[b[0],b[1],zL]],[[a[0],a[1],z0],[b[0],b[1],zL],[a[0],a[1],zL]]);   // vertical lip rim
-    const aL=[a[0],a[1],zL], bL=[b[0],b[1],zL], tj=map.indexOf(i);
-    if(tj>=0){ const c=[top[tj][0],top[tj][1],z1], d=[top[(tj+1)%top.length][0],top[(tj+1)%top.length][1],z1]; tris.push([aL,bL,d],[aL,d,c]); } }
-  if(rfVol(tris)<0) tris=tris.map(t=>[t[0],t[2],t[1]]);   // force outward normals whatever the input winding
-  return tris;
+  const base=rfOpen(baseIn), H=z1-z0; lip=Math.max(0,Math.min(lip||0,H*0.9)); const zL=z0+lip;
+  const norms=rfNormals(base), {top,runs}=rfTopVerts(base,norms,runsIn.map(r=>Math.max(0,Math.min(r||0,H*40))));
+  const pts=[]; base.forEach(p=>pts.push([p[0],p[1],z0])); base.forEach(p=>pts.push([p[0],p[1],zL]));
+  (top.length?top:[base[0]]).forEach(p=>pts.push([p[0],p[1],z1]));
+  return rfHull(pts);
 }
 // Per-edge slope ANGLES (deg from vertical, 0 = vertical wall) aligned to a shape's footprint edges. Reads
 // data-slopes ("a0,a1,..."); falls back to the legacy single data-slope-run/data-slope-dir so old designs
