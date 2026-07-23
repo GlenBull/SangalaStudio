@@ -2870,19 +2870,21 @@ function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
    shared and collinear edges - abutting bricks, a slot built from touching rectangles -
    are handled by construction rather than by luck. One rule serves all three ops (only
    the result test changes); Difference's reversed inner boundary falls out of the left
-   rule for free. Operands are simple rings (design mm); returns an array of OPEN rings
-   for nestRings to pair into outer + holes. This replaces an arc-stitch boolean that
-   dropped or duplicated shared-edge boundaries - a U-shaped slot built from three
-   abutting rectangles extruded mangled, and an L-shaped one lost a corner. Validated by
-   an independent point-membership oracle over hundreds of randomized and degenerate
-   cases (dev harness in scratchpad): strictly better, no regressions. */
+   rule for free. The core (pbArrange) works off a point-membership predicate, so the SAME
+   code does two-ring booleans (polyBool) and holed-region booleans that honor both operands'
+   holes for every op (boolShapes) - which is what lets a shape carry several cut-out windows.
+   Coordinates are design mm; results are OPEN rings for nestRings to pair into outer + holes.
+   This replaces an arc-stitch boolean that dropped or duplicated shared-edge boundaries - a
+   U-shaped slot built from three abutting rectangles extruded mangled, an L-shaped one lost a
+   corner, and Difference/Intersect dropped the first operand's existing holes. Validated by an
+   independent point-membership oracle over hundreds of randomized and degenerate cases (dev
+   harness in scratchpad): strictly better, no regressions. */
 const PB_EPS=1e-9;
 function pbArea(r){ let a=0; for(let i=0,n=r.length;i<n;i++){ const p=r[i],q=r[(i+1)%n]; a+=p[0]*q[1]-q[0]*p[1]; } return a/2; }
 function pbOpen(r){ if(r.length>1 && r[0][0]===r[r.length-1][0] && r[0][1]===r[r.length-1][1]) return r.slice(0,-1); return r.slice(); }
 function pbIn(pt,ring){ let x=pt[0],y=pt[1],inside=false;
   for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
     if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
-function pbCCW(r){ return pbArea(r)<0 ? r.slice().reverse() : r; }                       // orient so the interior sits on the left of each edge
 function pbSegX(p1,p2,q1,q2){ const dx1=p2[0]-p1[0],dy1=p2[1]-p1[1],dx2=q2[0]-q1[0],dy2=q2[1]-q1[1],den=dx1*dy2-dy1*dx2;
   if(Math.abs(den)<1e-12) return null;                                                    // parallel/collinear -> handled by vertex-on-edge splitting, not here
   const a=((q1[0]-p1[0])*dy2-(q1[1]-p1[1])*dx2)/den, b=((q1[0]-p1[0])*dy1-(q1[1]-p1[1])*dx1)/den;
@@ -2893,61 +2895,55 @@ function pbOnSeg(p,a,b){ const cr=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]
   const l2=(b[0]-a[0])**2+(b[1]-a[1])**2, t=l2?((p[0]-a[0])*(b[0]-a[0])+(p[1]-a[1])*(b[1]-a[1]))/l2:0;
   return (t>-PB_EPS&&t<1+PB_EPS)?Math.min(1,Math.max(0,t)):-1; }                          // param where p sits on ab, else -1
 function pbKey(p){ return Math.round(p[0]/1e-5)+","+Math.round(p[1]/1e-5); }              // snap key so coincident points merge
-function polyBool(op, Aring, Bring){
-  const A=pbCCW(pbOpen(Aring)), B=pbCCW(pbOpen(Bring));
-  if(A.length<3||B.length<3) return [];
-  const Ae=A.map((p,i)=>[p,A[(i+1)%A.length]]), Be=B.map((p,i)=>[p,B[(i+1)%B.length]]);
-  const cross=[]; for(const [a1,a2] of Ae) for(const [b1,b2] of Be){ const x=pbSegX(a1,a2,b1,b2); if(x) cross.push(x); }
-  const verts=A.concat(B).concat(cross);
-  const atomize=edges=>{ const out=[];                                                    // split every edge at each vertex/crossing lying on it
-    for(const [a,b] of edges){ const ts=[0,1];
-      for(const v of verts){ const t=pbOnSeg(v,a,b); if(t>PB_EPS&&t<1-PB_EPS) ts.push(t); }
-      ts.sort((x,y)=>x-y);
-      for(let i=0;i+1<ts.length;i++){ const t0=ts[i],t1=ts[i+1]; if(t1-t0<PB_EPS) continue;
-        out.push([[a[0]+(b[0]-a[0])*t0,a[1]+(b[1]-a[1])*t0],[a[0]+(b[0]-a[0])*t1,a[1]+(b[1]-a[1])*t1]]); } }
-    return out; };
-  const seen=new Map();                                                                   // coincident (overlapping/collinear) atoms merge to one
-  for(const [p,q] of atomize(Ae).concat(atomize(Be))){ const k=[pbKey(p),pbKey(q)].sort().join("|"); if(!seen.has(k)) seen.set(k,[p,q]); }
-  const res=p=>{ const inA=pbIn(p,A), inB=pbIn(p,B); return op==='union'?(inA||inB):op==='intersect'?(inA&&inB):(inA&&!inB); };
+// Arrange every edge of `rings` into a planar subdivision - each edge split at all crossings
+// and at any vertex lying on it - then keep each atomic segment that BOUNDS the target region:
+// interior on one side (res(pt)=true), exterior on the other, oriented interior-on-left.
+// Coincident/overlapping atoms merge, so shared and collinear edges are handled by construction.
+// Kept atoms stitch head-to-tail into OPEN rings. `res` is any point-membership predicate - which
+// is what lets one core serve BOTH the two-ring polyBool and the holed-region boolShapes below.
+function pbArrange(rings, res){
+  const edges=[]; for(const r of rings){ const R=pbOpen(r); if(R.length<3) continue; for(let i=0;i<R.length;i++) edges.push([R[i],R[(i+1)%R.length]]); }
+  const verts=[]; for(const r of rings){ for(const p of pbOpen(r)) verts.push(p); }        // every original vertex...
+  for(let i=0;i<edges.length;i++) for(let j=i+1;j<edges.length;j++){ const x=pbSegX(edges[i][0],edges[i][1],edges[j][0],edges[j][1]); if(x) verts.push(x); }   // ...plus every crossing
+  const seen=new Map();                                                                   // atomize each edge; coincident atoms merge to one
+  for(const [a,b] of edges){ const ts=[0,1];
+    for(const v of verts){ const t=pbOnSeg(v,a,b); if(t>PB_EPS&&t<1-PB_EPS) ts.push(t); }
+    ts.sort((x,y)=>x-y);
+    for(let i=0;i+1<ts.length;i++){ const t0=ts[i],t1=ts[i+1]; if(t1-t0<PB_EPS) continue;
+      const p=[a[0]+(b[0]-a[0])*t0,a[1]+(b[1]-a[1])*t0], q=[a[0]+(b[0]-a[0])*t1,a[1]+(b[1]-a[1])*t1];
+      const k=[pbKey(p),pbKey(q)].sort().join("|"); if(!seen.has(k)) seen.set(k,[p,q]); } }
   const kept=[];                                                                          // keep each atom oriented so the result interior is on its LEFT
   for(const [p,q] of seen.values()){
     const mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2,dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1e-30,e=Math.min(1e-4,L*0.25);
     const nx=-dy/L*e, ny=dx/L*e, lft=res([mx+nx,my+ny]), rgt=res([mx-nx,my-ny]);
     if(lft&&!rgt) kept.push([p,q]); else if(rgt&&!lft) kept.push([q,p]); }                 // (both same -> not a boundary edge -> dropped)
   const starts=new Map(); kept.forEach((edg,i)=>{ const k=pbKey(edg[0]); if(!starts.has(k)) starts.set(k,[]); starts.get(k).push(i); });
-  const used=new Array(kept.length).fill(false), rings=[];                                // stitch directed atoms head-to-tail into rings
+  const used=new Array(kept.length).fill(false), out=[];                                  // stitch directed atoms head-to-tail into rings
   for(let s=0;s<kept.length;s++){ if(used[s]) continue; const ring=[]; let cur=s, guard=0;
     while(cur!=null && !used[cur] && ++guard<100000){ used[cur]=true; ring.push(kept[cur][0]);
       const cand=(starts.get(pbKey(kept[cur][1]))||[]).filter(i=>!used[i]); cur=cand.length?cand[0]:null; }
     const clean=[]; for(const p of ring){ const l=clean[clean.length-1]; if(!l||Math.abs(l[0]-p[0])>1e-6||Math.abs(l[1]-p[1])>1e-6) clean.push(p); }
     while(clean.length>1 && Math.abs(clean[0][0]-clean[clean.length-1][0])<1e-6 && Math.abs(clean[0][1]-clean[clean.length-1][1])<1e-6) clean.pop();
-    if(clean.length>=3 && Math.abs(pbArea(clean))>1e-6) rings.push(clean); }               // drop degenerate / zero-area rings
-  return rings;
+    if(clean.length>=3 && Math.abs(pbArea(clean))>1e-6) out.push(clean); }                 // drop degenerate / zero-area rings
+  return out;
 }
-// polyBool works on two SIMPLE outlines. This wraps it to respect each operand's HOLES (a frame's window).
-// Union is the case that needs it: merging a shape onto a frame must keep the frame's window as a hole - minus
-// whatever the merged shape now fills - instead of silently dropping every hole and collapsing the frame to a
-// filled outline (which is why unioning the crane onto the shadowbox left only the bare square). Difference
-// and Intersect keep the plain outer-only path: their common use (carving a frame OUT of a solid) has no holed
-// operand. Returns a FLAT ring list for nestRings to re-pair into outer+holes, exactly like polyBool's output.
-function subtractSolid(ring, S){   // ring minus S's SOLID region (S.outer, with S's own holes punched back out)
-  const frags = polyBool('diff', ring, S.outer);                                     // the part of ring outside S entirely
-  (S.holes||[]).forEach(h => polyBool('intersect', ring, h).forEach(r=>frags.push(r)));   // + the part sitting inside one of S's holes
-  return frags;
+function polyBool(op, Aring, Bring){                                                       // two SIMPLE rings -> array of OPEN result rings
+  const A=pbOpen(Aring), B=pbOpen(Bring);
+  if(A.length<3||B.length<3) return [];
+  const res=p=>{ const a=pbIn(p,A), b=pbIn(p,B); return op==='union'?(a||b):op==='intersect'?(a&&b):(a&&!b); };
+  return pbArrange([A,B], res);
 }
+// Boolean of two SHAPES that may each carry holes, for ANY hole count and all three ops. A
+// shape's filled region is its outer ring minus its hole rings; feeding every ring of both shapes
+// to the arrangement and testing that region membership keeps exactly the edges bounding
+// (regionA op regionB). This is what lets you cut a SECOND (or third) window into a frame -
+// Difference and Intersect no longer drop the first operand's holes - and it subsumes the old
+// union-only hole handling (merging a shape onto a frame keeps the frame's window). nestRings
+// re-pairs the returned rings into outer + holes by containment.
 function boolShapes(op, A, B){   // A,B = {outer, holes}
-  const ah=A.holes||[], bh=B.holes||[];
-  if(op!=='union' || (!ah.length && !bh.length)) return polyBool(op, A.outer, B.outer);   // no holes, or diff/intersect -> plain path
-  const rings = polyBool('union', A.outer, B.outer);        // the combined outer boundary (>=1 ring)
-  ah.forEach(h => subtractSolid(h, B).forEach(r=>rings.push(r)));   // A's window(s), minus B's solid: the part still open
-  // B's windows contribute ONLY where they fall outside A's outer entirely. Anything inside A's outer is either
-  // A's own solid, or - where the two windows overlap - already emitted by an A-window term above. Subtracting
-  // by A's SOLID here (like A does) would re-emit that shared overlap as a 2nd coincident hole ring: the die
-  // cutter would trace it twice and even-odd fill would cancel (re-fill) it. Subtracting by A's OUTER instead
-  // deliberately drops the part A already owns, so each open region is emitted exactly once. (A solid A has no
-  // holes, so this reduces to plain h - A.outer - the crane-onto-frame case is unaffected either way.)
-  bh.forEach(h => polyBool('diff', h, A.outer).forEach(r=>rings.push(r)));
-  return rings;                                            // nestRings pairs these back into outer + holes by containment
+  const inReg=(p,S)=> pbIn(p,S.outer) && !(S.holes||[]).some(h=>pbIn(p,h));
+  const res=p=>{ const a=inReg(p,A), b=inReg(p,B); return op==='union'?(a||b):op==='intersect'?(a&&b):(a&&!b); };
+  return pbArrange([A.outer, ...(A.holes||[]), B.outer, ...(B.holes||[])], res);
 }
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
