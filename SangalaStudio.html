@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.92 -->
+<!-- SANGALA_VERSION: 2026-07-23.93 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -377,6 +377,7 @@ function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; v
   return { dw:dw, dh:dh, vw:vw, vh:vh, baseK:baseK, MX:(cv.width/baseK-vw)/2, MY:(cv.height/baseK-vh)/2 };
 }
 let selNode=null;            // index of the selected node within the selected object (node tool)
+let slopeHi=null;            // footprint edge index to highlight while a per-side Slope field is focused/hovered
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};   // Sticker Paper = Avery's white/clear kiss-cut setting (Blade 2, Speed 3, Thickness 6); metallic gold/silver would be Thickness 15
@@ -822,6 +823,12 @@ function draw(){
   if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.6; ctx.lineCap="round"; ctx.setLineDash([0.5,4]);
     holeObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke(); });
     ctx.restore(); }
+  if(slopeHi!=null){   // highlight the footprint edge whose per-side Slope field is focused/hovered
+    const so=selId!=null?objects.find(x=>x.id===selId):null;
+    if(so&&so.poly){ const p=placePoly(so.poly), n=(p.length>1&&p[0][0]===p[p.length-1][0]&&p[0][1]===p[p.length-1][1])?p.length-1:p.length;
+      if(slopeHi<n){ const a=p[slopeHi], b=p[(slopeHi+1)%n];
+        ctx.save(); ctx.strokeStyle="#1fa85a"; ctx.lineWidth=3; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(a[0]*k,a[1]*k); ctx.lineTo(b[0]*k,b[1]*k); ctx.stroke(); ctx.restore(); } } }
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
     const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
@@ -1298,6 +1305,9 @@ function rfEdgeAngles(o, base){
   return out;
 }
 function rfRuns(angles,H,lip){ const Hf=Math.max(1e-3,H-lip); return angles.map(a=>Hf*Math.tan(Math.max(0,Math.min(80,a))*Math.PI/180)); }
+function rfConvex(polyIn){ const p=rfOpen(polyIn), N=p.length; if(N<3) return false; let sign=0;   // Stage A roofs need a convex outline (concave = Stage C)
+  for(let i=0;i<N;i++){ const a=p[i], b=p[(i+1)%N], c=p[(i+2)%N], cr=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+    if(Math.abs(cr)>1e-9){ const s=cr>0?1:-1; if(sign===0) sign=s; else if(s!==sign) return false; } } return true; }
 function cylTris(cx,cy,r,z0,z1){   // triangle-fan caps + wall quads; outward winding, Z up; spans z0..z1
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), CB=[cx,cy,z0], CT=[cx,cy,z1], P=[], tris=[];
   for(let i=0;i<n;i++){const a=2*Math.PI*i/n; P.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
@@ -1878,6 +1888,10 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
       const bb=bbox([outer]), gr=[[bb[0]-G,bb[1]-G],[bb[2]+G,bb[1]-G],[bb[2]+G,bb[3]+G],[bb[0]-G,bb[3]+G]];   // grown outline, canonical order: edge 0 front / 1 right / 2 back / 3 left
       const angles=rfEdgeAngles(o, gr);
       if(angles.some(a=>a>0)) return roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP);
+    } else if(t==="polygon" && objClosed(o) && rfConvex(o.poly)){   // any convex outline (triangle, pentagon, ...): per-edge slope aligned to its own edges
+      const base = G>0 ? offsetRing(o.poly,G) : rfOpen(o.poly);
+      const angles=rfEdgeAngles(o, base);
+      if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP);
     }
   }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
@@ -3258,17 +3272,23 @@ function dimText(o){
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
   // Per-side Slope: ramp any side of a rectangular top inward. Angle in degrees from vertical, 0 = flat. Front
   // / Right / Back / Left are the -Y / +X / +Y / -X edges (canonical order, matching the roof builder).
-  const rectish = mode3D && !o.el.hasAttribute("data-brick") && o.el.getAttribute("data-sockets")!=="1"
-    && !(o.holes&&o.holes.length) && objClosed(o) && (t==="rect" || isRectRing(o.poly));
-  if(rectish){
-    const bb=bbox([o.poly]), cOuter=[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]], ang=rfEdgeAngles(o, cOuter);
+  // Per-side Slope: ramp any side of a convex top inward. Angle deg from vertical, 0 = flat. Aligned to the
+  // shape's own footprint edges (data-slopes). A rectangle gets friendly Front/Right/Back/Left names; any other
+  // convex outline (triangle, pentagon, ...) gets numbered sides. Focusing a field highlights that edge on the mat.
+  const slopeOk = mode3D && !o.el.hasAttribute("data-brick") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length) && objClosed(o);
+  const rectish = slopeOk && (t==="rect" || (t==="polygon" && isRectRing(o.poly)));
+  const convexPoly = slopeOk && t==="polygon" && !rectish && rfConvex(o.poly);
+  if(rectish || convexPoly){
+    const ang=rfEdgeAngles(o, rfOpen(o.poly));
     const sf=(lab,idx)=>'<td style="text-align:left">'+lab+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="1" min="0" max="80" data-dim="slope'+idx+'" value="'+Math.round(ang[idx])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td>';
+    let body;
+    if(rectish) body='<tr>'+sf("Front",0)+'<td style="width:.8rem"></td>'+sf("Back",2)+'</tr><tr>'+sf("Left",3)+'<td style="width:.8rem"></td>'+sf("Right",1)+'</tr>';
+    else { body=''; for(let i=0;i<ang.length;i+=2){ body+='<tr>'+sf("Side "+(i+1),i)+'<td style="width:.8rem"></td>'+(i+1<ang.length?sf("Side "+(i+2),i+1):'<td></td><td></td><td></td>')+'</tr>'; } }
     html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
       +'<div class="hint" style="margin-bottom:.25rem" title="Ramp each side of the top inward. 0 = flat (a vertical wall). The angle is measured from vertical.">Slope each side (0 = flat)</div>'
-      +'<table style="border-collapse:collapse"><tr>'+sf("Front",0)+'<td style="width:.8rem"></td>'+sf("Back",2)+'</tr>'
-      +'<tr>'+sf("Left",3)+'<td style="width:.8rem"></td>'+sf("Right",1)+'</tr></table></div>';
+      +'<table style="border-collapse:collapse">'+body+'</table></div>';
   }
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
     html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
@@ -3328,9 +3348,8 @@ function scaleFootprint(o,s){
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
-  if(/^slope[0-3]$/.test(dim)){   // per-side roof: set one edge's slope angle (deg from vertical, 0 = flat) in data-slopes
-    const idx=+dim.slice(5), bb=bbox([o.poly]), cOuter=[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]];
-    const ang=rfEdgeAngles(o, cOuter); ang[idx]=Math.max(0,Math.min(80,v));
+  if(/^slope\d+$/.test(dim)){   // per-side roof: set one edge's slope angle (deg from vertical, 0 = flat) in data-slopes (aligned to the footprint edges)
+    const idx=+dim.slice(5), ang=rfEdgeAngles(o, rfOpen(o.poly)); ang[idx]=Math.max(0,Math.min(80,v));
     o.el.setAttribute("data-slopes", ang.map(a=>fmtn(a)).join(","));
     o.el.removeAttribute("data-slope-run"); o.el.removeAttribute("data-slope-dir");   // migrated to per-edge
     if(!live)showDims(o); pvRefresh(); return; }
@@ -3436,6 +3455,11 @@ const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout 
   else if(el&&el.dataset&&el.dataset.dimflag!=null && !live) applyDimFlag(el.dataset.dimflag, el.checked); };   // checkbox: on change only
 $("editdims").addEventListener("input",  e=>onDimEdit(e,true));    // live: spinner steps and typing update the preview immediately
 $("editdims").addEventListener("change", e=>onDimEdit(e,false));   // commit (blur / Enter): also re-render the rounded readout
+const slopeEdgeOf=e=>{ const d=e.target&&e.target.dataset&&e.target.dataset.dim; return (d&&/^slope\d+$/.test(d))?+d.slice(5):null; };   // which footprint edge a Slope field maps to
+$("editdims").addEventListener("focusin", e=>{ const i=slopeEdgeOf(e); if(i!==null){ slopeHi=i; draw(); } });   // highlight the side a Slope field controls
+$("editdims").addEventListener("focusout",e=>{ const i=slopeEdgeOf(e); if(i!==null){ slopeHi=null; draw(); } });
+$("editdims").addEventListener("mouseover",e=>{ const i=slopeEdgeOf(e); if(i!==null && slopeHi!==i){ slopeHi=i; draw(); } });
+$("editdims").addEventListener("mouseout", e=>{ const i=slopeEdgeOf(e); if(i!==null && document.activeElement!==e.target){ slopeHi=null; draw(); } });
 /* ---------- Brick size controls (Columns / Rows / Depth / Fit), shown when a brick is selected in 3D ---------- */
 function selectedBrick(){   // the brick body object if the current selection is a brick (its group, or the body alone)
   if(selMulti.length){ for(const id of selMulti){ const o=objects.find(x=>x.id===id); if(o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-brick")) return o; } return null; }
