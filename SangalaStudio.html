@@ -385,7 +385,7 @@ const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
 const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
 const isHole    =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="hole";   // 3D role: a hole carves a void out of the solids it is grouped with (TinkerCAD-style)
-const is3DOnly  =o=>isBar(o)||!!o.mesh;   // a 3D bar, or a baked mesh from a 3D Combine: 3D-print only, never sent to the die cutter
+const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o);   // a 3D bar, a baked mesh, or a hole: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
 const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
 const printObjs =()=>objects.filter(o=>o.kind==="print");
@@ -814,10 +814,10 @@ function draw(){
   if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
     barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
     ctx.restore(); }
-  if(mode3D){ const holeObjs=objects.filter(isHole);   // a shape marked Hole reads as dotted (magenta) - it carves rather than adds when grouped
-    if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#b452cf"; ctx.lineWidth=1.6; ctx.setLineDash([3,3]);
-      holeObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke(); });
-      ctx.restore(); } }
+  const holeObjs=objects.filter(isHole);   // a shape marked Hole reads as a blue dotted outline - it carves rather than adds when grouped (excluded from the red cut lines above, so the dots are the only stroke)
+  if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.6; ctx.lineCap="round"; ctx.setLineDash([0.5,4]);
+    holeObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke(); });
+    ctx.restore(); }
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
     const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
@@ -3196,21 +3196,8 @@ function dimText(o){
       +flag("studs","Studs (top)",st,"LEGO studs on the top face, on the 8 mm grid wherever one fits. Click a stud on the mat to remove it.")
       +flag("sockets","Sockets (bottom)",sk,"Holes in the underside that clip onto the studs of the part below. Needs a Depth of about 5 mm or more.")+'</div>';
     if(st||sk) html+='<table style="border-collapse:collapse;margin-top:.35rem"><tr>'+cell(["Fit",R("data-fit"),"fit"])+'</tr></table>';   // clutch clearance: shaves the stud, opens the socket
-    // Axle hole: a round bore through a box (a solid rectangle, or a hollow frame from Difference). 3D only.
-    const boxLike = t==="rect" || (t==="polygon" && o.poly && isRectRing(o.poly));
-    if(boxLike){
-      const boreOn = (o.el.getAttribute("data-bore-axis")==="x"||o.el.getAttribute("data-bore-axis")==="y") && (+o.el.getAttribute("data-bore-d")||0)>0;
-      html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
-        +flag("bore","Axle hole (round)",boreOn,"A round hole bored straight through both walls for an axle. The two openings line up on their own, so a rod turns freely.");
-      if(boreOn){
-        const bz0=+o.el.getAttribute("data-z0")||0, bz=+o.el.getAttribute("data-z")||0;
-        const hz=Math.round((o.el.hasAttribute("data-bore-h")? +o.el.getAttribute("data-bore-h") : bz0+bz/2)*10)/10;
-        const dia=Math.round((+o.el.getAttribute("data-bore-d")||3.2)*10)/10;
-        html+='<div style="margin-top:.3rem">'+flag("borex","Across the width",o.el.getAttribute("data-bore-axis")==="x","Bore side-to-side across the width instead of front-to-back along the length.")+'</div>'
-          +'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(["Hole ⌀",dia,"bored"])+'<td style="width:1rem"></td>'+cell(["Height",hz,"boreh"])+'</tr></table>';
-      }
-      html+='</div>';
-    }
+    // (The old "Axle hole (round)" bore control was removed - a hole is now made with the Solid/Hole role + Combine.
+    //  The bodyTris bore branch stays so any pre-existing bored design still opens; there is just no UI to add one.)
   }
   if(mode3D && t==="polyline" && o.poly && o.poly.length===2){   // a straight line can become a 3D BAR (rod / stick): a hole when subtracted from a part, a peg when added
     const barOn=o.el.getAttribute("data-bar")==="1", shp=o.el.getAttribute("data-bar-shape")||"round";
