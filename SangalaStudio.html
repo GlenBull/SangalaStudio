@@ -2416,6 +2416,11 @@ const mesh3D=(function(){
     return toTris(a.all());
   };
 })();
+// Is this operand a 3D SOLID (has real volume)? A bar, a baked part, or a shape given a Depth. Combining two
+// of these must go through the 3D boolean - the flat 2D one rebuilds a depthless outline, dropping Depth and
+// Base (and it cannot represent an elevated base at all: one extrude has a single base/height).
+function is3DSolid(o){ return isBar(o) || !!o.mesh ||
+  (o.el&&o.el.tagName&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase()) && (+o.el.getAttribute("data-z")||0)>0); }
 // The 3D solid mesh for a Combine operand: a baked mesh as-is, a bar swept from its line, or an extruded
 // shape (rect/circle/polygon with a Depth). A flat shape with no Depth is not a solid -> null.
 function operandMesh(o){
@@ -2437,21 +2442,23 @@ function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar
   if(!mA||!mB){ say("To combine in 3D, give the solid part a Depth first - the 3D bar already has its own thickness."); return; }
   const mesh=mesh3D(op==="diff"?"subtract":op, mA, mB);
   if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
-  const part = isBar(o1) ? (isBar(o2)?o1:o2) : o1;   // footprint from the solid part (not the bar), so the 2D outline reads sensibly
-  const fp = part.poly.map(p=>[p[0],p[1]]);
+  let fp;   // the flat outline shown on the mat (a pick target): the part's own outline when a bar is involved, else the union of the two footprints so it covers the whole result
+  if(isBar(o1)||isBar(o2)){ const part=isBar(o1)?(isBar(o2)?o1:o2):o1; fp=part.poly.map(p=>[p[0],p[1]]); }
+  else { const u=nestRings(boolShapes("union",{outer:o1.poly,holes:o1.holes||[]},{outer:o2.poly,holes:o2.holes||[]}));
+    fp=(u[0]&&u[0].outer)?u[0].outer.map(p=>[p[0],p[1]]):o1.poly.map(p=>[p[0],p[1]]); }
   [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });
   objects=objects.filter(o=>o!==o1&&o!==o2);
   makeMeshObj(fp, mesh, o1.kind);
   selId=null; selId2=null; selMulti=[]; selNode=null;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
-  say({union:"Union",diff:"Difference",intersect:"Intersect"}[op]+" (3D): made a solid part"
-      +(op==="diff"?" with the bar bored out":op==="union"?" with the bar added on":"")+" - see it in the 3D view.");
+  say({union:"Union",diff:"Difference",intersect:"Intersect"}[op]+" (3D): one solid part"
+      +(op==="diff"?", the 2nd shape cut out":op==="union"?", the two merged":", only the overlap kept")+" - keeps its Depth and Base. See it in the 3D view.");
 }
 function applyBool(op){
   const [o1,o2]=combineOperands();
   if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
   if(!o1||!o2||o1===o2){ say("Pick two shapes: Shift+click a 2nd, or sweep a box around both."); return; }
-  if(isBar(o1)||isBar(o2)||o1.mesh||o2.mesh){ ensureDoc(); bool3D(op,o1,o2); return; }   // a 3D bar or baked part -> true 3D boolean, not the flat one
+  if(is3DSolid(o1)||is3DSolid(o2)){ ensureDoc(); bool3D(op,o1,o2); return; }   // any 3D solid (bar, baked part, or a shape with Depth) -> true 3D boolean, which keeps Depth + Base; only the flat 2D boolean drops them
   ensureDoc();
   const rings=boolShapes(op, {outer:o1.poly, holes:o1.holes}, {outer:o2.poly, holes:o2.holes});
   if(!rings.length){ say(op==="intersect"?"The two shapes don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
