@@ -3100,7 +3100,7 @@ function dimText(o){
       const rowc=(a,b)=>'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(a)+'<td style="width:1rem"></td>'+cell(b)+'</tr></table>';
       html+='<div style="margin-top:.3rem">Cross-section <select class="dimin" data-dim="barshape" style="width:auto;text-align:left">'
         +opt(0,"round","round")+opt(1,"rectangle","rect")+'</select></div>';
-      html+= shp==="rect" ? rowc(["Width",R("data-bar-w")||4,"barw"],["Thickness",R("data-bar-h")||4,"barh"])
+      html+= shp==="rect" ? rowc(["Height",R("data-bar-h")||4,"barh"],null)+rowc(["Width",R("data-bar-w")||4,"barw"],null)
                           : rowc(["Diameter",R("data-bar-d")||4,"bard"],null);
       html+= rowc(["Base",R("data-z0"),"z0"],null);   // Base sets the bar's height above the plate
     }
