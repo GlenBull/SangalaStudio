@@ -384,6 +384,7 @@ const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
 const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
+const isHole    =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="hole";   // 3D role: a hole carves a void out of the solids it is grouped with (TinkerCAD-style)
 const is3DOnly  =o=>isBar(o)||!!o.mesh;   // a 3D bar, or a baked mesh from a 3D Combine: 3D-print only, never sent to the die cutter
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
 const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
@@ -813,6 +814,10 @@ function draw(){
   if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
     barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
     ctx.restore(); }
+  if(mode3D){ const holeObjs=objects.filter(isHole);   // a shape marked Hole reads as dotted (magenta) - it carves rather than adds when grouped
+    if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#b452cf"; ctx.lineWidth=1.6; ctx.setLineDash([3,3]);
+      holeObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke(); });
+      ctx.restore(); } }
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
     const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
@@ -3222,6 +3227,10 @@ function dimText(o){
     }
     html+='</div>';
   }
+  if(mode3D && is3DSolid(o)){   // Solid vs Hole: a hole carves a void out of the solids it is grouped with (unchecked = a normal solid shape)
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +flag("hole","Hole",isHole(o),"Make this a hole: grouped with solid shapes, it carves a void out of them instead of adding material. Unchecked = a solid shape. Its outline shows dotted.")+'</div>';
+  }
   return html;
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
@@ -3306,6 +3315,7 @@ function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEG
     else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
     showDims(o); pvRefresh(); return; }
   if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
+  if(flag==="hole"){ if(on) o.el.setAttribute("data-role","hole"); else o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Hole; draw() redraws the dotted hole outline, pvRefresh re-evaluates any group it is in
   if(flag==="bar"){   // turn a line into a 3D bar: seed a round 4 mm rod at a visible height, off strips every bar attribute
     if(on){ o.el.setAttribute("data-bar","1"); if(!o.el.getAttribute("data-bar-shape")) o.el.setAttribute("data-bar-shape","round");
       if(!(+o.el.getAttribute("data-bar-d")>0)) o.el.setAttribute("data-bar-d","4"); if(!(+o.el.getAttribute("data-z0")>0)) o.el.setAttribute("data-z0","5"); }
