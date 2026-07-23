@@ -1558,10 +1558,10 @@ function prismThruTris(outer, holeRings, z0, z1){
     const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
     const dx=b[0]-a[0],dy=b[1]-a[1], ox=(ccw?dy:-dy), oy=(ccw?-dx:dx);
     for(const tri of [[a0,b0,b1],[a0,b1,a1]]) t.push(facing(tri,ox,oy,0)); }
-  holes.forEach(h=>{ let cx=0,cy=0; h.forEach(p=>{cx+=p[0]/h.length;cy+=p[1]/h.length;});                  // each hole wall faces INTO its own void
+  holes.forEach(h=>{ let Ah=0; for(let i=0;i<h.length;i++){ const a=h[i],b=h[(i+1)%h.length]; Ah+=a[0]*b[1]-b[0]*a[1]; } const ccwH=Ah>0;   // each hole wall faces INTO its own void
     for(let i=0;i<h.length;i++){ const a=h[i], b=h[(i+1)%h.length];
       const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
-      const ix=cx-(a[0]+b[0])/2, iy=cy-(a[1]+b[1])/2;
+      const dx=b[0]-a[0],dy=b[1]-a[1], ix=(ccwH?-dy:dy), iy=(ccwH?dx:-dx);                              // inward normal from the ring's own winding; a centroid ref flips walls on a concave (L/U) hole, whose centroid falls OUTSIDE it
       t.push(facing([a0,b0,b1],ix,iy,0), facing([a0,b1,a1],ix,iy,0)); } });
   return t;
 }
