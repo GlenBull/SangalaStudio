@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.91 -->
+<!-- SANGALA_VERSION: 2026-07-23.92 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3629,6 +3629,15 @@ function refreshEditPanel(){
   $("eCut").classList.toggle("on",   o.kind==="cut");
   $("eScore").classList.toggle("on", o.kind==="score");
   $("ePrint").classList.toggle("on", o.kind==="print");
+  const mate = selId2!=null ? objects.find(x=>x.id===selId2) : null;   // a Shift+click 2nd shape: offer Group/Ungroup on the pair, not only Combine
+  if(mate){
+    const isGroup = o.group!=null && o.group===mate.group;
+    $("groupsrow").style.display="block";
+    $("eGroup").textContent="▦ Group"; $("eUngroup").textContent="▤ Ungroup";
+    $("eGroup").title = mode3D ? "Bundle these two so they move and select as one, each still its own piece. To merge or carve them into one part, use the Combine tool." : "";
+    $("eUngroup").title = mode3D ? "Step back one grouping level - any inner group stays grouped." : "";
+    $("eGroup").style.display=isGroup?"none":""; $("eUngroup").style.display=isGroup?"":"none";
+  }
   const tag = o.el && o.el.tagName ? o.el.tagName.toLowerCase() : "";
   const isPoly = tag==="polygon" && !mode3D;   // Simplify only applies to node-built paths, and only in 2D - a 3D part's nodes are not edited that way
   $("esimprow").style.display = isPoly ? "flex" : "none";
@@ -3665,19 +3674,24 @@ $("eDelete").onclick=deleteSel;
 // Group: bind the current multi-selection into one unit (shared .group / gpath id) so it moves/selects together.
 // This is a BUNDLE in both modes - it never merges or carves geometry; each member stays its own piece. In 3D,
 // merging/carving is the Combine tool's job. Grouping nests, so Ungroup peels one level (see groupSel/ungroupSel).
+// The set Group/Ungroup act on: a marquee multi-selection, or - so Shift+click works the same as a sweep - the
+// Shift+click pair (selId + selId2). This is why grouping is offered for BOTH selection gestures.
+function groupIds(){ return selMulti.length>=2 ? selMulti.slice() : (selId!=null && selId2!=null && objects.some(o=>o.id===selId2) ? [selId, selId2] : (selMulti.length?selMulti.slice():[])); }
 function groupSel(){   // NEST: the new group becomes the OUTERMOST level, so a later ungroup peels just this step (TinkerCAD-style)
-  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then Group."); return; }
-  groupSeq++; const set=new Set(selMulti);
+  const ids=groupIds();
+  if(ids.length<2){ say("Select two or more objects first (drag a box around them, or Shift+click a 2nd), then Group."); return; }
+  groupSeq++; const set=new Set(ids);
   objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); p.unshift(groupSeq); o.gpath=p; o.group=groupSeq; } });
+  selMulti=ids; selId=null; selId2=null;   // the grouped set is now one selection (a Shift+click pair becomes a group)
   refreshEditPanel(); draw(); pvRefresh();
   say(mode3D
-    ? "Grouped "+selMulti.length+" shapes - they move and select as one, but each stays its own piece (a bundle). To merge or carve them into a single part, use the Combine tool. Ungroup steps back one level."
-    : "Grouped "+selMulti.length+" objects - they select and move as one. Ungroup to separate them.");
+    ? "Grouped "+ids.length+" shapes - they move and select as one, but each stays its own piece (a bundle). To merge or carve them into a single part, use the Combine tool. Ungroup steps back one level."
+    : "Grouped "+ids.length+" objects - they select and move as one. Ungroup to separate them.");
 }
 function ungroupSel(){   // PEEL one level: remove the outermost group id from each selected member; the inner grouping (if any) survives
-  const set=new Set(selMulti); let n=0;
+  const ids=groupIds(), set=new Set(ids.length?ids:(selId!=null?[selId]:[])); let n=0;
   objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); if(p.length){ p.shift(); o.gpath=p; o.group=p.length?p[0]:null; n++; } } });
-  selMulti=[]; selId=null;   // the loose set is no longer one selection; click to pick the inner group or a shape
+  selMulti=[]; selId=null; selId2=null;   // the loose set is no longer one selection; click to pick the inner group or a shape
   refreshEditPanel(); draw(); pvRefresh();
   say(mode3D ? "Ungrouped one level - "+n+" item"+(n!==1?"s":"")+" stepped out. Any inner group stays; click it to select." : "Ungrouped "+n+" objects.");
 }
