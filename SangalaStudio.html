@@ -1481,12 +1481,16 @@ function bridgeHoles(outer,holes){
   for(let hi=0; hi<hs.length; hi++){
     const h=hs[hi], pend=hs.slice(hi+1);                                              // holes not spliced in yet - the slit must miss them
     let mi=0; for(let i=1;i<h.length;i++) if(h[i][0]>h[mi][0]) mi=i;                   // start at the hole's right-most vertex...
-    const M=h[mi], hc=mid(h), hr=Math.hypot(h[0][0]-hc[0], h[0][1]-hc[1]);
+    const M=h[mi];
     let ci=-1, best=Infinity;
     for(let i=0;i<poly.length;i++){ const P=poly[i];
       const mx=(M[0]+P[0])/2, my=(M[1]+P[1])/2;
       if(!ptInPoly(mx,my,poly)) continue;                                             // the slit must run through material, not across a bay
-      if(segDist(hc[0],hc[1],M[0],M[1],P[0],P[1]) < hr-1e-6) continue;                // ...and run AWAY from it: a slit that re-enters its own hole corrupts the cap
+      let reenters=false;                                                             // ...and it must not cross the hole's OWN edges: a slit that re-enters its
+      for(let e=0;e<h.length;e++){ const q1=h[e],q2=h[(e+1)%h.length];                //    own hole corrupts the cap. (The old test - stay clear of the hole's
+        if(_samePt(q1,M)||_samePt(q2,M)) continue;                                     //    centroid by a fixed radius - assumed a compact convex hole; on a
+        if(segsCross(M,P,q1,q2)){ reenters=true; break; } }                           //    concave L/U the centroid falls OUTSIDE the hole and the radius blows
+      if(reenters) continue;                                                          //    up, so it rejected every slit and dropped the hole entirely.
       let ok=true;
       for(let j=0;j<poly.length && ok;j++){ const j2=(j+1)%poly.length;
         if(j===i||j2===i) continue;                                                   // edges meeting the target vertex touch, they don't cross
