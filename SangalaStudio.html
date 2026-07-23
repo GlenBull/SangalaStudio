@@ -383,8 +383,9 @@ const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
-const cutObjs   =()=>objects.filter(o=>o.kind==="cut");
-const scoreObjs =()=>objects.filter(o=>o.kind==="score");
+const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
+const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !isBar(o));
+const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !isBar(o));
 const printObjs =()=>objects.filter(o=>o.kind==="print");
 const cutPolys  =()=>cutObjs().flatMap(o=>(o.holes&&o.holes.length)?[o.poly].concat(o.holes):[o.poly]);   // a holed shape cuts as its outline PLUS each inner loop - a frame
 const scorePolys=()=>scoreObjs().map(o=>o.poly);
@@ -1758,8 +1759,43 @@ function bodiesTouch(a,b){   // do two 3D bodies actually meet? (overlapping in 
     if(segDist(A[i][0],A[i][1],B[j][0],B[j][1],B[j+1][0],B[j+1][1]) < 0.25) return true;   // edges within a quarter mm count as touching
   return false;
 }
+// A line drawn on the work surface, extruded as a solid BAR (rod or rectangular stick) that runs
+// ALONG its length at height Base. The cross-section (round diameter, or rect width x thickness) sits
+// in the vertical plane perpendicular to the line; the line's XY position and angle place and aim it.
+// This is a 3D-only object - a rod means nothing to the die cutter - so it is meant to be combined with
+// other parts (Difference bores a hole, Union adds a peg). Watertight, outward normals.
+function barTris(o){
+  const P=o.poly; if(!P||P.length<2) return [];
+  const a=P[0], b=P[P.length-1], base=+o.el.getAttribute("data-z0")||0;
+  const sub=(p,q)=>[p[0]-q[0],p[1]-q[1],p[2]-q[2]], add=(p,q)=>[p[0]+q[0],p[1]+q[1],p[2]+q[2]],
+        mul=(p,s)=>[p[0]*s,p[1]*s,p[2]*s], dot=(p,q)=>p[0]*q[0]+p[1]*q[1]+p[2]*q[2],
+        crs=(p,q)=>[p[1]*q[2]-p[2]*q[1],p[2]*q[0]-p[0]*q[2],p[0]*q[1]-p[1]*q[0]], ln=p=>Math.hypot(p[0],p[1],p[2]);
+  const p0=[a[0],a[1],base], p1=[b[0],b[1],base];
+  let ax=sub(p1,p0); const L=ln(ax); if(L<1e-6) return []; ax=mul(ax,1/L);
+  let u=crs(ax,[0,0,1]); const ul=ln(u)||1e-9; u=mul(u,1/ul);          // horizontal direction perpendicular to the line
+  const w2=crs(ax,u), t=[];                                            // w2 completes the cross-section frame (has the vertical component)
+  const orient=(tri,n)=>dot(crs(sub(tri[1],tri[0]),sub(tri[2],tri[0])),n)<0?[tri[0],tri[2],tri[1]]:tri;
+  if((o.el.getAttribute("data-bar-shape")||"round")==="rect"){
+    const hw=(+o.el.getAttribute("data-bar-w")||4)/2, hh=(+o.el.getAttribute("data-bar-h")||4)/2;
+    const off=[[hw,hh],[-hw,hh],[-hw,-hh],[hw,-hh]].map(([su,sz])=>add(mul(u,su),mul([0,0,1],sz)));
+    const A=off.map(o2=>add(p0,o2)), B=off.map(o2=>add(p1,o2));
+    for(let i=0;i<4;i++){ const j=(i+1)%4, outN=crs(sub(B[i],A[i]),sub(A[j],A[i]));
+      t.push(orient([A[i],A[j],B[j]],outN),orient([A[i],B[j],B[i]],outN)); }
+    t.push(orient([A[0],A[1],A[2]],mul(ax,-1)),orient([A[0],A[2],A[3]],mul(ax,-1)));   // end caps
+    t.push(orient([B[0],B[1],B[2]],ax),orient([B[0],B[2],B[3]],ax));
+  } else {
+    const r=(+o.el.getAttribute("data-bar-d")||4)/2, n=32;
+    const ring=c=>{const A=[];for(let i=0;i<n;i++){const th=2*Math.PI*i/n;A.push(add(c,add(mul(u,r*Math.cos(th)),mul(w2,r*Math.sin(th)))));}return A;};
+    const R0=ring(p0), R1=ring(p1);
+    for(let i=0;i<n;i++){ const j=(i+1)%n, th=2*Math.PI*(i+0.5)/n, rad=add(mul(u,Math.cos(th)),mul(w2,Math.sin(th)));
+      t.push(orient([R0[i],R0[j],R1[j]],rad),orient([R0[i],R1[j],R1[i]],rad)); }
+    for(let i=0;i<n;i++){ const j=(i+1)%n; t.push(orient([p0,R0[i],R0[j]],mul(ax,-1)),orient([p1,R1[i],R1[j]],ax)); }   // round caps
+  }
+  return t;
+}
 function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
+  if(o.el.getAttribute("data-bar")==="1") return barTris(o);   // a line extruded as a rod / stick (3D-only; combine with parts to bore or add)
   if(o.el.hasAttribute("data-brick")){
     const bz=g("data-z0");   // Base: how far the brick sits above the build plate
     return liftTris(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"),o.el.getAttribute("data-inv")==="1"),
@@ -1807,7 +1843,8 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
-  let bodies=bricks.concat(plain);
+  const bars=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1"&&o.poly&&o.poly.length>=2);   // lines extruded as rods/sticks
+  let bodies=bricks.concat(plain).concat(bars);
   if(onlyIds && onlyIds.size){
     const grp=new Set(); bodies.forEach(o=>{ if(onlyIds.has(o.id) && o.group!=null) grp.add(o.group); });
     bodies=bodies.filter(o=> onlyIds.has(o.id) || (o.group!=null && grp.has(o.group)) );   // whole groups, never a fragment
@@ -3028,7 +3065,7 @@ function dimText(o){
     html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
       "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
   }
-  if(mode3D && !o.el.hasAttribute("data-brick")){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath
+  if(mode3D && !o.el.hasAttribute("data-brick") && objClosed(o)){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath (closed shapes only - an open line has no top face)
     const st=o.el.getAttribute("data-studs")==="1", sk=o.el.getAttribute("data-sockets")==="1";
     html+='<div style="margin-top:.45rem">'
       +flag("studs","Studs (top)",st,"LEGO studs on the top face, on the 8 mm grid wherever one fits. Click a stud on the mat to remove it.")
@@ -3050,6 +3087,21 @@ function dimText(o){
       html+='</div>';
     }
   }
+  if(mode3D && t==="polyline" && o.poly && o.poly.length===2){   // a straight line can become a 3D BAR (rod / stick): a hole when subtracted from a part, a peg when added
+    const barOn=o.el.getAttribute("data-bar")==="1", shp=o.el.getAttribute("data-bar-shape")||"round";
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +flag("bar","3D bar (rod / stick)",barOn,"Turn this line into a solid 3D bar running along its length, at the Base height. Combine it with a part: Difference bores a hole, Union adds a peg.");
+    if(barOn){
+      const opt=(v,l,val)=>'<option value="'+v+'"'+(shp===val?' selected':'')+'>'+l+'</option>';
+      const rowc=(a,b)=>'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(a)+'<td style="width:1rem"></td>'+cell(b)+'</tr></table>';
+      html+='<div style="margin-top:.3rem">Cross-section <select class="dimin" data-dim="barshape" style="width:auto;text-align:left">'
+        +opt(0,"round","round")+opt(1,"rectangle","rect")+'</select></div>';
+      html+= shp==="rect" ? rowc(["Width",R("data-bar-w")||4,"barw"],["Thickness",R("data-bar-h")||4,"barh"])
+                          : rowc(["Diameter",R("data-bar-d")||4,"bard"],null);
+      html+= rowc(["Base (height)",R("data-z0"),"z0"],null);   // Base sets the bar's height above the plate
+    }
+    html+='</div>';
+  }
   return html;
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
@@ -3062,6 +3114,10 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
   if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
+  if(dim==="barshape"){ o.el.setAttribute("data-bar-shape", v===0?"round":"rect"); showDims(o); pvRefresh(); return; }       // 3D bar cross-section: round vs rectangle (swaps which size fields show)
+  if(dim==="bard"){ o.el.setAttribute("data-bar-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar diameter (round)
+  if(dim==="barw"){ o.el.setAttribute("data-bar-w",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar width (rect)
+  if(dim==="barh"){ o.el.setAttribute("data-bar-h",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar thickness (rect)
   if(!mode3D && units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm. In 3D the field shows mm (see cell()), so the typed value is already mm - no conversion.
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
@@ -3130,6 +3186,11 @@ function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEG
     else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
     showDims(o); pvRefresh(); return; }
   if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
+  if(flag==="bar"){   // turn a line into a 3D bar: seed a round 4 mm rod at a visible height, off strips every bar attribute
+    if(on){ o.el.setAttribute("data-bar","1"); if(!o.el.getAttribute("data-bar-shape")) o.el.setAttribute("data-bar-shape","round");
+      if(!(+o.el.getAttribute("data-bar-d")>0)) o.el.setAttribute("data-bar-d","4"); if(!(+o.el.getAttribute("data-z0")>0)) o.el.setAttribute("data-z0","5"); }
+    else { ["data-bar","data-bar-shape","data-bar-d","data-bar-w","data-bar-h"].forEach(a=>o.el.removeAttribute(a)); }
+    showDims(o); draw(); pvRefresh(); return; }
   if(flag!=="studs" && flag!=="sockets") return;
   o.el.setAttribute(flag==="studs"?"data-studs":"data-sockets", on?"1":"0"); showDims(o); draw(); pvRefresh(); }   // draw(): the connector overlay on the mat
 const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
