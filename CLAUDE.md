@@ -254,7 +254,10 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
 - **Sloped tops = per-edge "roof" (`roofTris`, Stage A + B DONE, validated 2026-07-23).** Any side of a CONVEX
   extruded top can ramp inward independently, set by ANGLE (deg from vertical, 0 = flat), uniform or asymmetric.
   Every ramp keeps a short vertical **lip** (`ROOF_LIP` = 0.6 mm) so it never tapers to an unprintable feather
-  edge. An inward-sloped solid on a convex base is itself convex, so the mesh is the **3D convex hull** (`rfHull`,
+  edge. **Invert** (`data-slope-inv`, an *Invert* checkbox shown once there is a slope/cone) mirrors the roof in
+  Z — the top stays full and flat, the UNDERSIDE falls away — the shape that fills the underside of an overhang,
+  like a slope brick's invert (reflect + swap winding, so normals stay outward). An inward-sloped solid on a
+  convex base is itself convex, so the mesh is the **3D convex hull** (`rfHull`,
   incremental) of the base ring (z0), the lip ring (zL) and the top vertices (z1); the top vertices come from
   clipping the base inward by each edge's offset (`rfClip`/`rfTopVerts`), capped only so the feasible top is at
   least a point. That single construction covers a **truncated** top, a **ridge** (top = segment, a gable), and

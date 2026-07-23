@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.96 -->
+<!-- SANGALA_VERSION: 2026-07-23.97 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1299,12 +1299,14 @@ function rfHull(ptsIn){
   return faces.map(f=>[pts[f[0]].slice(),pts[f[1]].slice(),pts[f[2]].slice()]);
 }
 // base = footprint ring (mm), runs = per-edge TOP INSET (mm; 0 = a vertical wall). lip = printable rim height.
-function roofTris(baseIn,z0,z1,runsIn,lip){
+function roofTris(baseIn,z0,z1,runsIn,lip,inv){
   const base=rfOpen(baseIn), H=z1-z0; lip=Math.max(0,Math.min(lip||0,H*0.9)); const zL=z0+lip;
   const norms=rfNormals(base), {top,runs}=rfTopVerts(base,norms,runsIn.map(r=>Math.max(0,Math.min(r||0,H*40))));
   const pts=[]; base.forEach(p=>pts.push([p[0],p[1],z0])); base.forEach(p=>pts.push([p[0],p[1],zL]));
   (top.length?top:[base[0]]).forEach(p=>pts.push([p[0],p[1],z1]));
-  return rfHull(pts);
+  let tris=rfHull(pts);
+  if(inv){ const m=z0+z1, r=p=>[p[0],p[1],m-p[2]]; tris=tris.map(t=>[r(t[0]),r(t[2]),r(t[1])]); }   // INVERTED slope: mirror in Z (top stays full, the underside falls away) - reflect + swap winding to keep normals outward
+  return tris;
 }
 // A moderate-resolution circle ring for a CONE base (open). The cut circle's own poly is ~2 pts/mm, which is
 // far more than a smooth cone needs and would slow the hull - so cap the facet count here.
@@ -1901,16 +1903,17 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   // Sloped top ("roof"): each edge can ramp inward (see roofTris). Gated (Stage A) to AXIS-ALIGNED rectangles
   // with no sockets or holes - a socketed/holed top is not level, so a ramp would contradict it, and a sloped
   // top carries no studs. Per-edge angles come from data-slopes (or the legacy single slope); all-0 = flat.
+  const slopeInv = o.el.getAttribute("data-slope-inv")==="1";   // Invert: mirror the slope in Z (top stays full, the underside falls away - fills an overhang)
   if((t==="rect"||t==="polygon") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length)){
     const outer = t==="rect" ? [[g("x"),g("y")],[g("x")+g("width"),g("y")],[g("x")+g("width"),g("y")+g("height")],[g("x"),g("y")+g("height")]] : o.poly;
     if(isRectRing(outer)){
       const bb=bbox([outer]), gr=[[bb[0]-G,bb[1]-G],[bb[2]+G,bb[1]-G],[bb[2]+G,bb[3]+G],[bb[0]-G,bb[3]+G]];   // grown outline, canonical order: edge 0 front / 1 right / 2 back / 3 left
       const angles=rfEdgeAngles(o, gr);
-      if(angles.some(a=>a>0)) return roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP);
+      if(angles.some(a=>a>0)) return roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
     } else if(t==="polygon" && objClosed(o) && rfConvex(o.poly)){   // any convex outline (triangle, pentagon, ...): per-edge slope aligned to its own edges
       const base = G>0 ? offsetRing(o.poly,G) : rfOpen(o.poly);
       const angles=rfEdgeAngles(o, base);
-      if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP);
+      if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
     }
   }
   // Cone: a circle whose rim tapers inward toward the top (one angle for the whole rim). Moderate taper -> a
@@ -1918,7 +1921,7 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   if(t==="circle" && o.el.getAttribute("data-sockets")!=="1"){
     const cone=Math.max(0,Math.min(80,+o.el.getAttribute("data-cone")||0));
     if(cone>0){ const base=rfConeBase(g("cx"),g("cy"),g("r")+G), run=rfRuns([cone],z1-z0,ROOF_LIP)[0];
-      return roofTris(base, z0, z1, base.map(()=>run), ROOF_LIP); }
+      return roofTris(base, z0, z1, base.map(()=>run), ROOF_LIP, slopeInv); }
   }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
   let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
@@ -3005,7 +3008,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-cone","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -3014,7 +3017,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-cone","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -3337,14 +3340,18 @@ function dimText(o){
     else { body=''; for(let i=0;i<ang.length;i+=2){ body+='<tr>'+sf("Side "+(i+1),i)+'<td style="width:.8rem"></td>'+(i+1<ang.length?sf("Side "+(i+2),i+1):'<td></td><td></td><td></td>')+'</tr>'; } }
     html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
       +'<div class="hint" style="margin-bottom:.25rem" title="Ramp each side of the top inward. 0 = flat (a vertical wall). The angle is measured from vertical.">Slope each side (0 = flat)</div>'
-      +'<table style="border-collapse:collapse">'+body+'</table></div>';
+      +'<table style="border-collapse:collapse">'+body+'</table>'
+      +(ang.some(a=>a>0) ? '<div style="margin-top:.35rem">'+flag("slopeinv","Invert",o.el.getAttribute("data-slope-inv")==="1","Turn the slope upside down: the top stays full and flat, and the UNDERSIDE falls away instead - the shape that fills the underside of an overhang.")+'</div>' : '')
+      +'</div>';
   }
   if(mode3D && t==="circle" && o.el.getAttribute("data-sockets")!=="1"){   // a circle can taper to a cone (one angle for the whole rim)
     html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
       +'<div class="hint" style="margin-bottom:.25rem" title="Taper the rim inward toward the top. 0 = a straight cylinder; a moderate taper gives a truncated cone, a steep one a full cone (apex). Angle from vertical.">Cone taper (0 = straight)</div>'
       +'<table style="border-collapse:collapse"><tr><td style="text-align:left">Taper:</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="1" min="0" max="80" data-dim="cone" value="'+Math.round(R("data-cone"))+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td></tr></table></div>';
+      +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td></tr></table>'
+      +(R("data-cone")>0 ? '<div style="margin-top:.35rem">'+flag("slopeinv","Invert",o.el.getAttribute("data-slope-inv")==="1","Turn the cone upside down: the top stays full and the UNDERSIDE tapers away instead - fills the underside of an overhang.")+'</div>' : '')
+      +'</div>';
   }
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
     html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
@@ -3500,6 +3507,7 @@ function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEG
     showDims(o); pvRefresh(); return; }
   if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
   if(flag==="hole"){ if(on) o.el.setAttribute("data-role","hole"); else o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Hole; draw() redraws the dotted hole outline, pvRefresh re-evaluates any group it is in
+  if(flag==="slopeinv"){ o.el.setAttribute("data-slope-inv", on?"1":"0"); pvRefresh(); return; }   // invert a sloped shape / cone: the top stays full, the underside falls away
   if(flag==="bar"){   // turn a line into a 3D bar: seed a round 4 mm rod at a visible height, off strips every bar attribute
     if(on){ o.el.setAttribute("data-bar","1"); if(!o.el.getAttribute("data-bar-shape")) o.el.setAttribute("data-bar-shape","round");
       if(!(+o.el.getAttribute("data-bar-d")>0)) o.el.setAttribute("data-bar-d","4"); if(!(+o.el.getAttribute("data-z0")>0)) o.el.setAttribute("data-z0","5"); }
