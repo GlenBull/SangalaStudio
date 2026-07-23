@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.77 -->
+<!-- SANGALA_VERSION: 2026-07-23.78 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1870,38 +1870,11 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
   return tris;
 }
-// ---- nested Solid/Hole grouping (TinkerCAD-style): a group's solids union and its holes carve, evaluated
-// bottom-up so a hole is scoped to the level it was grouped at. gpath = [outermost .. innermost] group ids;
-// a plain (flat) group is a one-link path. Ungrouped: a solid stands alone, a lone hole is invisible. ----
+// ---- Grouping = BUNDLE (TinkerCAD-style): a group's members move and select together but each keeps its own
+// 3D geometry - solids stay separate printed pieces, and a shape marked Hole makes no material on its own.
+// Merging and carving are the Combine tool's job (baked), not the group's. gpath = [outermost..innermost]
+// group ids; a plain (flat) group is a one-link path, and Ungroup peels one level. ----
 function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[o.group]:[]); }
-function geomStamp(o){ const g=a=>o.el.getAttribute(a), t=o.el.tagName?o.el.tagName.toLowerCase():"";   // cheap change-signature to key the group cache
-  let s=o.id+"|"+(isHole(o)?"H":"S")+"|"+gpathOf(o).join(",")+"|";
-  if(o.mesh) return s+"m"+o.mesh.length+"|"+o.mesh[0].join(",")+"|"+o.mesh[o.mesh.length-1].join(",");
-  if(t==="rect") return s+"r"+["x","y","width","height","data-z","data-z0","data-slope-run","data-slope-dir","data-studs","data-sockets","data-fit"].map(g).join(",");
-  if(t==="circle") return s+"c"+["cx","cy","r","data-z","data-z0"].map(g).join(",");
-  return s+"p"+(o.poly?o.poly.map(p=>p[0]+","+p[1]).join(";"):"")+"|"+["data-z","data-z0","data-bar","data-bar-shape","data-bar-d","data-bar-w","data-bar-h"].map(g).join(",");
-}
-let _groupCache=new Map();
-function evalGroupTree(members,d){   // members share gpath[0..d-1]; returns one mesh: solids unioned, holes subtracted, subgroups resolved first
-  const leaves=members.filter(o=>gpathOf(o).length===d+1), sub=members.filter(o=>gpathOf(o).length>d+1);
-  const bySub=new Map(); sub.forEach(o=>{const k=gpathOf(o)[d+1]; if(!bySub.has(k))bySub.set(k,[]); bySub.get(k).push(o);});
-  const solids=[], holes=[];
-  leaves.forEach(o=>{ const m=bodyTris(o,false); if(m.length)(isHole(o)?holes:solids).push(m); });
-  bySub.forEach(sm=>{ const m=evalGroupTree(sm,d+1); if(m.length) solids.push(m); });   // a subgroup is a solid (a shape that may contain voids)
-  let acc = solids.length ? solids.reduce((a,m)=> a? mesh3D("union",a,m) : m, null) : [];
-  holes.forEach(h=>{ if(acc.length) acc=mesh3D("subtract",acc,h); });
-  return acc||[];
-}
-function evalNonBrick(bodies){   // -> list of piece meshes (one per top-level group / ungrouped solid), cached per group so unrelated drags don't recompute
-  const pieces=[], seen=new Set();
-  bodies.filter(o=>gpathOf(o).length===0 && !isHole(o)).forEach(o=>{ const m=bodyTris(o,false); if(m.length)pieces.push(m); });   // ungrouped solid stands alone; a lone hole cuts nothing -> invisible
-  const byTop=new Map(); bodies.filter(o=>gpathOf(o).length>0).forEach(o=>{const k=gpathOf(o)[0]; if(!byTop.has(k))byTop.set(k,[]); byTop.get(k).push(o);});
-  byTop.forEach(members=>{ const sig=members.map(geomStamp).sort().join("~"); seen.add(sig);
-    let m=_groupCache.get(sig); if(!m){ m=evalGroupTree(members,0); _groupCache.set(sig,m); }
-    if(m.length)pieces.push(m); });
-  if(_groupCache.size>200) for(const key of [..._groupCache.keys()]) if(!seen.has(key)) _groupCache.delete(key);
-  return pieces;
-}
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
@@ -1912,7 +1885,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   let all=bricks.concat(plain).concat(bars).concat(meshes);
   if(onlyIds && onlyIds.size){
     const grp=new Set(); all.forEach(o=>{ if(onlyIds.has(o.id)){ const p=gpathOf(o); if(p.length)grp.add(p[0]); } });
-    all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group, never a fragment
+    all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group (bundle), never a fragment
   }
   const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
   const parts=[];
@@ -1920,7 +1893,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   const bmap=new Map();
   brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
   bmap.forEach(t=>parts.push(t));
-  evalNonBrick(nonBrick).forEach(m=>parts.push(m));   // solids union, holes carve, nested/stepwise
+  nonBrick.forEach(o=>{ if(isHole(o)) return; const t=bodyTris(o,false); if(t.length) parts.push(t); });   // each body is its OWN piece (bundle, no merge); a hole makes no material until Combined
   const list=parts.filter(p=>p.length);
   return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list};
 }
@@ -2499,8 +2472,15 @@ function makeMeshObj(footprint, mesh, kind){
 function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar or an already-baked part)
   const mA=operandMesh(o1), mB=operandMesh(o2);
   if(!mA||!mB){ say("To combine in 3D, give the solid part a Depth first - the 3D bar already has its own thickness."); return; }
-  const mesh=mesh3D(op==="diff"?"subtract":op, mA, mB);
-  if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
+  // Union honors the Solid/Hole flag (TinkerCAD-style): a shape marked Hole subtracts instead of adding, so
+  // Union combines everything - solids merge, holes carve. Difference/Intersect stay literal two-operand ops.
+  const carved = op==="union" && (isHole(o1)!==isHole(o2));
+  const mesh = op==="union"
+    ? ( isHole(o1)&&!isHole(o2) ? mesh3D("subtract",mB,mA)      // the hole (o1) cut out of the solid (o2)
+      : isHole(o2)&&!isHole(o1) ? mesh3D("subtract",mA,mB)      // the hole (o2) cut out of the solid (o1)
+      : mesh3D("union",mA,mB) )                                 // both solid (or both hole) -> merge
+    : mesh3D(op==="diff"?"subtract":op, mA, mB);
+  if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":carved?"The hole covers the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
   let fp;   // the flat outline shown on the mat (a pick target): the part's own outline when a bar is involved, else the union of the two footprints so it covers the whole result
   if(isBar(o1)||isBar(o2)){ const part=isBar(o1)?(isBar(o2)?o1:o2):o1; fp=part.poly.map(p=>[p[0],p[1]]); }
   else { const u=nestRings(boolShapes("union",{outer:o1.poly,holes:o1.holes||[]},{outer:o2.poly,holes:o2.holes||[]}));
@@ -2510,8 +2490,10 @@ function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar
   makeMeshObj(fp, mesh, o1.kind);
   selId=null; selId2=null; selMulti=[]; selNode=null;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
-  say({union:"Union",diff:"Difference",intersect:"Intersect"}[op]+" (3D): one solid part"
-      +(op==="diff"?", the 2nd shape cut out":op==="union"?", the two merged":", only the overlap kept")+" - keeps its Depth and Base. See it in the 3D view.");
+  say((carved?"Union (3D): the hole cut out of the solid"
+      :op==="diff"?"Difference (3D): the 2nd shape cut out"
+      :op==="union"?"Union (3D): the two merged"
+      :"Intersect (3D): only the overlap kept")+" - one solid part, keeps its Depth and Base. See it in the 3D view.");
 }
 function applyBool(op){
   const [o1,o2]=combineOperands();
@@ -3517,16 +3499,16 @@ function refreshEditPanel(){
     const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
     const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
     setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
-    $("editinfo").textContent = mode3D ? (isGroup?"Grouped: ":"")+selMulti.length+" shapes selected"+(isGroup?" - solids merge, any hole carves.":".")
+    $("editinfo").textContent = mode3D ? (isGroup?"Grouped: ":"")+selMulti.length+" shapes selected"+(isGroup?" - a bundle, they move together.":".")
                                        : (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none"; $("eBreak").style.display="none";
     $("groupsrow").style.display="block";
-    $("eGroup").textContent   = "▦ Group";                                            // in 3D a group's solids union and holes carve; grouping nests
+    $("eGroup").textContent   = "▦ Group";                                            // a group is a BUNDLE: members move together, each stays its own piece; grouping nests
     $("eUngroup").textContent = "▤ Ungroup";
     $("eUngroup").title = mode3D ? "Step back one grouping level - any inner group stays grouped (click it to select)." : "";
-    $("eGroup").title = mode3D ? "Group these in 3D: solids merge into one part and any shape marked Hole carves a void. Groups can nest." : "";
+    $("eGroup").title = mode3D ? "Bundle these so they move and select as one, each still its own piece. To merge or carve them into one part, use the Combine tool. Groups can nest." : "";
     $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     const mbrk=selectedBrick();                               // a grouped brick: offer its size controls too
     if(mode3D && mbrk){ $("editinfo").textContent="LEGO brick selected — adjust its size below."; }
@@ -3578,17 +3560,16 @@ $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
 // Group: bind the current multi-selection into one unit (shared .group / gpath id) so it moves/selects together.
-// In 3D the same binding drives the boolean build (evalGroupTree): the group's solids union and its holes carve
-// a void. Grouping nests, so Ungroup peels one level at a time (see groupSel/ungroupSel).
+// This is a BUNDLE in both modes - it never merges or carves geometry; each member stays its own piece. In 3D,
+// merging/carving is the Combine tool's job. Grouping nests, so Ungroup peels one level (see groupSel/ungroupSel).
 function groupSel(){   // NEST: the new group becomes the OUTERMOST level, so a later ungroup peels just this step (TinkerCAD-style)
-  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Group":"Group")+"."); return; }
+  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then Group."); return; }
   groupSeq++; const set=new Set(selMulti);
   objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); p.unshift(groupSeq); o.gpath=p; o.group=groupSeq; } });
   refreshEditPanel(); draw(); pvRefresh();
-  if(!mode3D){ say("Grouped "+selMulti.length+" objects - they select and move as one. Ungroup to separate them."); return; }
-  const holes=selMulti.filter(id=>{const o=objects.find(x=>x.id===id);return o&&isHole(o);}).length;
-  say("Grouped "+selMulti.length+" shapes - solids merge and "+(holes?holes+" hole"+(holes!==1?"s":"")+" carve":"holes would carve")
-    +" a void. Ungroup steps back one level.");
+  say(mode3D
+    ? "Grouped "+selMulti.length+" shapes - they move and select as one, but each stays its own piece (a bundle). To merge or carve them into a single part, use the Combine tool. Ungroup steps back one level."
+    : "Grouped "+selMulti.length+" objects - they select and move as one. Ungroup to separate them.");
 }
 function ungroupSel(){   // PEEL one level: remove the outermost group id from each selected member; the inner grouping (if any) survives
   const set=new Set(selMulti); let n=0;
