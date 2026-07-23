@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.82 -->
+<!-- SANGALA_VERSION: 2026-07-23.83 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3202,15 +3202,14 @@ const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;
   +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
 function dimText(o){
   if(!o||!o.el) return "";
-  if(o.mesh){   // a baked 3D part: footprint size is baked in, but Base (how high its lowest point sits above the plate) is a rigid vertical shift of the whole mesh
-    const msg='<div style="color:#8a7350;line-height:1.5">3D part (combined). Move it on the mat, Combine it again with another bar or part, or export it. Its footprint size is baked in'+(mode3D?' - but you can set its thickness and how high it sits:':'.')+'</div>';
-    if(!mode3D) return msg;
+  if(o.mesh){   // a baked 3D part: only its z is adjustable (thickness + elevation); footprint x/y is baked. No blurb - just the Depth/Base fields in 3D, nothing in 2D
+    if(!mode3D) return "";
     let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
     const b=isFinite(lo)?lo:0, d=isFinite(hi)?hi-b:0;
     const fld=(lab,key,val)=>'<td style="text-align:left">'+lab+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+MM_UNIT.step+'" data-dim="'+key+'" value="'+MM_UNIT.f(val)+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+MM_UNIT.lab+'</td>';
-    return msg+'<table style="border-collapse:collapse;margin-top:.35rem"><tr>'
+    return '<table style="border-collapse:collapse"><tr>'
       +fld("Depth","meshdepth",d)+'<td style="width:1.2rem"></td>'+fld("Base","meshbase",b)+'</tr></table>';
   }
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
