@@ -571,8 +571,10 @@ function loadSVG(text){
         return [p[0]*scale, p[1]*scale]; })); }                  // leaves the holes at their old coords - the window drifts off the frame on reimport.
     objects.push(o);
   });
-  if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
+  if(!cutObjs().length && !scoreObjs().length && !objects.some(o=>isBar(o)||o.mesh)){say("No cut lines found in that SVG.");clearDoc();return;}   // a 3D-only design (bars / combined parts) is valid though it has no cut lines
   if(!silo) normalize();
+  objects.forEach(o=>{ if(o.el&&o.el.getAttribute&&o.el.getAttribute("data-mesh")==="1"){ const mr=parseMeshRel(o.el.getAttribute("data-mesh-tris"));   // rebuild a baked 3D-Combine part's mesh, anchored to its (now normalized) footprint
+    if(mr&&o.poly){ const [ox,oy]=meshAnchor(o.poly); o.mesh=mr.map(t=>t.map(v=>[v[0]+ox,v[1]+oy,v[2]])); } } });
   bgImg=null; renderBg();
   draw(); refreshEditPanel();
   if(pvOn){                                  // opening a design while the 3D View is up must REPLACE what it shows: the
@@ -1192,7 +1194,7 @@ async function saveSVG(){
   const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
   objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
     if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group");
-    syncHolesToEl(o); });
+    syncHolesToEl(o); syncMeshToEl(o); });
   const clone=svgEl.cloneNode(true);
   clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
   clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
@@ -1585,6 +1587,20 @@ function parseHoles(el){ const s=el&&el.getAttribute&&el.getAttribute("data-hole
 function syncHolesToEl(o){ if(!o||!o.el||!o.el.setAttribute) return;
   if(o.holes&&o.holes.length) o.el.setAttribute("data-holes", o.holes.map(h=>h.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")).join(";"));
   else if(o.el.removeAttribute) o.el.removeAttribute("data-holes"); }
+// data-mesh-tris carries a baked 3D-Combine part's triangle mesh (design mm, x,y,z) so a combined part survives
+// Save SVG -> reopen. Stored RELATIVE to the footprint's bbox min corner, so Save SVG's viewBox crop (a pure
+// shift of x,y) cancels out on reload; z is height and stays absolute. o.mesh is the in-memory source of truth.
+function meshAnchor(poly){ let ox=1e9,oy=1e9; (poly||[]).forEach(p=>{ if(p[0]<ox)ox=p[0]; if(p[1]<oy)oy=p[1]; }); return [ox===1e9?0:ox, oy===1e9?0:oy]; }
+function parseMeshRel(s){ if(!s) return null;
+  const tris=s.split(";").map(t=>t.trim()).filter(Boolean)
+    .map(t=>t.split(/\s+/).map(v=>{const c=v.split(","); return [parseFloat(c[0]),parseFloat(c[1]),parseFloat(c[2])];}))
+    .filter(t=>t.length===3 && t.every(v=>isFinite(v[0])&&isFinite(v[1])&&isFinite(v[2])));
+  return tris.length? tris : null; }
+function syncMeshToEl(o){ if(!o||!o.el||!o.el.setAttribute) return;
+  if(o.mesh&&o.mesh.length&&o.poly){ const [ox,oy]=meshAnchor(o.poly);
+    o.el.setAttribute("data-mesh","1");
+    o.el.setAttribute("data-mesh-tris", o.mesh.map(t=>t.map(v=>fmtn(v[0]-ox)+","+fmtn(v[1]-oy)+","+fmtn(v[2])).join(" ")).join(";")); }
+  else if(o.el.removeAttribute){ o.el.removeAttribute("data-mesh"); o.el.removeAttribute("data-mesh-tris"); } }
 // Nest boolean-result rings into outers that each carry their holes. A ring whose interior point sits inside an
 // ODD number of the others is a hole of the smallest ring containing it (even -> an outer). For a plain
 // Difference (inner fully inside outer) this yields one outer + one hole; when nothing contains anything each
@@ -2077,7 +2093,8 @@ function serializeState(){
       tag: (o.el&&o.el.tagName)? o.el.tagName.toLowerCase():null,
       attrs: (o.el&&o.el.attributes)? Array.from(o.el.attributes).map(a=>[a.name,a.value]):[],
       kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null,
-      holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:o.group })) };
+      holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+      mesh: o.mesh? o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:o.group })) };   // a baked 3D-Combine part carries its mesh through Undo/Redo too
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
   if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
@@ -2090,7 +2107,8 @@ function restoreState(st){
   objects = st.objs.map(so=>{ let el=null;
     if(so.tag){ el=document.createElementNS(SVGNS,so.tag); so.attrs.forEach(a=>el.setAttribute(a[0],a[1])); svgEl.appendChild(el); }
     return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null,
-             holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:so.group }; });
+             holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+             mesh: so.mesh? so.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:so.group }; });
   objSeq=st.objSeq; groupSeq=st.groupSeq; printFile=st.printFile;
   selId=null; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();
