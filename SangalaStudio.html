@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.89 -->
+<!-- SANGALA_VERSION: 2026-07-23.90 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3290,6 +3290,19 @@ function scaleDepth(o,s){
   if(!o.el||!o.el.getAttribute||o.el.hasAttribute("data-brick")||!(s>0)||Math.abs(s-1)<1e-9) return;
   const z=+o.el.getAttribute("data-z")||0; if(z>0) o.el.setAttribute("data-z", fmtn(Math.max(0.1, z*s)));
 }
+// The other half of Lock ratio in 3D: a Depth edit scales the 2D footprint (Width/Height) by the same factor,
+// anchored like the Width/Height edits (rect: its x,y corner; circle: center; polygon: bbox min).
+function scaleFootprint(o,s){
+  if(!o.el||!o.el.getAttribute||o.el.hasAttribute("data-brick")||!(s>0)||Math.abs(s-1)<1e-9) return;
+  const t=o.el.tagName.toLowerCase(), N=x=>+o.el.getAttribute(x)||0;
+  if(t==="rect"){ const x=N("x"),y=N("y"),nw=Math.max(1,N("width")*s),nh=Math.max(1,N("height")*s);
+    o.el.setAttribute("width",fmtn(nw)); o.el.setAttribute("height",fmtn(nh));
+    o.poly=[[x,y],[x+nw,y],[x+nw,y+nh],[x,y+nh],[x,y]]; }
+  else if(t==="circle"){ const cx=N("cx"),cy=N("cy"),nr=Math.max(0.25,N("r")*s);
+    o.el.setAttribute("r",fmtn(nr)); o.poly=circlePoly(cx,cy,nr); }
+  else if(t==="polygon"||t==="polyline"){ const bb=bbox([o.poly]),minX=bb[0],minY=bb[1], sp=p=>[minX+(p[0]-minX)*s,minY+(p[1]-minY)*s];
+    o.poly=o.poly.map(sp); if(o.holes)o.holes=o.holes.map(h=>h.map(sp)); placeEl(o); }
+}
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
@@ -3304,7 +3317,10 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
       const cur=hi-lo, s=cur>1e-6 ? Math.max(0.1,v)/cur : 1;
       if(s!==1){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],lo+(p[2]-lo)*s])); if(!live) syncMeshToEl(o); } }
     if(!live)showDims(o); pvRefresh(); return; }
-  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
+  if(dim==="z"||dim==="z0"){
+    if(dim==="z" && mode3D && o.el.getAttribute("data-lockratio")==="1"){   // Lock ratio (symmetric): a Depth edit scales Width/Height to match
+      const oldZ=+o.el.getAttribute("data-z")||0; if(oldZ>1e-6 && v>0.1) scaleFootprint(o, v/oldZ); }
+    o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
   if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
