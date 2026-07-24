@@ -233,7 +233,13 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     and select together, but it NEVER merges or carves geometry — each member stays its own printed piece,
     and a shape marked *Hole* makes no material on its own. `buildTris` emits one part per non-brick body and
     skips holes; grouping does not touch the 3D geometry at all. Grouping **nests** (`gpath =
-    [outermost..innermost]`, `o.group` = `gpath[0]`), so **Ungroup peels one level** (stepwise). Persists via
+    [outermost..innermost]`, `o.group` = `gpath[0]`), so **Ungroup peels one level** (stepwise). **You build a
+    nested group by Shift+clicking (TinkerCAD-style): select a group, Shift+click a new shape to ADD it, then
+    Group.** The click handler's Shift branch grows `selMulti` (adding the clicked object's WHOLE outermost
+    group) so a group + a new shape becomes one Group-able selection; two loose single shapes still set
+    `selId2` (the Combine 2nd operand, also Group-able as a pair), and any 3rd pick or a group operand promotes
+    to `selMulti`. (Before this, Shift+click only set `selId2` and only when a single shape was selected, so a
+    group could never gain a member — the bug Glen hit.) Persists via
     Save SVG (`data-gpath`, space-joined; legacy `data-group` = one level), Undo/Redo, copy. (The earlier
     live union+carve group build — `evalGroupTree`/`evalNonBrick`/`geomStamp`/`_groupCache` — was REMOVED;
     Glen's rule: "a Group that is really a Union" is wrong. Bricks still weld via `FUSE_GROW`/`offsetRing`

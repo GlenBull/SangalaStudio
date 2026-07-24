@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.101 -->
+<!-- SANGALA_VERSION: 2026-07-24.102 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3938,9 +3938,22 @@ cv.addEventListener("click",(e)=>{
     if(!fillOf(o) || !o.poly || o.poly.length<3 || !objClosed(o)) continue;
     if(ptInPoly(mx,my,placePoly(o.poly))){ hit=o; break; } }
   const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
-  if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
-    if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
-    else if(onImg && refImg && refImg.img){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
+  if(e.shiftKey && activeTool!=="node" && (selMulti.length || selId!=null)){   // Shift+click builds up a selection to Group (or, for two loose shapes, to Combine)
+    const wholeGroup = ob => (ob && ob.group!=null) ? objects.filter(z=>z.group===ob.group).map(z=>z.id) : (ob?[ob.id]:[]);   // clicking any member pulls in its whole (outermost) bundle
+    if(hit){
+      if(selMulti.length){                            // already a multi / group selection -> ADD the clicked object's whole group (bundle a group with a new shape, TinkerCAD-style)
+        const s=new Set(selMulti); wholeGroup(hit).forEach(id=>s.add(id));
+        selMulti=[...s]; selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+        say("Added to the selection - "+selMulti.length+" objects. Group to bundle them (Shift+click more to keep adding)."); }
+      else if(hit.id!==selId){
+        const sel1=objects.find(x=>x.id===selId);
+        if(selId2!=null || hit.group!=null || (sel1&&sel1.group!=null)){   // a group is involved, or this is a 3rd pick -> a 2-operand Combine no longer fits; promote to a Group-able multi-selection
+          const s=new Set([...wholeGroup(sel1), ...(selId2!=null?wholeGroup(objects.find(x=>x.id===selId2)):[]), ...wholeGroup(hit)]);
+          selMulti=[...s]; selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+          say("Selected "+selMulti.length+" objects. Group to bundle them."); }
+        else { selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect, or Group to bundle them."); } }   // two loose single shapes: the Combine 2nd operand, still Group-able as a pair
+    }
+    else if(onImg && refImg && refImg.img && selId!=null){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
   } else if(hit && hit.group!=null && activeTool!=="node"){   // a grouped object -> select the whole group (moves/deletes as one).
     selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;   // EXCEPT the Node tool, which edits ONE shape - it falls through below and picks the individual object out of the group (e.g. the frame of a tabbed shadowbox)
     say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
