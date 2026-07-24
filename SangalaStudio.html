@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.109 -->
+<!-- SANGALA_VERSION: 2026-07-24.110 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -114,9 +114,8 @@
   <div class="logo" id="brand"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
-    <button class="tbtn" id="bSaveProj" title="Save a Sangala project (.project) - reopens exactly as it is now"><span class="glyph">💾</span><small>Save</small></button>
+    <button class="tbtn" id="bSaveProj" title="Save your design - as an SVG for TinkerCAD or the die cutter, or as a Sangala project (.project) that reopens exactly as it is now"><span class="glyph">💾</span><small>Save</small></button>
     <button class="tbtn" id="bOpen" title="Open a Sangala project (.project), an SVG design, or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
-    <button class="tbtn" id="bSave" title="Export an SVG for TinkerCAD or the die cutter (re-sampled on reopen; use Save for an exact project)"><span class="glyph">📄</span><small>Export SVG</small></button>
     <button class="tbtn" id="bStl" style="display:none" title="Export an STL for 3D printing"><span class="glyph">🔷</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
@@ -186,6 +185,10 @@
   <button id="mManual">🕹️ Manual Align</button>
   <button id="mUnload">⏏️ Unload Mat</button>
   <button id="mRaw">⌨️ Send GPGL…</button>
+</div>
+<div id="savemenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <button id="mSaveSvg" title="Export an SVG for TinkerCAD or the die cutter (re-sampled on reopen)">📄 Save as SVG</button>
+  <button id="mSaveProj" title="Save a Sangala project (.project) - reopens exactly as it is now">💾 Save project</button>
 </div>
 <div id="jogpanel" class="panel" style="position:fixed;z-index:30;display:none;width:250px">
     <h2 class="marker">Manual registration</h2>
@@ -1251,7 +1254,6 @@ async function saveSVG(){
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   say("Saved sangala-design.svg"+size);
 }
-$("bSave").onclick=saveSVG;
 // ---- Project file (.project): the EXACT app state, so a design reopens as it was saved. Unlike Export SVG (an
 // interchange file that re-samples geometry and classifies by stroke on reopen), this stores the verbatim object
 // snapshot (serializeState - the same one Undo restores, so no re-sampling) plus the globals SVG omits: the
@@ -1275,9 +1277,15 @@ async function saveProject(){
   ensureDoc();
   if(!objects.length){ say("Add a shape first, then Save."); return; }
   const name=await saveBlob(new Blob([JSON.stringify(collectProject())],{type:"application/json"}), "sangala-design.project", "Sangala project", ".project");
-  if(name) say("Saved "+name+" - reopens exactly as it is now. (Export SVG is for TinkerCAD / the die cutter; Export STL is for a 3D print.)");
+  if(name) say("Saved "+name+" - reopens exactly as it is now. (Save as SVG is for TinkerCAD / the die cutter; Export STL is for a 3D print.)");
 }
-$("bSaveProj").onclick=saveProject;
+// Save is a menu (mirrors Mosaic): Save as SVG (interchange for TinkerCAD / the die cutter) or Save project (.project, exact reopen).
+function closeSave(){ $("savemenu").style.display="none"; }
+$("bSaveProj").onclick=(e)=>{ e.stopPropagation(); const t=$("savemenu"), r=$("bSaveProj").getBoundingClientRect(); const open=t.style.display!=="flex";
+  if(open){ t.style.left=Math.max(8,r.left-20)+"px"; t.style.top=(r.bottom+8)+"px"; } t.style.display=open?"flex":"none"; };
+$("mSaveSvg").onclick=()=>{ closeSave(); saveSVG(); };
+$("mSaveProj").onclick=()=>{ closeSave(); saveProject(); };
+document.addEventListener("click",(e)=>{ const t=$("savemenu"); if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("bSaveProj").contains(e.target)) t.style.display="none"; });
 function openProject(text){
   let proj; try{ proj=JSON.parse(text); }catch(e){ say("That .project file could not be read."); return; }
   if(!proj || proj.sangala!=="project" || !proj.state){ say("That does not look like a Sangala project file."); return; }
