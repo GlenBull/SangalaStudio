@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.97 -->
+<!-- SANGALA_VERSION: 2026-07-23.98 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2515,11 +2515,22 @@ const mesh3D=(function(){
 // lying on another triangle's edge - the BSP splits one solid's face against the other's plane but not the
 // neighbor's shared edge, leaving edges shared by !=2 faces). Splitting each straddled edge at the vertices on
 // it makes the mesh manifold. Winding/orientation is preserved (each split fans from the opposite corner).
+// T-junction splits reuse EXISTING welded verts (no new points), so a spatial hash of the verts stays valid
+// through the whole pass - each edge tests only nearby verts, not all of them (a cone CSG can be thousands of
+// triangles; the naive all-verts scan froze the page). A huge-mesh backstop welds only, never hangs.
 function cleanMesh(tris, eps){
   eps=eps||1e-4;
   const verts=[], vmap=new Map(), vkey=p=>Math.round(p[0]/eps)+","+Math.round(p[1]/eps)+","+Math.round(p[2]/eps);
   const vidx=p=>{ const k=vkey(p); if(vmap.has(k)) return vmap.get(k); const i=verts.length; verts.push([p[0],p[1],p[2]]); vmap.set(k,i); return i; };
   let faces=tris.map(t=>[vidx(t[0]),vidx(t[1]),vidx(t[2])]).filter(f=>f[0]!==f[1]&&f[1]!==f[2]&&f[2]!==f[0]);
+  const emit=()=>faces.map(f=>[verts[f[0]].slice(),verts[f[1]].slice(),verts[f[2]].slice()]);
+  if(faces.length>50000) return emit();   // pathological CSG blow-up: weld-only backstop, never freeze
+  let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9]; for(const v of verts)for(let k=0;k<3;k++){ if(v[k]<mn[k])mn[k]=v[k]; if(v[k]>mx[k])mx[k]=v[k]; }
+  const diag=Math.hypot(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1, cell=Math.max(eps*10, diag/40);
+  const ci=p=>[Math.floor(p[0]/cell),Math.floor(p[1]/cell),Math.floor(p[2]/cell)];
+  const hash=new Map(); for(let vi=0;vi<verts.length;vi++){ const c=ci(verts[vi]), k=c[0]+","+c[1]+","+c[2]; if(!hash.has(k))hash.set(k,[]); hash.get(k).push(vi); }
+  const near=(a,b)=>{ const c0=ci([Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.min(a[2],b[2])]), c1=ci([Math.max(a[0],b[0]),Math.max(a[1],b[1]),Math.max(a[2],b[2])]), out=[];
+    for(let x=c0[0];x<=c1[0];x++)for(let y=c0[1];y<=c1[1];y++)for(let z=c0[2];z<=c1[2];z++){ const arr=hash.get(x+","+y+","+z); if(arr) for(const vi of arr) out.push(vi); } return out; };
   const onSeg=(p,a,b)=>{ const ab=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], ap=[p[0]-a[0],p[1]-a[1],p[2]-a[2]], L2=ab[0]*ab[0]+ab[1]*ab[1]+ab[2]*ab[2];
     if(L2<eps*eps) return -1; const t=(ap[0]*ab[0]+ap[1]*ab[1]+ap[2]*ab[2])/L2; if(t<=1e-6||t>=1-1e-6) return -1;
     const dx=p[0]-(a[0]+ab[0]*t), dy=p[1]-(a[1]+ab[1]*t), dz=p[2]-(a[2]+ab[2]*t); return Math.hypot(dx,dy,dz)<eps ? t : -1; };
@@ -2527,12 +2538,12 @@ function cleanMesh(tris, eps){
   while(changed && guard++<20){ changed=false; const out=[];
     for(const f of faces){ let sp=null;
       for(let e=0;e<3;e++){ const ia=f[e], ib=f[(e+1)%3], ic=f[(e+2)%3], a=verts[ia], b=verts[ib], on=[];
-        for(let vi=0;vi<verts.length;vi++){ if(vi===ia||vi===ib||vi===ic) continue; const t=onSeg(verts[vi],a,b); if(t>0) on.push([t,vi]); }
+        for(const vi of near(a,b)){ if(vi===ia||vi===ib||vi===ic) continue; const t=onSeg(verts[vi],a,b); if(t>0) on.push([t,vi]); }
         if(on.length){ on.sort((u,w)=>u[0]-w[0]); sp={ia,ib,ic,on:on.map(o=>o[1])}; break; } }
       if(!sp){ out.push(f); continue; }
       changed=true; const chain=[sp.ia, ...sp.on, sp.ib]; for(let i=0;i+1<chain.length;i++) out.push([sp.ic, chain[i], chain[i+1]]); }
     faces=out; }
-  return faces.map(f=>[verts[f[0]].slice(),verts[f[1]].slice(),verts[f[2]].slice()]);
+  return emit();
 }
 // Is this operand a 3D SOLID (has real volume)? A bar, a baked part, or a shape given a Depth. Combining two
 // of these must go through the 3D boolean - the flat 2D one rebuilds a depthless outline, dropping Depth and

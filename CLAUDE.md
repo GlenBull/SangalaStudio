@@ -239,7 +239,10 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     neighbor's shared edge → edges shared by ≠2 faces → slicers flag "non-manifold"), so `bool3D` runs the
     result through **`cleanMesh`** (weld coincident verts + split each straddled edge at the vertices on it,
     winding preserved) → manifold STL, volume unchanged. Validated `cleanmesh.js` (nm→0, vol diff ~1e-14).
-    Cleaning is at bake time; a part combined before this fix needs a re-Combine to clean up.
+    Cleaning is at bake time; a part combined before this fix needs a re-Combine to clean up. **Perf:** the
+    T-junction test is spatial-hashed (splits reuse existing welded verts, so the hash is valid throughout) —
+    a naive all-verts scan froze the page on a cone CSG (thousands of tris); hashed it's ~8× faster (a
+    cone+cone union 1113→82 ms). A >50k-tri backstop welds only rather than hang.
   - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
     `#1a5fb4`, `data-role="hole"`) only produces an effect inside Combine — a bundled/ungrouped hole shows
     nothing in 3D until Combined.
