@@ -206,6 +206,14 @@ Fabricate panel — the most-used control, out of Setup — and **defaults to Ca
 most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** seeds the fields with Cardstock's values as a starting point and opens the Settings panel (`openSettings()`) to adjust (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
 the rest under a **Silhouette Settings** header: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
 blade 7, 2 passes.
+- **Grabbing a shape to move it: the whole INTERIOR is a grip, not just the thin outline.** In the select-tool
+  mousedown handler, an unselected body press picks the TOPMOST closed shape whose interior (`ptInPoly`) — or
+  outline (within 8 px) — is under the pointer, selects it, and starts the move in one gesture; you can grab a
+  DIFFERENT shape directly (it switches selection). It sets `suppressClick` so a press that doesn't drag still
+  holds the shape. Guarded by `!e.shiftKey` so Shift+click still builds a group / picks the Combine operand via
+  the click handler. (Before: an unfilled shape was grabbable only by its ~8 px outline — "hard to click in the
+  right place." The click handler's own interior selection still requires a fill, deliberately, for 2D
+  click-through; this is only the drag-to-move grab.) Grouped shapes are still grabbed by the group block above.
 
 ## Current state (as of handoff)
 - Full no-admin print-and-cut VALIDATED end-to-end on the Calibration Card:

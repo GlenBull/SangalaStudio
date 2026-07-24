@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.103 -->
+<!-- SANGALA_VERSION: 2026-07-24.104 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4152,7 +4152,19 @@ cv.addEventListener("mousedown",(e)=>{
     const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
     if(!(refImg&&refImg.sel) && !onImg && !objects.some(onObjId)){ marquee={x0:mx,y0:my,x1:mx,y1:my}; e.preventDefault(); return; }
   }
-  if(selId==null) return;
+  if(!e.shiftKey){   // Grab the topmost shape UNDER THE POINTER to move it - its whole INTERIOR is a grip, not
+    // just the thin outline (hunting for the exact stroke is what made a shape hard to pick up). Works with or
+    // without an existing selection, so you can grab a DIFFERENT shape directly. Grouped shapes are handled
+    // above; Shift is left alone so Shift+click still builds a group / picks the Combine operand (click handler).
+    const {mx,my,k}=evtMM(e); let pick=null;
+    for(let i=objects.length-1;i>=0;i--){ const c=objects[i]; if(!c.el||!c.poly||c.group!=null) continue;
+      const p=placePoly(c.poly); let on=false;
+      if(p.length>=3 && objClosed(c) && ptInPoly(mx,my,p)) on=true;
+      else for(let j=0;j+1<p.length;j++) if(segDist(mx,my,p[j][0],p[j][1],p[j+1][0],p[j+1][1])*k<=8){ on=true; break; }
+      if(on){ pick=c; break; } }
+    if(!pick){ if(selId==null) return; }   // pressed off every shape and nothing was selected -> nothing to grab
+    else { if(pick.id!==selId){ selId=pick.id; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; draw(); refreshEditPanel(); } suppressClick=true; }   // suppressClick: a body press selects AND holds the shape, so a click that doesn't drag won't deselect it
+  } else if(selId==null) return;   // Shift held with nothing selected: no move to start; let the click handler do the Shift+click
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
