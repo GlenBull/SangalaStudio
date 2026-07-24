@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.98 -->
+<!-- SANGALA_VERSION: 2026-07-23.99 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -397,7 +397,7 @@ const printPolys=()=>printObjs().map(o=>o.poly);
 function say(t){$("status").innerHTML=t;}
 let units="in";
 function offMM(v){return units==="in"?v*25.4:v;}
-function fmtn(v){return Math.round(v*100)/100;}
+function fmtn(v){ v=Math.round(v*100)/100; return isFinite(v)?v:0; }   // never emit NaN/Infinity: a "NaN" stored in an attribute poisons every read, the mesh, and freezes the CSG
 // Object dimensions honor the Units setting (the same one that drives Position). Only 2D lengths convert; the
 // 3D/LEGO params (Depth/Base/Fit/bore) stay mm - they're metric by nature (LEGO's 8 mm grid, a sub-mm clutch).
 const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
@@ -2009,7 +2009,7 @@ function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so B
   pvSetTris(b); renderPreview();
 }
 function renderPreview(){
-  const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
+  const pv=$("pv"), g=pv.getContext("2d",{willReadFrequently:true}), W=pv.width, H=pv.height;   // the z-buffer reads back every frame - hint the browser so getImageData is fast
   const bg=g.createLinearGradient(0,0,0,H); bg.addColorStop(0,"#dfe7ef"); bg.addColorStop(1,"#c3cedb");
   g.fillStyle=bg; g.fillRect(0,0,W,H);
   const ca=Math.cos(pvYaw),sa=Math.sin(pvYaw),ce=Math.cos(pvPitch),se=Math.sin(pvPitch);
@@ -2581,6 +2581,8 @@ function holeFootprint(o){
 function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar or an already-baked part)
   const mA=operandMesh(o1), mB=operandMesh(o2);
   if(!mA||!mB){ say("To combine in 3D, give the solid part a Depth first - the 3D bar already has its own thickness."); return; }
+  const finiteMesh=m=>m.every(t=>t.every(p=>isFinite(p[0])&&isFinite(p[1])&&isFinite(p[2])));   // a NaN vertex makes the BSP CSG recurse forever - refuse it rather than freeze
+  if(!finiteMesh(mA)||!finiteMesh(mB)){ say("One of these shapes has an invalid size or slope - fix or redraw it, then Combine again."); return; }
   // Union honors the Solid/Hole flag (TinkerCAD-style): a shape marked Hole subtracts instead of adding, so
   // Union combines everything - solids merge, holes carve. Difference/Intersect stay literal two-operand ops.
   const carved = op==="union" && (isHole(o1)!==isHole(o2));
