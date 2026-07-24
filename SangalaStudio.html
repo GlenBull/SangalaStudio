@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.106 -->
+<!-- SANGALA_VERSION: 2026-07-24.107 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -358,7 +358,7 @@ let penHover=null;           // Pen tool: current cursor (placed mm) for the rub
 let penObj=null;             // Pen tool: the open outline it picked up, if it is continuing one rather than starting fresh
 let penBase=0;               // Pen tool: how many of penPts came from the outline it picked up - undo stops here, since the Pen did not put those there
 let penUndone=[];            // Pen tool: points taken back with Ctrl-Z, ready for Ctrl-Y
-let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
+let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel, mask, trace}. Never cut/printed, but a .sangala project DOES keep it (source + mask + trace tuning).
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
@@ -1109,7 +1109,7 @@ function loadImageFile(file){
       refImg={img:img, x:(PAGE_W-w)/2, y:(PAGE_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
       $("bRemoveBg").disabled=false;
       selId=null; selId2=null; draw(); refreshEditPanel();
-      say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, or Remove BG to make a silhouette.");
+      say("Imported image (reference only - won't cut or print, but Save keeps it in the project). Drag to move, corner to resize, or Remove BG to make a silhouette.");
     };
     img.onerror=()=>say("Could not read that image file.");
     img.src=ev.target.result; };
@@ -1259,11 +1259,17 @@ $("bSave").onclick=saveSVG;
 // by the .sangala extension. (A traced reference PHOTO is not stored - it never was part of a save.)
 function collectProject(){
   const settings={}; ["force","speed","blade","passes","scale"].forEach(id=>{ const el=$(id); if(el) settings[id]=el.value; });
-  return { sangala:"project", version:1,
+  // An in-progress trace is part of the state: keep the source photo (data URL), its placement, the Remove-BG
+  // mask (so reopening never re-runs the ONNX model - the fast trace recomputes from it), and the trace tuning.
+  const refImage = (refImg && refImg.img && refImg.img.src) ? {
+      src: refImg.img.src, x:refImg.x, y:refImg.y, w:refImg.w, h:refImg.h,
+      mask: (refImg.mask && refImg.mask.toDataURL) ? refImg.mask.toDataURL("image/png") : null,
+      threshold: traceThreshold, pathomit: tracePathomit } : null;
+  return { sangala:"project", version:2,
     mode3D:mode3D, units:units, showMarks:showMarks,
     material: $("material")?$("material").value:null, offx: $("offx")?$("offx").value:null, offy: $("offy")?$("offy").value:null,
     settings: settings, view: {zoom:view.zoom, panX:view.panX, panY:view.panY},
-    state: serializeState() };
+    refImage: refImage, state: serializeState() };
 }
 async function saveProject(){
   ensureDoc();
@@ -1288,7 +1294,32 @@ function openProject(text){
   if(proj.view){ view.zoom=proj.view.zoom||1; view.panX=proj.view.panX||0; view.panY=proj.view.panY||0; clampPan(); updateZoomUI(); }
   setMode3D(!!proj.mode3D);                                   // last: re-lays the toolbar for the mode, then redraw
   draw(); refreshEditPanel(); pvRefresh();
+  if(proj.refImage && proj.refImage.src) restoreRefImage(proj.refImage);   // async: the photo (and any in-progress trace) reappears when it decodes
   say("Opened the project - restored exactly as saved"+(proj.mode3D?" (3D mode).":"."));
+}
+// Rebuild a saved reference photo + its in-progress trace. The photo decodes async, then the mask (if the
+// background was already removed) decodes and the fast trace recomputes from it - the ONNX model never re-runs.
+function restoreRefImage(ri){
+  if(ri.threshold!=null) traceThreshold=ri.threshold;
+  if(ri.pathomit!=null) tracePathomit=ri.pathomit;
+  const img=new Image();
+  img.onload=()=>{
+    refImg={img:img, x:ri.x, y:ri.y, w:ri.w, h:ri.h, sel:false, cutout:null, mask:null, confirmed:false};
+    if($("bRemoveBg")) $("bRemoveBg").disabled=false;
+    const finish=()=>{ draw(); refreshEditPanel(); };
+    if(ri.mask){ const m=new Image();
+      m.onload=()=>{ const c=document.createElement("canvas"); c.width=m.naturalWidth||m.width; c.height=m.naturalHeight||m.height;
+        c.getContext("2d").drawImage(m,0,0); refImg.mask=c;
+        try{ refImg.trace=SangalaBg.trace(refImg.mask,{threshold:traceThreshold,pathomit:tracePathomit}); }catch(e){ refImg.trace=null; }
+        if(refImg.trace && refImg.trace.paths && refImg.trace.paths.length && $("tracetune")){   // reopen the tune panel so the trace can be adjusted / confirmed
+          $("bUseCut").style.display=""; $("tracetune").style.display="block";
+          $("thrRange").value=traceThreshold; $("thrVal").textContent=traceThreshold; $("pomRange").value=tracePathomit; $("pomVal").textContent=tracePathomit; }
+        finish(); };
+      m.onerror=finish; m.src=ri.mask; }
+    else finish();
+  };
+  img.onerror=()=>say("The project opened, but its reference photo could not be restored.");
+  img.src=ri.src;
 }
 // native Save As (choose folder + name) with plain-download fallback; returns saved name or null
 async function saveBlob(blob,suggestedName,desc,ext){

@@ -208,12 +208,17 @@ on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut)
   the Silhouette settings (force/speed/blade/passes/scale), `material`, position (offx/offy), the Marks toggle,
   and `view`. `openProject()` runs `restoreState()` then re-applies those globals (`setUnits` FIRST — it rewrites
   the position fields — then restore their saved values; `setMode3D` LAST to re-lay the toolbar), and is routed
-  through the **Open** button by the `.sangala` extension (accept list + `openFile`). A traced reference PHOTO is
-  NOT stored (it never was part of a save). Icons: Save 💾, Export SVG 📄, Export STL 🔷 (avoid 📦 — the Mode(3D)
+  through the **Open** button by the `.sangala` extension (accept list + `openFile`). An **in-progress trace IS
+  stored** (`refImage`, format version 2): the source photo (data URL), placement, the Remove-BG **mask** (also a
+  data URL — so reopening recomputes the fast `SangalaBg.trace` from it and NEVER re-runs the ONNX model), and the
+  threshold/pathomit tuning. `restoreRefImage()` decodes it async (photo, then mask, then re-trace) and re-opens
+  the tune panel. A big photo makes a big project file — that is the accepted cost. Icons: Save 💾, Export SVG 📄,
+  Export STL 🔷 (avoid 📦 — the Mode(3D)
   button uses it). Why: Export SVG re-samples geometry (getCTM + Douglas-Peucker ~0.08 mm), re-derives kind from
   stroke, and doesn't carry mode/settings/photo — it is lossy for reload; the project file is the exact one.
   Validated: build+combine+group in 3D → project JSON (4.5 KB) → flip mode & Force, reopen → objects, mesh
-  volumes, gpaths, all attrs, mode, and settings restored identically (`project_test.js`, real `openProject`).
+  volumes, gpaths, all attrs, mode, and settings restored identically (`project_test.js`, real `openProject`);
+  and a reference photo + Remove-BG mask + trace + threshold/pathomit round-trips exactly (`refimg_test.js`).
 **Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen/**Custom**) sits BELOW the Make it! button in the
 Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
 most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** seeds the fields with Cardstock's values as a starting point and opens the Settings panel (`openSettings()`) to adjust (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
