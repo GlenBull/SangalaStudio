@@ -230,9 +230,7 @@ watertightness oracle (dev harness in the scratchpad). Bars and combined parts a
 excluded from the die cutter, drawn on the plan as a teal line (bar) or gray outline (part).
 - **Two mechanisms, cleanly split by role (settled 2026-07-23, Glen's design):**
   - **Group / Ungroup (details-panel buttons) = BUNDLE, in BOTH modes.** A group binds members so they move
-    and select together, but it NEVER merges or carves geometry — each member stays its own printed piece,
-    and a shape marked *Hole* makes no material on its own. `buildTris` emits one part per non-brick body and
-    skips holes; grouping does not touch the 3D geometry at all. Grouping **nests** (`gpath =
+    and select together; the objects stay separate and Ungroup-able (it is NOT a bake). Grouping **nests** (`gpath =
     [outermost..innermost]`, `o.group` = `gpath[0]`), so **Ungroup peels one level** (stepwise). **You build a
     nested group by Shift+clicking (TinkerCAD-style): select a group, Shift+click a new shape to ADD it, then
     Group.** The click handler's Shift branch grows `selMulti` (adding the clicked object's WHOLE outermost
@@ -277,8 +275,22 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     heavy iterated design (many high-facet holes) can still bloat past ~50k tris and then export non-manifold
     via the backstop — a coplanar-face merge is the follow-up cure if a real design hits it.
   - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
-    `#1a5fb4`, `data-role="hole"`) only produces an effect inside Combine — a bundled/ungrouped hole shows
-    nothing in 3D until Combined.
+    `#1a5fb4`, `data-role="hole"`). A **loose (ungrouped) hole still makes no material** — it shows nothing in
+    3D. But a hole **grouped** with solids now carves them in the LIVE preview (see next bullet), and Combine
+    still bakes.
+  - **Group-preview boolean (settled 2026-07-24, Glen's staging-ground request).** `buildTris` buckets the
+    non-brick bodies by their OUTERMOST group. A bundle with **no** hole stays a plain bundle (each solid its
+    own piece — non-touching shapes just coexist). A bundle that **holds a hole** previews the boolean: each
+    solid is carved (`mesh3D("subtract", …)`, weld-only) by every hole that reaches it — a hole that misses a
+    solid leaves it whole, a hole that covers one empties it. So a grouped solid+hole **renders AND exports**
+    as a solid-with-a-hole WITHOUT baking (WYSIWYG: `buildTris` is the single source for both the 3D preview
+    and the STL). The objects stay separate and Ungroup-able; Combine is still what bakes a single committed
+    mesh. **No forced union of solids** (overlapping solids stay separate parts — a slicer unions them) and
+    **no Intersect** — a bundle has no operator for "keep only the overlap"; that stays Combine-only. Cached
+    per bundle by a geometry stamp (`grpStamp` → `_grpPrev`) so orbiting never recomputes and only an edited
+    bundle rebuilds; camera moves call `renderPreview` (projection) not `buildTris`, so this never reintroduces
+    the old rotate-freeze. Validated: grouped solid+hole vol 12000→11000 (1000 carved), a disjoint solid in the
+    same group stays whole, a loose hole still emits nothing (`grouppreview_test.js`, real `buildTris`).
   - **Plan-view (2D) footprint of a baked part is operation-matched** so it reads true with 3D View off
     (`bool3D` computes it via `boolShapes` to mirror the op): a shape carve = solid **minus** cutter — the
     outline **notches** where the cutter bit an edge and shows a **dashed interior hole** where it was inside,

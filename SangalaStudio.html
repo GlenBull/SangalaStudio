@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.102 -->
+<!-- SANGALA_VERSION: 2026-07-24.103 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1953,6 +1953,13 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
 // Merging and carving are the Combine tool's job (baked), not the group's. gpath = [outermost..innermost]
 // group ids; a plain (flat) group is a one-link path, and Ungroup peels one level. ----
 function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[o.group]:[]); }
+// A bundle that contains a Hole PREVIEWS the boolean live (each solid carved by the holes that reach it) so a
+// grouped solid+hole shows the hole WITHOUT baking - a staging view before Combine (the objects stay separate
+// and Ungroup-able; Combine is still what bakes). Cached per bundle by a geometry stamp so orbiting never
+// recomputes and only an EDITED bundle rebuilds; the CSG runs on the fast weld-only path (see cleanMesh).
+let _grpPrev=new Map();   // outermost group id -> {stamp, outs:[mesh,...]}
+function grpStamp(members){ return members.map(o=>{ const e=o.el;
+    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
@@ -1971,7 +1978,28 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   const bmap=new Map();
   brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
   bmap.forEach(t=>parts.push(t));
-  nonBrick.forEach(o=>{ if(isHole(o)) return; const t=bodyTris(o,false); if(t.length) parts.push(t); });   // each body is its OWN piece (bundle, no merge); a hole makes no material until Combined
+  // Non-brick bodies group by their OUTERMOST bundle. A bundle with NO hole stays a plain bundle (each solid
+  // its own piece - non-touching shapes are fine, they just coexist). A bundle that HOLDS a hole previews the
+  // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
+  // so a grouped solid+hole renders and EXPORTS as a solid-with-a-hole without baking. No forced union of
+  // solids - Intersect and a single merged mesh stay the Combine tool's job.
+  const useCache = !(onlyIds && onlyIds.size);
+  const buckets=new Map();   // outermost group id (or "solo<id>" for ungrouped) -> members
+  nonBrick.forEach(o=>{ const g=gpathOf(o), key=g.length?g[0]:("solo"+o.id); if(!buckets.has(key))buckets.set(key,[]); buckets.get(key).push(o); });
+  buckets.forEach((members,key)=>{
+    const holes=members.filter(isHole), solids=members.filter(o=>!isHole(o));
+    if(!holes.length){ solids.forEach(o=>{ const t=bodyTris(o,false); if(t.length) parts.push(t); }); return; }   // bundle with no hole -> plain bundle
+    const stamp=grpStamp(members); let c=useCache?_grpPrev.get(key):null;
+    if(!c || c.stamp!==stamp){
+      const holeMeshes=holes.map(operandMesh).filter(m=>m&&m.length);
+      const outs=[];
+      solids.forEach(o=>{ let m=operandMesh(o); if(!m||!m.length) return;
+        for(const hm of holeMeshes){ m=cleanMesh(mesh3D("subtract",m,hm),1e-4,true); if(!m.length) break; }   // carve each hole; a full cover empties the solid (it vanishes), a miss leaves it unchanged
+        if(m.length) outs.push(m); });
+      c={stamp, outs}; if(useCache) _grpPrev.set(key,c);
+    }
+    c.outs.forEach(m=>{ if(m.length) parts.push(m); });
+  });
   const list=parts.filter(p=>p.length);
   return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list};
 }
