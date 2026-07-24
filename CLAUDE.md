@@ -183,6 +183,15 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
 - SVG read: getCTM() returns pixel space → convert px→mm with 25.4/96. For paths in
   <defs> (null CTM, e.g. Studio's <use>-instanced geometry) use raw user units × the
   svg's mm-per-unit scale. Drop any non-finite point's whole path.
+- **On load, a rect/circle/ellipse's own geometry attributes (x/y/w/h, cx/cy/r) are re-mapped through the
+  same getCTM into design-mm, because the 3D build (`bodyTris`) reads them straight off the element — a
+  polygon uses `o.poly`, but a rect/circle uses its attributes.** Without this a REOPENED shape extruded at
+  its raw file coordinates: Save SVG crops the viewBox to the design's bbox, which re-bases `o.poly` but not
+  the attributes, so a reopened rect/circle sat OFFSET in X,Y (by the old bbox-min) in 3D while the 2D sketch
+  looked right (Z was fine — only x/y drift). A drawn shape sets `el` and `poly` together so it was never
+  affected; the mismatch only showed when a new shape was drawn over an opened design. `normalize()` shifts
+  the element geometry in lockstep with `o.poly`. A rotated rect (skew in the CTM) is left as-is. Verified
+  against real Chromium getCTM (`ctm_math.js`): viewBox "50 30 100 80" maps a rect at (60,45) → (10,15).
 - Print files (silhouette-style SVGs) keep ABSOLUTE page coordinates. Registered cut
   coords = page coords − 15.9 mm (the mark origin). Print hides the red machine lines
   (like Studio's weight-0) and overlays the standard marks, so the inkjet prints
@@ -191,14 +200,40 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
   reintroduce it without checking direction.
 
 ## UI
-Toolbar: Connect · Open SVG · **Marks** (toggle, default OFF) · Print · **Test**
+Toolbar: Connect · **Save** (💾) · Open · **Export SVG** (📄) · **Export STL** (🔷, 3D only) · **Marks** (toggle, default OFF) · Print · **Test**
 (menu: Test square / Scan test / Manual align) · Settings (gear). Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
+- **Three file actions, distinct on purpose (2026-07-24):** **Save** writes a `.project` file (JSON) that
+  reopens EXACTLY as saved; **Export SVG** (was "Save SVG") writes an interchange SVG for TinkerCAD / the die
+  cutter; **Export STL** writes a 3D-print mesh. `.project` = `collectProject()` — the verbatim `serializeState()`
+  object snapshot (the SAME one Undo restores, so NO re-sampling) PLUS the globals SVG drops: `mode3D`, `units`,
+  the Silhouette settings (force/speed/blade/passes/scale), `material`, position (offx/offy), the Marks toggle,
+  and `view`. `openProject()` runs `restoreState()` then re-applies those globals (`setUnits` FIRST — it rewrites
+  the position fields — then restore their saved values; `setMode3D` LAST to re-lay the toolbar), and is routed
+  through the **Open** button by the `.project` extension (accept list + `openFile`). An **in-progress trace IS
+  stored** (`refImage`, format version 2): the source photo (data URL), placement, the Remove-BG **mask** (also a
+  data URL — so reopening recomputes the fast `SangalaBg.trace` from it and NEVER re-runs the ONNX model), and the
+  threshold/pathomit tuning. `restoreRefImage()` decodes it async (photo, then mask, then re-trace) and re-opens
+  the tune panel. A big photo makes a big project file — that is the accepted cost. Icons: Save 💾, Export SVG 📄,
+  Export STL 🔷 (avoid 📦 — the Mode(3D)
+  button uses it). Why: Export SVG re-samples geometry (getCTM + Douglas-Peucker ~0.08 mm), re-derives kind from
+  stroke, and doesn't carry mode/settings/photo — it is lossy for reload; the project file is the exact one.
+  Validated: build+combine+group in 3D → project JSON (4.5 KB) → flip mode & Force, reopen → objects, mesh
+  volumes, gpaths, all attrs, mode, and settings restored identically (`project_test.js`, real `openProject`);
+  and a reference photo + Remove-BG mask + trace + threshold/pathomit round-trips exactly (`refimg_test.js`).
 **Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen/**Custom**) sits BELOW the Make it! button in the
 Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
 most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** seeds the fields with Cardstock's values as a starting point and opens the Settings panel (`openSettings()`) to adjust (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
 the rest under a **Silhouette Settings** header: Force, Speed, Blade, Passes, Scale %, Units, Position. Heavy cardstock preset = force 33, speed 3,
 blade 7, 2 passes.
+- **Grabbing a shape to move it: the whole INTERIOR is a grip, not just the thin outline.** In the select-tool
+  mousedown handler, an unselected body press picks the TOPMOST closed shape whose interior (`ptInPoly`) — or
+  outline (within 8 px) — is under the pointer, selects it, and starts the move in one gesture; you can grab a
+  DIFFERENT shape directly (it switches selection). It sets `suppressClick` so a press that doesn't drag still
+  holds the shape. Guarded by `!e.shiftKey` so Shift+click still builds a group / picks the Combine operand via
+  the click handler. (Before: an unfilled shape was grabbable only by its ~8 px outline — "hard to click in the
+  right place." The click handler's own interior selection still requires a fill, deliberately, for 2D
+  click-through; this is only the drag-to-move grab.) Grouped shapes are still grabbed by the group block above.
 
 ## Current state (as of handoff)
 - Full no-admin print-and-cut VALIDATED end-to-end on the Calibration Card:
@@ -211,6 +246,128 @@ blade 7, 2 passes.
 - Open threads: adapt designs wider than the 8" (203 mm) Portrait width by re-nesting
   (no scaling); prepare a CAD Library entry (open SVG + metadata + instructions);
   a "Open from Library" linkage that fetches a design SVG by URL.
+
+## 3D bars and line-driven holes (feature branch `claude/repo-review-det4qo`)
+A straight line can be turned into a solid 3D **bar** (round or rectangular cross-section,
+placed by the line's XY + angle, height set by Base). Combining a bar with a part via
+**Difference / Union / Intersect** runs a true **3D boolean** (`mesh3D` — an inlined BSP CSG,
+plus `bool3D` / `operandMesh` / `makeMeshObj`), because a horizontal rod through a solid — or a
+hole through a curved or sloped part — has no flat 2D stand-in. Difference bores a hole, Union
+adds a peg, Intersect keeps the overlap. Validated by an independent point-membership +
+watertightness oracle (dev harness in the scratchpad). Bars and combined parts are **3D-only**:
+excluded from the die cutter, drawn on the plan as a teal line (bar) or gray outline (part).
+- **Two mechanisms, cleanly split by role (settled 2026-07-23, Glen's design):**
+  - **Group / Ungroup (details-panel buttons) = BUNDLE, in BOTH modes.** A group binds members so they move
+    and select together; the objects stay separate and Ungroup-able (it is NOT a bake). Grouping **nests** (`gpath =
+    [outermost..innermost]`, `o.group` = `gpath[0]`), so **Ungroup peels one level** (stepwise). **You build a
+    nested group by Shift+clicking (TinkerCAD-style): select a group, Shift+click a new shape to ADD it, then
+    Group.** The click handler's Shift branch grows `selMulti` (adding the clicked object's WHOLE outermost
+    group) so a group + a new shape becomes one Group-able selection; two loose single shapes still set
+    `selId2` (the Combine 2nd operand, also Group-able as a pair), and any 3rd pick or a group operand promotes
+    to `selMulti`. (Before this, Shift+click only set `selId2` and only when a single shape was selected, so a
+    group could never gain a member — the bug Glen hit.) Persists via
+    Save SVG (`data-gpath`, space-joined; legacy `data-group` = one level), Undo/Redo, copy. (The earlier
+    live union+carve group build — `evalGroupTree`/`evalNonBrick`/`geomStamp`/`_groupCache` — was REMOVED;
+    Glen's rule: "a Group that is really a Union" is wrong. Bricks still weld via `FUSE_GROW`/`offsetRing`
+    through `bodyTris(o,fuse)`.)
+  - **Combine (`bool3D`) = MERGE/CARVE, baked.** This is where geometry actually combines. **Union honors the
+    Solid/Hole flag** (TinkerCAD-style): a Hole operand subtracts, a solid unions — so Union alone does both
+    (solids merge, holes carve), validated by the oracle (`union_hole_test.js`, mism=0). **N-ary in 3D
+    (`bool3Dn`, 2026-07-24): Combine takes AS MANY shapes as are selected** — union merges every solid then
+    carves every hole; intersect keeps the region common to all. `applyBool` routes `selMulti` (2+) through
+    `bool3Dn` in `mode3D`; `bool3D(op,o1,o2)` is now a 2-operand shim over it, and `updateCombine` enables the
+    buttons for a 2+ multi-selection. Removes only the shapes it actually combined (a selected flat/no-Depth
+    shape is left alone), bakes ONE part with a footprint FOLDED to match the op. Validated: 3 chained solids +
+    1 hole → one part, vol 10000−360=9640; 3-box intersect → 1000 (`nary_test.js`/`nary_test2.js`, real
+    `applyBool`). **Menu is mode-specific:** 2D = Union / Difference / Intersect (two shapes); **3D = Union /
+    Intersect only** (`pDiff` hidden when `mode3D` — Difference is unneeded because Hole + Union carves).
+    Combine bakes one mesh, keeps Depth/Base,
+    and is destructive (undo/redo to reposition). A bar bores a hole by being marked Hole and Combined. The BSP
+    CSG (`mesh3D`) leaves T-junctions on subtract/intersect (a face split against one solid's plane but not the
+    neighbor's shared edge → edges shared by ≠2 faces → slicers flag "non-manifold"), so `bool3D` runs the
+    result through **`cleanMesh`** (weld coincident verts + split each straddled edge at the vertices on it,
+    winding preserved) → manifold STL, volume unchanged. Validated `cleanmesh.js` (nm→0, vol diff ~1e-14).
+    **Where the clean runs (settled 2026-07-24, iterated-Combine freeze fix):** `bool3D` bakes **weld-only**
+    (`cleanMesh(...,1e-4,true)` — weld coincident verts + drop degenerate slivers, but SKIP the T-junction
+    pass); the **full manifold clean runs once per piece at STL export** (`exportSTL` maps each `part` through
+    `cleanMesh`). Reason: the T-junction pass ADDS triangles (it splits straddled edges), and running it after
+    every Combine compounds across an iterated design — each new hole re-splits an ever-larger mesh, so the
+    COST was O(mesh) per hole and the page froze on the 4th-ish round hole cut into a many-combine solid (not
+    the CSG — the clean). Weld-only intermediates stay geometrically exact (volume tracks perfectly) and keep
+    their T-junctions until export, where slicers need manifold. Validated: 16 iterated holes each <300 ms,
+    NaN=0 throughout (`app_sim.js`); known-good CSG suite still nm→0 with identical volumes (`suite_new.js`).
+    A baked part therefore persists a weld-only (non-manifold-until-export) mesh in `data-mesh-tris`; the STL
+    is cleaned at export, and cleaning is per-piece (never across pieces, which would weld separate parts).
+    **CSG robustness (same fix):** `mesh3D` now DROPS degenerate (cross-length <1e-9) and non-finite triangles
+    from CSG input AND output, and `split` clamps a near-zero denominator (`|den|>1e-12 ? … : 0.5`) — an
+    iterated boolean was accumulating sliver triangles whose garbage plane-normals divided to NaN and made the
+    BSP recurse forever, which is why each successive hole "reported several NaN errors before resolving." With
+    the drop+clamp a sliver can no longer poison the next Combine. **Perf:** the T-junction test is
+    spatial-hashed (splits reuse existing welded verts, so the hash is valid throughout) — a naive all-verts
+    scan froze the page on a cone CSG (thousands of tris); hashed it's ~8× faster (a cone+cone union
+    1113→82 ms). A >50k-tri backstop welds only rather than hang. **Known remaining limit:** the BSP still
+    re-fragments flat faces each subtract (a slab top chopped by a cutter's infinite side-planes), so a VERY
+    heavy iterated design (many high-facet holes) can still bloat past ~50k tris and then export non-manifold
+    via the backstop — a coplanar-face merge is the follow-up cure if a real design hits it.
+  - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
+    `#1a5fb4`, `data-role="hole"`). A **loose (ungrouped) hole still makes no material** — it shows nothing in
+    3D. But a hole **grouped** with solids now carves them in the LIVE preview (see next bullet), and Combine
+    still bakes.
+  - **Group-preview boolean (settled 2026-07-24, Glen's staging-ground request).** `buildTris` buckets the
+    non-brick bodies by their OUTERMOST group. A bundle with **no** hole stays a plain bundle (each solid its
+    own piece — non-touching shapes just coexist). A bundle that **holds a hole** previews the boolean: each
+    solid is carved (`mesh3D("subtract", …)`, weld-only) by every hole that reaches it — a hole that misses a
+    solid leaves it whole, a hole that covers one empties it. So a grouped solid+hole **renders AND exports**
+    as a solid-with-a-hole WITHOUT baking (WYSIWYG: `buildTris` is the single source for both the 3D preview
+    and the STL). The objects stay separate and Ungroup-able; Combine is still what bakes a single committed
+    mesh. **No forced union of solids** (overlapping solids stay separate parts — a slicer unions them) and
+    **no Intersect** — a bundle has no operator for "keep only the overlap"; that stays Combine-only. Cached
+    per bundle by a geometry stamp (`grpStamp` → `_grpPrev`) so orbiting never recomputes and only an edited
+    bundle rebuilds; camera moves call `renderPreview` (projection) not `buildTris`, so this never reintroduces
+    the old rotate-freeze. Validated: grouped solid+hole vol 12000→11000 (1000 carved), a disjoint solid in the
+    same group stays whole, a loose hole still emits nothing (`grouppreview_test.js`, real `buildTris`).
+  - **Plan-view (2D) footprint of a baked part is operation-matched** so it reads true with 3D View off
+    (`bool3D` computes it via `boolShapes` to mirror the op): a shape carve = solid **minus** cutter — the
+    outline **notches** where the cutter bit an edge and shows a **dashed interior hole** where it was inside,
+    existing holes carried; union/intersect show the merged/overlap outline. The part draws gray, its openings
+    dashed-gray (distinct from a not-yet-combined hole's blue dots). Stored in `o.holes` (`data-holes`),
+    persisted, and moved/rotated/resized with the part; `bodyTris` ignores them (the mesh already has them).
+    A **bar** bore is the exception: it keeps the solid outline + a dashed swept-rectangle marker (an internal
+    bore does not breach the top face, so it must not notch the outline). Validated: `footprint_test2.js`.
+- **Sloped tops = per-edge "roof" (`roofTris`, Stage A + B DONE, validated 2026-07-23).** Any side of a CONVEX
+  extruded top can ramp inward independently, set by ANGLE (deg from vertical, 0 = flat), uniform or asymmetric.
+  Every ramp keeps a short vertical **lip** (`ROOF_LIP` = 0.6 mm) so it never tapers to an unprintable feather
+  edge. **Invert** (`data-slope-inv`, an *Invert* checkbox shown once there is a slope/cone) mirrors the roof in
+  Z — the top stays full and flat, the UNDERSIDE falls away — the shape that fills the underside of an overhang,
+  like a slope brick's invert (reflect + swap winding, so normals stay outward). An inward-sloped solid on a
+  convex base is itself convex, so the mesh is the **3D convex hull** (`rfHull`,
+  incremental) of the base ring (z0), the lip ring (zL) and the top vertices (z1); the top vertices come from
+  clipping the base inward by each edge's offset (`rfClip`/`rfTopVerts`), capped only so the feasible top is at
+  least a point. That single construction covers a **truncated** top, a **ridge** (top = segment, a gable), and
+  an **apex** (top = point, a pyramid/hip) — Stage B — all watertight and winding-agnostic. Replaces the old
+  one-axis `slopedBoxTris` wedge (removed; `yzPrism` stays for bricks, which keep their own slope path).
+  **Data:** `data-slopes` = per-edge angles aligned to the footprint's own edge order; legacy single
+  `data-slope-run`/`data-slope-dir` is read as a fallback and migrated on first edit. Persists via Save/Undo/copy.
+  **Gate:** axis-aligned rects (canonical Front -Y / Right +X / Back +Y / Left -X) OR any `rfConvex` polygon OR a
+  **circle → cone** (`data-cone` = one rim taper angle; `rfConeBase` gives a moderate-facet ring, roofed with a
+  uniform run — moderate = truncated cone, steep = full cone/apex); concave falls back to no slope (Stage C);
+  skipped with sockets/holes (a non-level top). **UI:** rects show named sides, other convex shapes show numbered
+  Side 1..N (focusing/hovering a field green-highlights that edge on the plan, `slopeHi`), a circle shows one
+  Cone taper field. Validated against the point-membership + watertightness oracle across square/triangle/
+  pentagon, uniform/asymmetric, truncated + ridge + apex, and clockwise inputs (scratchpad `roof.js`/`roofB.js`);
+  the ported app code reproduces the oracle volumes exactly (`app_roofB.js` check). **Next:** Stage C (concave
+  via straight skeleton), and possibly a circle → cone.
+- A 3D-Combine result is a **baked mesh**. It PERSISTS: `syncMeshToEl`/`parseMeshRel` store the
+  triangles in `data-mesh-tris` (relative to the footprint bbox-min, so a Save-SVG crop cancels), so
+  save/reopen and Undo/Redo (`serializeState` carries `o.mesh`) keep the part. It can be MOVED, ROTATED,
+  and RESIZED — the drag handlers carry the mesh through the same transform as the footprint (rotate spins
+  the mesh about the vertical axis; box-resize scales its x/y, `rotMeshTris` + the boxresize scale). **Full
+  z control in the details panel** (`mode3D` only): a baked part shows **Depth** (`data-dim="meshdepth"` —
+  scales every triangle's z about the base so the lowest point stays put and thickness grows upward, like a
+  shape's Depth extruding up from z0) and **Base** (`data-dim="meshbase"` — rigidly shifts all z so the lowest
+  point sits at the given height). Both leave footprint x/y untouched, update the preview live, persist via
+  `data-mesh-tris`, and carry through Undo/Redo. A z-scale about the base is a positive affine, so the mesh
+  stays watertight. (Footprint x/y still resize only via box-resize; the z fields cover thickness + elevation.)
 
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
