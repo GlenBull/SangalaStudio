@@ -198,9 +198,22 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
   reintroduce it without checking direction.
 
 ## UI
-Toolbar: Connect · Open SVG · **Marks** (toggle, default OFF) · Print · **Test**
+Toolbar: Connect · **Save** (💾) · Open · **Export SVG** (📄) · **Export STL** (🔷, 3D only) · **Marks** (toggle, default OFF) · Print · **Test**
 (menu: Test square / Scan test / Manual align) · Settings (gear). Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
+- **Three file actions, distinct on purpose (2026-07-24):** **Save** writes a `.sangala` **project** (JSON) that
+  reopens EXACTLY as saved; **Export SVG** (was "Save SVG") writes an interchange SVG for TinkerCAD / the die
+  cutter; **Export STL** writes a 3D-print mesh. `.sangala` = `collectProject()` — the verbatim `serializeState()`
+  object snapshot (the SAME one Undo restores, so NO re-sampling) PLUS the globals SVG drops: `mode3D`, `units`,
+  the Silhouette settings (force/speed/blade/passes/scale), `material`, position (offx/offy), the Marks toggle,
+  and `view`. `openProject()` runs `restoreState()` then re-applies those globals (`setUnits` FIRST — it rewrites
+  the position fields — then restore their saved values; `setMode3D` LAST to re-lay the toolbar), and is routed
+  through the **Open** button by the `.sangala` extension (accept list + `openFile`). A traced reference PHOTO is
+  NOT stored (it never was part of a save). Icons: Save 💾, Export SVG 📄, Export STL 🔷 (avoid 📦 — the Mode(3D)
+  button uses it). Why: Export SVG re-samples geometry (getCTM + Douglas-Peucker ~0.08 mm), re-derives kind from
+  stroke, and doesn't carry mode/settings/photo — it is lossy for reload; the project file is the exact one.
+  Validated: build+combine+group in 3D → project JSON (4.5 KB) → flip mode & Force, reopen → objects, mesh
+  volumes, gpaths, all attrs, mode, and settings restored identically (`project_test.js`, real `openProject`).
 **Material** (Paper/Cardstock/Heavy cardstock/Vinyl/Pen/**Custom**) sits BELOW the Make it! button in the
 Fabricate panel — the most-used control, out of Setup — and **defaults to Cardstock** (the material used
 most). Picking a material drives Force/Speed/Blade/Passes via `applyMat()`; **Custom** seeds the fields with Cardstock's values as a starting point and opens the Settings panel (`openSettings()`) to adjust (it is not a MATS preset, so the cut runs in blade mode from the field values). Settings panel (the gear) holds
