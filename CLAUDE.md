@@ -181,6 +181,15 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
 - SVG read: getCTM() returns pixel space → convert px→mm with 25.4/96. For paths in
   <defs> (null CTM, e.g. Studio's <use>-instanced geometry) use raw user units × the
   svg's mm-per-unit scale. Drop any non-finite point's whole path.
+- **On load, a rect/circle/ellipse's own geometry attributes (x/y/w/h, cx/cy/r) are re-mapped through the
+  same getCTM into design-mm, because the 3D build (`bodyTris`) reads them straight off the element — a
+  polygon uses `o.poly`, but a rect/circle uses its attributes.** Without this a REOPENED shape extruded at
+  its raw file coordinates: Save SVG crops the viewBox to the design's bbox, which re-bases `o.poly` but not
+  the attributes, so a reopened rect/circle sat OFFSET in X,Y (by the old bbox-min) in 3D while the 2D sketch
+  looked right (Z was fine — only x/y drift). A drawn shape sets `el` and `poly` together so it was never
+  affected; the mismatch only showed when a new shape was drawn over an opened design. `normalize()` shifts
+  the element geometry in lockstep with `o.poly`. A rotated rect (skew in the CTM) is left as-is. Verified
+  against real Chromium getCTM (`ctm_math.js`): viewBox "50 30 100 80" maps a rect at (60,45) → (10,15).
 - Print files (silhouette-style SVGs) keep ABSOLUTE page coordinates. Registered cut
   coords = page coords − 15.9 mm (the mark origin). Print hides the red machine lines
   (like Studio's weight-0) and overlays the standard marks, so the inkjet prints
