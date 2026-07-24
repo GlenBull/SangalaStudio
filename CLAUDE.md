@@ -92,6 +92,12 @@ USB only, user-mode.** This constraint is absolute.
 - **Commit and push after each verified-good change** — one change, verify it's
   good (see line-14 physical-test rule for machine-facing changes), then commit
   and push so any regression is a `git diff` away, not a guess.
+- **Collaboration is shared-repo, not forks (since 2026-07-24).** Jo Watts is a
+  write collaborator on `GlenBull/SangalaStudio`; he and Glen work on branches in
+  the one repo and integrate via ordinary Pull Requests — no more cross-fork
+  merges. The one-time "Github Merge" runbook (the careful bring-in of Jo's 3D
+  fork into `main`) was a migration artifact, not the routine process; day-to-day
+  is branch → PR.
 
 ## Files
 - **DieCutter.cs** — USB + GPGL engine. Opens the cutter via the `usbprint.sys`
