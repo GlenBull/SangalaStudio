@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-22.74 -->
+<!-- SANGALA_VERSION: 2026-07-24.108 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -114,9 +114,10 @@
   <div class="logo" id="brand"><b class="marker">Sangala Studio</b><small>Digital Fabrication tool</small></div>
   <div class="tools">
     <button class="tbtn" id="bConnect"><span class="glyph">🔌</span><small>Connect</small></button>
-    <button class="tbtn" id="bOpen" title="Open an SVG design or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
-    <button class="tbtn" id="bSave"><span class="glyph">💾</span><small>Save SVG</small></button>
-    <button class="tbtn" id="bStl" style="display:none"><span class="glyph">🧊</span><small>Export STL</small></button>
+    <button class="tbtn" id="bSaveProj" title="Save a Sangala project (.project) - reopens exactly as it is now"><span class="glyph">💾</span><small>Save</small></button>
+    <button class="tbtn" id="bOpen" title="Open a Sangala project (.project), an SVG design, or a photo (.svg, .png, .jpg)"><span class="glyph">📂</span><small>Open</small></button>
+    <button class="tbtn" id="bSave" title="Export an SVG for TinkerCAD or the die cutter (re-sampled on reopen; use Save for an exact project)"><span class="glyph">📄</span><small>Export SVG</small></button>
+    <button class="tbtn" id="bStl" style="display:none" title="Export an STL for 3D printing"><span class="glyph">🔷</span><small>Export STL</small></button>
     <button class="tbtn" id="bMarks"><span class="glyph">⌖</span><small>Marks</small></button>
     <button class="tbtn" id="bPrint"><span class="glyph">🖨️</span><small>Print</small></button>
     <button class="tbtn" id="bTestMenu" style="display:none"><span class="glyph">🧪</span><small>Test</small></button>
@@ -126,7 +127,7 @@
   <button class="tbtn" id="bPreview" style="display:none" title="Rotatable 3D preview of the model"><span class="glyph">👁️</span><small>3D View</small></button>
   <button class="tbtn" id="bMode" title="Switch between 2D die-cutting and 3D design"><span class="glyph">📐</span><small>2D</small></button>
   <button class="tbtn" id="buffalo" title="About Sangala Studio"><span class="glyph"><img src="data:image/png;base64,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" alt=""></span><small>About</small></button>
-  <input type="file" id="file" accept=".svg,image/svg+xml,image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none">
+  <input type="file" id="file" accept=".project,.svg,image/svg+xml,image/png,image/jpeg,.png,.jpg,.jpeg" style="display:none">
 </header>
 
 <div id="setup" class="panel">
@@ -248,10 +249,10 @@
   </div>
 
   <div class="panel" id="fab">
-    <h2 class="marker">Fabricate</h2>
+    <h2 class="marker" id="fabHead">Fabricate</h2>
     <div class="conn" id="conn">Not connected</div>
     <button class="go" id="make" disabled>Make It!</button>
-    <h2 class="marker" style="margin-top:.6rem">Material</h2>
+    <h2 class="marker" id="matHead" style="margin-top:.6rem">Material</h2>
     <select id="material" style="width:100%;border:none;box-shadow:inset 0 0 0 1px #cbb78f">
       <option>Paper</option><option>Sticker Paper</option><option selected>Cardstock</option><option>Heavy Cardstock</option><option>Vinyl</option><option>Custom</option>
       <option disabled>– – – – – – – – – – – – –</option>
@@ -271,7 +272,7 @@
       <button id="bUseCut" class="ebtn" style="width:100%;margin-top:.7rem;display:none">✅ Confirm — remove the background</button>
     </div>
     <div id="editpanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
-      <h2 class="marker" style="margin-top:0">Selected object</h2>
+      <h2 class="marker" style="margin-top:0">Selected Object</h2>
       <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
       <div class="two" id="kindrow1" style="margin-top:.5rem">
         <button class="ebtn" id="eCut" disabled>✂️ Cut</button>
@@ -357,7 +358,7 @@ let penHover=null;           // Pen tool: current cursor (placed mm) for the rub
 let penObj=null;             // Pen tool: the open outline it picked up, if it is continuing one rather than starting fresh
 let penBase=0;               // Pen tool: how many of penPts came from the outline it picked up - undo stops here, since the Pen did not put those there
 let penUndone=[];            // Pen tool: points taken back with Ctrl-Z, ready for Ctrl-Y
-let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel}. Does NOT cut/print/save.
+let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel, mask, trace}. Never cut/printed, but a .project file DOES keep it (source + mask + trace tuning).
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
@@ -377,14 +378,18 @@ function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; v
   return { dw:dw, dh:dh, vw:vw, vh:vh, baseK:baseK, MX:(cv.width/baseK-vw)/2, MY:(cv.height/baseK-vh)/2 };
 }
 let selNode=null;            // index of the selected node within the selected object (node tool)
+let slopeHi=null;            // footprint edge index to highlight while a per-side Slope field is focused/hovered
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
 const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1],"Heavy Cardstock":[33,3,7,0,2],Vinyl:[10,8,1,0,1],"Pen (draw)":[12,8,0,1,1]};   // Sticker Paper = Avery's white/clear kiss-cut setting (Blade 2, Speed 3, Thickness 6); metallic gold/silver would be Thickness 15
 // Single source of truth: objects=[{id, el, kind, poly}] where kind is 'cut'|'score'|'print',
 // el is a live node in the retained svgDoc (preserves all imported attributes for lossless save),
 // and poly is the flattened mm polyline cache used for preview + the die cutter.
-const cutObjs   =()=>objects.filter(o=>o.kind==="cut");
-const scoreObjs =()=>objects.filter(o=>o.kind==="score");
+const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
+const isHole    =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="hole";   // 3D role: a hole carves a void out of the solids it is grouped with (TinkerCAD-style)
+const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o);   // a 3D bar, a baked mesh, or a hole: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
+const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
+const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
 const printObjs =()=>objects.filter(o=>o.kind==="print");
 const cutPolys  =()=>cutObjs().flatMap(o=>(o.holes&&o.holes.length)?[o.poly].concat(o.holes):[o.poly]);   // a holed shape cuts as its outline PLUS each inner loop - a frame
 const scorePolys=()=>scoreObjs().map(o=>o.poly);
@@ -393,7 +398,7 @@ const printPolys=()=>printObjs().map(o=>o.poly);
 function say(t){$("status").innerHTML=t;}
 let units="in";
 function offMM(v){return units==="in"?v*25.4:v;}
-function fmtn(v){return Math.round(v*100)/100;}
+function fmtn(v){ v=Math.round(v*100)/100; return isFinite(v)?v:0; }   // never emit NaN/Infinity: a "NaN" stored in an attribute poisons every read, the mesh, and freezes the CSG
 // Object dimensions honor the Units setting (the same one that drives Position). Only 2D lengths convert; the
 // 3D/LEGO params (Depth/Base/Fit/bore) stay mm - they're metric by nature (LEGO's 8 mm grid, a sub-mm clutch).
 const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
@@ -559,18 +564,35 @@ function loadSVG(text){
     // silo files classify by line style; a plain (no-red) design cuts every shape (old behavior).
     const kind = silo ? classifyKind(el) : "cut";
     const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
-    const dg = el.getAttribute && el.getAttribute("data-group");   // restore grouping saved by Save SVG
-    let grp=null; if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; grp=gmap[dg]; }
-    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:grp};
+    const dgp = el.getAttribute && el.getAttribute("data-gpath"), dg = el.getAttribute && el.getAttribute("data-group");   // restore (nested) grouping saved by Save SVG
+    let gpath=[];
+    if(dgp) gpath = dgp.trim().split(/\s+/).filter(Boolean).map(id=>{ if(!(id in gmap)) gmap[id]=++groupSeq; return gmap[id]; });   // remap each level, preserving which objects share which level
+    else if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; gpath=[gmap[dg]]; }   // legacy flat group -> one-level path
+    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:gpath.length?gpath[0]:null, gpath:gpath.length?gpath:null};
     const hs=parseHoles(el);                                     // a frame saved by Sangala carries its inner loops in data-holes,
     if(hs){ const m=el.getCTM();                                 // in the element's OWN user units - so map them through the SAME
       o.holes=hs.map(ring=>ring.map(p=>{                         // transform sample() gives the outer. Without this, Save SVG's cropped
         if(m){ rootPt.x=p[0]; rootPt.y=p[1]; const q=rootPt.matrixTransform(m); return [q.x*PX2MM, q.y*PX2MM]; }   // viewBox re-bases the outer but
         return [p[0]*scale, p[1]*scale]; })); }                  // leaves the holes at their old coords - the window drifts off the frame on reimport.
+    // A rect/circle/ellipse keeps its ORIGINAL file attributes on o.el, and the 3D build (bodyTris) reads x/y/
+    // cx/cy/r straight off the element - so those must live in the SAME design-mm space as o.poly. A Save-SVG
+    // crops the viewBox to the design's bbox, which re-bases o.poly (via getCTM) but NOT the raw attributes, so
+    // a reopened shape extruded at its old page coordinates - offset in X,Y from where the 2D sketch (drawn
+    // from o.poly) shows it, though Z was right. Map the geometry through the same CTM. (A rotated rect - skew
+    // in the CTM - can't be an axis-aligned x/y/w/h, so leave it; its o.poly still drives the 2D view.)
+    { const tag=el.tagName.toLowerCase(), m=el.getCTM(),
+        mapP=(X,Y)=>{ if(m){ rootPt.x=X; rootPt.y=Y; const q=rootPt.matrixTransform(m); return [q.x*PX2MM, q.y*PX2MM]; } return [X*scale, Y*scale]; },
+        sc=m?Math.hypot(m.a,m.b)*PX2MM:scale, rot=!!m&&(Math.abs(m.b)>1e-6||Math.abs(m.c)>1e-6);
+      if(tag==="rect" && !rot){ const x0=+el.getAttribute("x")||0,y0=+el.getAttribute("y")||0,w0=+el.getAttribute("width")||0,h0=+el.getAttribute("height")||0,c0=mapP(x0,y0),c1=mapP(x0+w0,y0+h0);
+        el.setAttribute("x",fmtn(Math.min(c0[0],c1[0]))); el.setAttribute("y",fmtn(Math.min(c0[1],c1[1]))); el.setAttribute("width",fmtn(Math.abs(c1[0]-c0[0]))); el.setAttribute("height",fmtn(Math.abs(c1[1]-c0[1]))); }
+      else if(tag==="circle"){ const c=mapP(+el.getAttribute("cx")||0,+el.getAttribute("cy")||0); el.setAttribute("cx",fmtn(c[0])); el.setAttribute("cy",fmtn(c[1])); el.setAttribute("r",fmtn((+el.getAttribute("r")||0)*sc)); }
+      else if(tag==="ellipse"){ const c=mapP(+el.getAttribute("cx")||0,+el.getAttribute("cy")||0); el.setAttribute("cx",fmtn(c[0])); el.setAttribute("cy",fmtn(c[1])); el.setAttribute("rx",fmtn((+el.getAttribute("rx")||0)*sc)); el.setAttribute("ry",fmtn((+el.getAttribute("ry")||0)*sc)); } }
     objects.push(o);
   });
-  if(!cutObjs().length && !scoreObjs().length){say("No cut lines found in that SVG.");clearDoc();return;}
+  if(!cutObjs().length && !scoreObjs().length && !objects.some(o=>isBar(o)||o.mesh)){say("No cut lines found in that SVG.");clearDoc();return;}   // a 3D-only design (bars / combined parts) is valid though it has no cut lines
   if(!silo) normalize();
+  objects.forEach(o=>{ if(o.el&&o.el.getAttribute&&o.el.getAttribute("data-mesh")==="1"){ const mr=parseMeshRel(o.el.getAttribute("data-mesh-tris"));   // rebuild a baked 3D-Combine part's mesh, anchored to its (now normalized) footprint
+    if(mr&&o.poly){ const [ox,oy]=meshAnchor(o.poly); o.mesh=mr.map(t=>t.map(v=>[v[0]+ox,v[1]+oy,v[2]])); } } });
   bgImg=null; renderBg();
   draw(); refreshEditPanel();
   if(pvOn){                                  // opening a design while the 3D View is up must REPLACE what it shows: the
@@ -585,7 +607,10 @@ function loadSVG(text){
 function normalize(){let mx=1e9,my=1e9;
   objects.forEach(o=>o.poly.forEach(q=>{mx=Math.min(mx,q[0]);my=Math.min(my,q[1]);}));
   if(mx===1e9)return;
-  objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]); if(o.holes) o.holes=o.holes.map(h=>h.map(q=>[q[0]-mx,q[1]-my]));});}
+  objects.forEach(o=>{o.poly=o.poly.map(q=>[q[0]-mx,q[1]-my]); if(o.holes) o.holes=o.holes.map(h=>h.map(q=>[q[0]-mx,q[1]-my]));
+    const el=o.el, tg=el&&el.tagName&&el.tagName.toLowerCase();   // keep the element's own geometry (read by the 3D build) locked to the shifted footprint
+    if(tg==="rect"){ el.setAttribute("x",fmtn((+el.getAttribute("x")||0)-mx)); el.setAttribute("y",fmtn((+el.getAttribute("y")||0)-my)); }
+    else if(tg==="circle"||tg==="ellipse"){ el.setAttribute("cx",fmtn((+el.getAttribute("cx")||0)-mx)); el.setAttribute("cy",fmtn((+el.getAttribute("cy")||0)-my)); }});}
 
 // per-object placement WITHOUT reordering — same scale/offset math as placeAndOrder.
 // used for the Edit-mode overlay + hit-testing so object identity is preserved.
@@ -801,6 +826,26 @@ function draw(){
   ctx.strokeStyle="#dc2626";ctx.lineWidth=1.5;
   const pl=placed();
   pl.forEach(p=>{ctx.beginPath();p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});
+  const meshParts=objects.filter(o=>o.mesh);   // baked 3D parts: show the footprint (gray) so they can be picked and moved; not a cut
+  if(meshParts.length){ ctx.save(); ctx.strokeStyle="#8a8a8a"; ctx.lineWidth=1.5; ctx.setLineDash([]);
+    meshParts.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke();
+      (o.holes||[]).forEach(h=>{ const hp=placePoly(h); ctx.setLineDash([4,3]); ctx.beginPath(); hp.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); });   // carved openings: dashed, same gray, so a hole stays visible with 3D off
+    });
+    ctx.restore(); }
+  const barLines=objects.filter(isBar);   // 3D bars are shown on the plan (so you can place and aim them) but never cut - a distinct teal, not the red of a cut
+  if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
+    barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
+    ctx.restore(); }
+  const holeObjs=objects.filter(isHole);   // a shape marked Hole reads as a blue dotted outline - it carves rather than adds when grouped (excluded from the red cut lines above, so the dots are the only stroke)
+  if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.6; ctx.lineCap="round"; ctx.setLineDash([0.5,4]);
+    holeObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke(); });
+    ctx.restore(); }
+  if(slopeHi!=null){   // highlight the footprint edge whose per-side Slope field is focused/hovered
+    const so=selId!=null?objects.find(x=>x.id===selId):null;
+    if(so&&so.poly){ const p=placePoly(so.poly), n=(p.length>1&&p[0][0]===p[p.length-1][0]&&p[0][1]===p[p.length-1][1])?p.length-1:p.length;
+      if(slopeHi<n){ const a=p[slopeHi], b=p[(slopeHi+1)%n];
+        ctx.save(); ctx.strokeStyle="#1fa85a"; ctx.lineWidth=3; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(a[0]*k,a[1]*k); ctx.lineTo(b[0]*k,b[1]*k); ctx.stroke(); ctx.restore(); } } }
   if(mode3D){   // where the LEGO connectors sit on an extruded shape (the same cells the 3D mesh uses) - a 3D annotation, not a cut line.
     const pp=placeParams();                                            // brown = stud on top, blue-gray = socket underneath; a removed one is a dotted ghost you can click to put back
     ctx.save(); ctx.lineWidth=1;
@@ -1038,9 +1083,10 @@ setInterval(pollSnap,1500);
 // (a REFERENCE layer for tracing - it never cuts, prints, or saves; the traced vector is the design).
 function openFile(f){ if(!f) return;
   const nm=(f.name||"").toLowerCase(), ty=f.type||"";
+  if(nm.endsWith(".project")){ f.text().then(openProject); return; }   // a Sangala project -> restore the exact state
   if(nm.endsWith(".svg")||ty==="image/svg+xml"){ f.text().then(loadSVG); return; }
   if(ty.indexOf("image/")===0||/\.(png|jpe?g|gif|webp|bmp)$/.test(nm)){ loadImageFile(f); return; }
-  say("Open an SVG design or a photo (.svg, .png, .jpg).");
+  say("Open a Sangala project (.project), an SVG design, or a photo (.svg, .png, .jpg).");
 }
 $("bOpen").onclick=()=>$("file").click();
 $("file").onchange=e=>{ openFile(e.target.files[0]); e.target.value=""; };
@@ -1063,7 +1109,7 @@ function loadImageFile(file){
       refImg={img:img, x:(PAGE_W-w)/2, y:(PAGE_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
       $("bRemoveBg").disabled=false;
       selId=null; selId2=null; draw(); refreshEditPanel();
-      say("Imported image (reference only - won't cut, print, or save). Drag to move, corner to resize, or Remove BG to make a silhouette.");
+      say("Imported image (reference only - won't cut or print, but Save keeps it in the project). Drag to move, corner to resize, or Remove BG to make a silhouette.");
     };
     img.onerror=()=>say("Could not read that image file.");
     img.src=ev.target.result; };
@@ -1181,8 +1227,9 @@ async function saveSVG(){
   const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
   const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
   objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
-    if(o.group!=null) o.el.setAttribute("data-group", o.group); else if(o.el.removeAttribute) o.el.removeAttribute("data-group");
-    syncHolesToEl(o); });
+    const gp=gpathOf(o); if(gp.length){ o.el.setAttribute("data-group", gp[0]); o.el.setAttribute("data-gpath", gp.join(" ")); }   // full nesting path (outermost..innermost) so stepwise ungroup survives reopen
+    else if(o.el.removeAttribute){ o.el.removeAttribute("data-group"); o.el.removeAttribute("data-gpath"); }
+    syncHolesToEl(o); syncMeshToEl(o); });
   const clone=svgEl.cloneNode(true);
   clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
   clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
@@ -1205,6 +1252,75 @@ async function saveSVG(){
   say("Saved sangala-design.svg"+size);
 }
 $("bSave").onclick=saveSVG;
+// ---- Project file (.project): the EXACT app state, so a design reopens as it was saved. Unlike Export SVG (an
+// interchange file that re-samples geometry and classifies by stroke on reopen), this stores the verbatim object
+// snapshot (serializeState - the same one Undo restores, so no re-sampling) plus the globals SVG omits: the
+// 2D/3D mode, units, die-cutter settings, position, and the marks toggle. Opened through the Open button, routed
+// by the .project extension. (A traced reference PHOTO is not stored - it never was part of a save.)
+function collectProject(){
+  const settings={}; ["force","speed","blade","passes","scale"].forEach(id=>{ const el=$(id); if(el) settings[id]=el.value; });
+  // An in-progress trace is part of the state: keep the source photo (data URL), its placement, the Remove-BG
+  // mask (so reopening never re-runs the ONNX model - the fast trace recomputes from it), and the trace tuning.
+  const refImage = (refImg && refImg.img && refImg.img.src) ? {
+      src: refImg.img.src, x:refImg.x, y:refImg.y, w:refImg.w, h:refImg.h,
+      mask: (refImg.mask && refImg.mask.toDataURL) ? refImg.mask.toDataURL("image/png") : null,
+      threshold: traceThreshold, pathomit: tracePathomit } : null;
+  return { sangala:"project", version:2,
+    mode3D:mode3D, units:units, showMarks:showMarks,
+    material: $("material")?$("material").value:null, offx: $("offx")?$("offx").value:null, offy: $("offy")?$("offy").value:null,
+    settings: settings, view: {zoom:view.zoom, panX:view.panX, panY:view.panY},
+    refImage: refImage, state: serializeState() };
+}
+async function saveProject(){
+  ensureDoc();
+  if(!objects.length){ say("Add a shape first, then Save."); return; }
+  const name=await saveBlob(new Blob([JSON.stringify(collectProject())],{type:"application/json"}), "sangala-design.project", "Sangala project", ".project");
+  if(name) say("Saved "+name+" - reopens exactly as it is now. (Export SVG is for TinkerCAD / the die cutter; Export STL is for a 3D print.)");
+}
+$("bSaveProj").onclick=saveProject;
+function openProject(text){
+  let proj; try{ proj=JSON.parse(text); }catch(e){ say("That .project file could not be read."); return; }
+  if(!proj || proj.sangala!=="project" || !proj.state){ say("That does not look like a Sangala project file."); return; }
+  ensureDoc();
+  bgImg=null; refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  histBusy=true; restoreState(proj.state); histBusy=false;   // rebuild the EXACT objects (verbatim attrs + poly + mesh; no re-sampling)
+  hist=[]; redoStack=[]; commit();                           // start a fresh undo history at the loaded state
+  if(proj.units && $("units")){ $("units").value=proj.units; setUnits(proj.units); }   // units first: setUnits rewrites the position fields, then we restore their saved values
+  if(proj.settings) for(const id in proj.settings){ const el=$(id); if(el) el.value=proj.settings[id]; }
+  if(proj.material && $("material")) $("material").value=proj.material;
+  if(proj.offx!=null && $("offx")) $("offx").value=proj.offx;
+  if(proj.offy!=null && $("offy")) $("offy").value=proj.offy;
+  showMarks=!!proj.showMarks; $("bMarks").classList.toggle("on",showMarks);
+  if(proj.view){ view.zoom=proj.view.zoom||1; view.panX=proj.view.panX||0; view.panY=proj.view.panY||0; clampPan(); updateZoomUI(); }
+  setMode3D(!!proj.mode3D);                                   // last: re-lays the toolbar for the mode, then redraw
+  draw(); refreshEditPanel(); pvRefresh();
+  if(proj.refImage && proj.refImage.src) restoreRefImage(proj.refImage);   // async: the photo (and any in-progress trace) reappears when it decodes
+  say("Opened the project - restored exactly as saved"+(proj.mode3D?" (3D mode).":"."));
+}
+// Rebuild a saved reference photo + its in-progress trace. The photo decodes async, then the mask (if the
+// background was already removed) decodes and the fast trace recomputes from it - the ONNX model never re-runs.
+function restoreRefImage(ri){
+  if(ri.threshold!=null) traceThreshold=ri.threshold;
+  if(ri.pathomit!=null) tracePathomit=ri.pathomit;
+  const img=new Image();
+  img.onload=()=>{
+    refImg={img:img, x:ri.x, y:ri.y, w:ri.w, h:ri.h, sel:false, cutout:null, mask:null, confirmed:false};
+    if($("bRemoveBg")) $("bRemoveBg").disabled=false;
+    const finish=()=>{ draw(); refreshEditPanel(); };
+    if(ri.mask){ const m=new Image();
+      m.onload=()=>{ const c=document.createElement("canvas"); c.width=m.naturalWidth||m.width; c.height=m.naturalHeight||m.height;
+        c.getContext("2d").drawImage(m,0,0); refImg.mask=c;
+        try{ refImg.trace=SangalaBg.trace(refImg.mask,{threshold:traceThreshold,pathomit:tracePathomit}); }catch(e){ refImg.trace=null; }
+        if(refImg.trace && refImg.trace.paths && refImg.trace.paths.length && $("tracetune")){   // reopen the tune panel so the trace can be adjusted / confirmed
+          $("bUseCut").style.display=""; $("tracetune").style.display="block";
+          $("thrRange").value=traceThreshold; $("thrVal").textContent=traceThreshold; $("pomRange").value=tracePathomit; $("pomVal").textContent=tracePathomit; }
+        finish(); };
+      m.onerror=finish; m.src=ri.mask; }
+    else finish();
+  };
+  img.onerror=()=>say("The project opened, but its reference photo could not be restored.");
+  img.src=ri.src;
+}
 // native Save As (choose folder + name) with plain-download fallback; returns saved name or null
 async function saveBlob(blob,suggestedName,desc,ext){
   if(window.showSaveFilePicker){
@@ -1222,41 +1338,84 @@ function boxTris(x,y,w,h,z0,z1){   // 8 corners -> 12 triangles, outward winding
   const quad=(a,b,c,d)=>[[v[a],v[b],v[c]],[v[a],v[c],v[d]]];   // two tris, CCW seen from outside
   return [].concat(quad(4,5,6,7),quad(3,2,1,0),quad(0,1,5,4),quad(2,3,7,6),quad(3,0,4,7),quad(1,2,6,5));
 }
-// A sloped BLOCK: a rectangular block whose top falls away toward the FRONT (low-Y) edge over `run` mm,
-// the rest of the top staying flat. This is the same wedge the Brick tool makes, but on an ordinary block -
-// so unlike a brick it can sit on a Base, stack on another body, and Fuse into a bigger one. That is what
-// makes a tapered animal buildable: slopes used to exist only inside brickTris, which is nailed to the plate.
-// Built from yzPrism, the side-view profile sweep that ALREADY draws the brick's slope, so this is the
-// proven geometry rather than a second implementation of it.
-// The front lip follows the brick's rule (lip = depth - run, floored at 0): run == depth gives exactly 45
-// degrees, a longer run gives a shallower ramp, and the lip keeps the front from tapering to a knife edge
-// that no printer can lay down.
-function slopedBoxTris(x,y,w,h,z0,z1,run){
-  const y0=y, y1=y+h, d=z1-z0;
-  run=Math.max(0, Math.min(run, h));
-  if(run<=0 || d<=0) return boxTris(x,y,w,h,z0,z1);
-  const yb=y0+run, lip=Math.max(0, d-run);
-  const prof=[[y0,z0],[y1,z0],[y1,z1]];          // front-bottom -> back-bottom -> back-top
-  if(yb < y1-1e-6) prof.push([yb,z1]);           // ...flat top back to where the slope starts
-  if(lip > 1e-6)   prof.push([y0,z0+lip]);       // ...down the ramp to the front lip (omitted = knife edge)
-  return yzPrism(prof, x, x+w);
+// ---- Sloped top ("roof"): per-edge slopes on a CONVEX footprint. Each edge may ramp its share of the top
+// inward; every edge gets a short vertical LIP (printability - no feather edge) then a ramp up to the inset
+// top. Uniform or per-edge, any convex outline. An inward-sloped solid on a convex base is itself convex, so
+// it is the 3D CONVEX HULL (rfHull) of the base ring (z0), the lip ring (zL) and the top vertices (z1) - which
+// lets slopes fully collapse into a RIDGE (top = segment) or an APEX (top = point), a true gable/hip roof, as
+// well as a truncated top, all watertight and winding-agnostic. Replaces the old one-axis slopedBox wedge.
+// Validated against a point-membership + watertightness oracle (dev harness: scratchpad roof.js / roofB.js). ----
+const ROOF_LIP=0.6;   // mm vertical rim at the foot of every ramp so a slope never tapers to a knife edge
+function rfOpen(p){ let r=p.map(q=>[q[0],q[1]]); while(r.length>1&&Math.abs(r[0][0]-r[r.length-1][0])<1e-9&&Math.abs(r[0][1]-r[r.length-1][1])<1e-9) r.pop(); return r; }
+function rfNormals(p){ let cx=0,cy=0; p.forEach(q=>{cx+=q[0]/p.length;cy+=q[1]/p.length;});   // INWARD unit normal per edge (toward centroid), any winding
+  return p.map((a,i)=>{ const b=p[(i+1)%p.length], dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1; let n=[-dy/L,dx/L];
+    const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2; if((cx-mx)*n[0]+(cy-my)*n[1]<0) n=[-n[0],-n[1]]; return n; }); }
+function rfClipHalf(poly,a,n,c){ const out=[],N=poly.length;   // keep { p : dot(p-a,n) >= c }
+  for(let i=0;i<N;i++){ const s=poly[i],e=poly[(i+1)%N], fs=(s[0]-a[0])*n[0]+(s[1]-a[1])*n[1]-c, fe=(e[0]-a[0])*n[0]+(e[1]-a[1])*n[1]-c;
+    if(fs>=-1e-9) out.push(s);
+    if((fs>1e-9&&fe<-1e-9)||(fs<-1e-9&&fe>1e-9)){ const t=fs/(fs-fe); out.push([s[0]+(e[0]-s[0])*t, s[1]+(e[1]-s[1])*t]); } }
+  const d=[]; for(const q of out){ const l=d[d.length-1]; if(!l||Math.hypot(l[0]-q[0],l[1]-q[1])>1e-7) d.push(q); }
+  while(d.length>1&&Math.hypot(d[0][0]-d[d.length-1][0],d[0][1]-d[d.length-1][1])<1e-7) d.pop(); return d; }
+function rfClip(base,norms,runs){ let poly=base; for(let i=0;i<base.length;i++){ if(runs[i]>1e-9){ poly=rfClipHalf(poly,base[i],norms[i],runs[i]); if(poly.length<1) return []; } } return poly; }
+// Top vertices at z1: base clipped inward by each edge's offset. runs are capped so the feasible top is at
+// least a point (never empty) - which is what lets a slope collapse to a RIDGE (segment) or an APEX (point).
+function rfTopVerts(base,norms,runs){ const feasible=l=>rfClip(base,norms,runs.map(x=>x*l)).length>=1;
+  let R=runs; if(!feasible(1)){ let lo=0,hi=1; for(let i=0;i<50;i++){ const m=(lo+hi)/2; if(feasible(m))lo=m; else hi=m; } R=runs.map(x=>x*lo); }
+  return {top:rfClip(base,norms,R), runs:R}; }
+// Small-set 3D convex hull (incremental). The sloped solid on a CONVEX base IS convex, so hulling the base
+// ring (z0), the lip ring (zL) and the top vertices (z1) builds truncated / ridge / apex uniformly, watertight.
+function rfHull(ptsIn){
+  const S=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], X=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]], D=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2], L=a=>Math.hypot(a[0],a[1],a[2]);
+  const pts=[]; for(const p of ptsIn){ if(!pts.some(q=>L(S(q,p))<1e-6)) pts.push(p); }
+  const n=pts.length; if(n<4) return [];
+  let i0=0; for(let i=1;i<n;i++) if(pts[i][0]<pts[i0][0]) i0=i;
+  let i1=0,best=-1; for(let i=0;i<n;i++){ const d=L(S(pts[i],pts[i0])); if(d>best){best=d;i1=i;} }
+  let i2=0; best=-1; for(let i=0;i<n;i++){ const d=L(X(S(pts[i],pts[i0]),S(pts[i],pts[i1]))); if(d>best){best=d;i2=i;} }
+  const nr=X(S(pts[i1],pts[i0]),S(pts[i2],pts[i0])); let i3=0; best=-1;
+  for(let i=0;i<n;i++){ const d=Math.abs(D(nr,S(pts[i],pts[i0]))); if(d>best){best=d;i3=i;} }
+  if(best<1e-9) return [];   // all coplanar - no volume
+  const cen=[0,1,2].map(k=>(pts[i0][k]+pts[i1][k]+pts[i2][k]+pts[i3][k])/4);
+  const fn=f=>X(S(pts[f[1]],pts[f[0]]),S(pts[f[2]],pts[f[0]]));
+  let faces=[[i0,i1,i2],[i0,i2,i3],[i0,i3,i1],[i1,i3,i2]].map(f=>D(fn(f),S(cen,pts[f[0]]))>0?[f[0],f[2],f[1]]:f);
+  const used=new Set([i0,i1,i2,i3]);
+  for(let i=0;i<n;i++){ if(used.has(i)) continue; const p=pts[i];
+    const vis=faces.filter(f=>D(fn(f),S(p,pts[f[0]]))>1e-9); if(!vis.length) continue;
+    const ed=new Map(); for(const f of vis) for(let e=0;e<3;e++) ed.set(f[e]+","+f[(e+1)%3],[f[e],f[(e+1)%3]]);
+    const hor=[]; for(const [k,ab] of ed) if(!ed.has(ab[1]+","+ab[0])) hor.push(ab);
+    faces=faces.filter(f=>!vis.includes(f)); for(const ab of hor) faces.push([ab[0],ab[1],i]); used.add(i); }
+  return faces.map(f=>[pts[f[0]].slice(),pts[f[1]].slice(),pts[f[2]].slice()]);
 }
-// Face the ramp toward any edge. slopedBoxTris always falls toward the FRONT (low-Y) edge; the other three
-// directions are a rigid QUARTER TURN of the finished mesh about the block's center. A rotation about Z has
-// determinant +1, so the winding stays outward and no normals need flipping - a mirror would, which is why
-// this is safe and a reflection would not be. A quarter turn swaps the footprint, so the block is built with
-// its extents swapped and rotated back onto the rectangle the student actually drew. Rotating the OUTLINE
-// instead would break the axis-aligned test and silently drop the slope, which is the trap this replaces.
-function slopedBoxDirTris(x,y,w,h,z0,z1,run,dir){
-  dir=((Math.round(dir)||0)%4+4)%4;                       // 0 front, 1 right, 2 back, 3 left
-  if(!dir) return slopedBoxTris(x,y,w,h,z0,z1,run);
-  const swap=(dir===1||dir===3), bw=swap?h:w, bh=swap?w:h;
-  const t=slopedBoxTris(0,0,bw,bh,z0,z1,run);             // built in a local frame, ramp toward local -Y
-  const lx=bw/2, ly=bh/2, cx=x+w/2, cy=y+h/2;
-  return t.map(tri=>tri.map(p=>{ const a=p[0]-lx, b=p[1]-ly;
-    const q = dir===1 ? [-b,a] : dir===2 ? [-a,-b] : [b,-a];
-    return [cx+q[0], cy+q[1], p[2]]; }));
+// base = footprint ring (mm), runs = per-edge TOP INSET (mm; 0 = a vertical wall). lip = printable rim height.
+function roofTris(baseIn,z0,z1,runsIn,lip,inv){
+  const base=rfOpen(baseIn), H=z1-z0; lip=Math.max(0,Math.min(lip||0,H*0.9)); const zL=z0+lip;
+  const norms=rfNormals(base), {top,runs}=rfTopVerts(base,norms,runsIn.map(r=>Math.max(0,Math.min(r||0,H*40))));
+  const pts=[]; base.forEach(p=>pts.push([p[0],p[1],z0])); base.forEach(p=>pts.push([p[0],p[1],zL]));
+  (top.length?top:[base[0]]).forEach(p=>pts.push([p[0],p[1],z1]));
+  let tris=rfHull(pts);
+  if(inv){ const m=z0+z1, r=p=>[p[0],p[1],m-p[2]]; tris=tris.map(t=>[r(t[0]),r(t[2]),r(t[1])]); }   // INVERTED slope: mirror in Z (top stays full, the underside falls away) - reflect + swap winding to keep normals outward
+  return tris;
 }
+// A moderate-resolution circle ring for a CONE base (open). The cut circle's own poly is ~2 pts/mm, which is
+// far more than a smooth cone needs and would slow the hull - so cap the facet count here.
+function rfConeBase(cx,cy,r){ const n=Math.max(24,Math.min(96,Math.round(Math.PI*Math.max(1,r)))), p=[];
+  for(let i=0;i<n;i++){ const a=2*Math.PI*i/n; p.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]); } return p; }
+// Per-edge slope ANGLES (deg from vertical, 0 = vertical wall) aligned to a shape's footprint edges. Reads
+// data-slopes ("a0,a1,..."); falls back to the legacy single data-slope-run/data-slope-dir so old designs
+// still slope (dir 0/1/2/3 = the edge whose outward normal faces front -Y / right +X / back +Y / left -X).
+function rfEdgeAngles(o, base){
+  const N=base.length, out=new Array(N).fill(0), g=a=>o.el.getAttribute&&o.el.getAttribute(a);
+  const raw=g("data-slopes");
+  if(raw){ raw.split(",").forEach((v,i)=>{ if(i<N) out[i]=Math.max(0,Math.min(80,+v||0)); }); return out; }
+  const run=+(g("data-slope-run")||0);
+  if(run>0){ const dir=((Math.round(+(g("data-slope-dir")||0))%4)+4)%4, want=[[0,-1],[1,0],[0,1],[-1,0]][dir], norms=rfNormals(rfOpen(base));
+    let best=0,bd=-2; norms.forEach((n,i)=>{ const dp=-n[0]*want[0]-n[1]*want[1]; if(dp>bd){bd=dp;best=i;} });   // outward normal ~ -inward
+    const H=Math.max(1e-3,+(g("data-z")||0)); out[best]=Math.atan2(run,H)*180/Math.PI; }
+  return out;
+}
+function rfRuns(angles,H,lip){ const Hf=Math.max(1e-3,H-lip); return angles.map(a=>Hf*Math.tan(Math.max(0,Math.min(80,a))*Math.PI/180)); }
+function rfConvex(polyIn){ const p=rfOpen(polyIn), N=p.length; if(N<3) return false; let sign=0;   // Stage A roofs need a convex outline (concave = Stage C)
+  for(let i=0;i<N;i++){ const a=p[i], b=p[(i+1)%N], c=p[(i+2)%N], cr=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+    if(Math.abs(cr)>1e-9){ const s=cr>0?1:-1; if(sign===0) sign=s; else if(s!==sign) return false; } } return true; }
 function cylTris(cx,cy,r,z0,z1){   // triangle-fan caps + wall quads; outward winding, Z up; spans z0..z1
   const n=Math.max(32,Math.ceil(Math.PI*2*r*2)), CB=[cx,cy,z0], CT=[cx,cy,z1], P=[], tris=[];
   for(let i=0;i<n;i++){const a=2*Math.PI*i/n; P.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}
@@ -1481,12 +1640,16 @@ function bridgeHoles(outer,holes){
   for(let hi=0; hi<hs.length; hi++){
     const h=hs[hi], pend=hs.slice(hi+1);                                              // holes not spliced in yet - the slit must miss them
     let mi=0; for(let i=1;i<h.length;i++) if(h[i][0]>h[mi][0]) mi=i;                   // start at the hole's right-most vertex...
-    const M=h[mi], hc=mid(h), hr=Math.hypot(h[0][0]-hc[0], h[0][1]-hc[1]);
+    const M=h[mi];
     let ci=-1, best=Infinity;
     for(let i=0;i<poly.length;i++){ const P=poly[i];
       const mx=(M[0]+P[0])/2, my=(M[1]+P[1])/2;
       if(!ptInPoly(mx,my,poly)) continue;                                             // the slit must run through material, not across a bay
-      if(segDist(hc[0],hc[1],M[0],M[1],P[0],P[1]) < hr-1e-6) continue;                // ...and run AWAY from it: a slit that re-enters its own hole corrupts the cap
+      let reenters=false;                                                             // ...and it must not cross the hole's OWN edges: a slit that re-enters its
+      for(let e=0;e<h.length;e++){ const q1=h[e],q2=h[(e+1)%h.length];                //    own hole corrupts the cap. (The old test - stay clear of the hole's
+        if(_samePt(q1,M)||_samePt(q2,M)) continue;                                     //    centroid by a fixed radius - assumed a compact convex hole; on a
+        if(segsCross(M,P,q1,q2)){ reenters=true; break; } }                           //    concave L/U the centroid falls OUTSIDE the hole and the radius blows
+      if(reenters) continue;                                                          //    up, so it rejected every slit and dropped the hole entirely.
       let ok=true;
       for(let j=0;j<poly.length && ok;j++){ const j2=(j+1)%poly.length;
         if(j===i||j2===i) continue;                                                   // edges meeting the target vertex touch, they don't cross
@@ -1554,10 +1717,10 @@ function prismThruTris(outer, holeRings, z0, z1){
     const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
     const dx=b[0]-a[0],dy=b[1]-a[1], ox=(ccw?dy:-dy), oy=(ccw?-dx:dx);
     for(const tri of [[a0,b0,b1],[a0,b1,a1]]) t.push(facing(tri,ox,oy,0)); }
-  holes.forEach(h=>{ let cx=0,cy=0; h.forEach(p=>{cx+=p[0]/h.length;cy+=p[1]/h.length;});                  // each hole wall faces INTO its own void
+  holes.forEach(h=>{ let Ah=0; for(let i=0;i<h.length;i++){ const a=h[i],b=h[(i+1)%h.length]; Ah+=a[0]*b[1]-b[0]*a[1]; } const ccwH=Ah>0;   // each hole wall faces INTO its own void
     for(let i=0;i<h.length;i++){ const a=h[i], b=h[(i+1)%h.length];
       const a0=[a[0],a[1],z0],b0=[b[0],b[1],z0],a1=[a[0],a[1],z1],b1=[b[0],b[1],z1];
-      const ix=cx-(a[0]+b[0])/2, iy=cy-(a[1]+b[1])/2;
+      const dx=b[0]-a[0],dy=b[1]-a[1], ix=(ccwH?-dy:dy), iy=(ccwH?dx:-dx);                              // inward normal from the ring's own winding; a centroid ref flips walls on a concave (L/U) hole, whose centroid falls OUTSIDE it
       t.push(facing([a0,b0,b1],ix,iy,0), facing([a0,b1,a1],ix,iy,0)); } });
   return t;
 }
@@ -1571,6 +1734,20 @@ function parseHoles(el){ const s=el&&el.getAttribute&&el.getAttribute("data-hole
 function syncHolesToEl(o){ if(!o||!o.el||!o.el.setAttribute) return;
   if(o.holes&&o.holes.length) o.el.setAttribute("data-holes", o.holes.map(h=>h.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")).join(";"));
   else if(o.el.removeAttribute) o.el.removeAttribute("data-holes"); }
+// data-mesh-tris carries a baked 3D-Combine part's triangle mesh (design mm, x,y,z) so a combined part survives
+// Save SVG -> reopen. Stored RELATIVE to the footprint's bbox min corner, so Save SVG's viewBox crop (a pure
+// shift of x,y) cancels out on reload; z is height and stays absolute. o.mesh is the in-memory source of truth.
+function meshAnchor(poly){ let ox=1e9,oy=1e9; (poly||[]).forEach(p=>{ if(p[0]<ox)ox=p[0]; if(p[1]<oy)oy=p[1]; }); return [ox===1e9?0:ox, oy===1e9?0:oy]; }
+function parseMeshRel(s){ if(!s) return null;
+  const tris=s.split(";").map(t=>t.trim()).filter(Boolean)
+    .map(t=>t.split(/\s+/).map(v=>{const c=v.split(","); return [parseFloat(c[0]),parseFloat(c[1]),parseFloat(c[2])];}))
+    .filter(t=>t.length===3 && t.every(v=>isFinite(v[0])&&isFinite(v[1])&&isFinite(v[2])));
+  return tris.length? tris : null; }
+function syncMeshToEl(o){ if(!o||!o.el||!o.el.setAttribute) return;
+  if(o.mesh&&o.mesh.length&&o.poly){ const [ox,oy]=meshAnchor(o.poly);
+    o.el.setAttribute("data-mesh","1");
+    o.el.setAttribute("data-mesh-tris", o.mesh.map(t=>t.map(v=>fmtn(v[0]-ox)+","+fmtn(v[1]-oy)+","+fmtn(v[2])).join(" ")).join(";")); }
+  else if(o.el.removeAttribute){ o.el.removeAttribute("data-mesh"); o.el.removeAttribute("data-mesh-tris"); } }
 // Nest boolean-result rings into outers that each carry their holes. A ring whose interior point sits inside an
 // ODD number of the others is a hole of the smallest ring containing it (even -> an outer). For a plain
 // Difference (inner fully inside outer) this yields one outer + one hole; when nothing contains anything each
@@ -1754,8 +1931,44 @@ function bodiesTouch(a,b){   // do two 3D bodies actually meet? (overlapping in 
     if(segDist(A[i][0],A[i][1],B[j][0],B[j][1],B[j+1][0],B[j+1][1]) < 0.25) return true;   // edges within a quarter mm count as touching
   return false;
 }
+// A line drawn on the work surface, extruded as a solid BAR (rod or rectangular stick) that runs
+// ALONG its length at height Base. The cross-section (round diameter, or rect width x thickness) sits
+// in the vertical plane perpendicular to the line; the line's XY position and angle place and aim it.
+// This is a 3D-only object - a rod means nothing to the die cutter - so it is meant to be combined with
+// other parts (Difference bores a hole, Union adds a peg). Watertight, outward normals.
+function barTris(o){
+  const P=o.poly; if(!P||P.length<2) return [];
+  const a=P[0], b=P[P.length-1], base=+o.el.getAttribute("data-z0")||0;
+  const sub=(p,q)=>[p[0]-q[0],p[1]-q[1],p[2]-q[2]], add=(p,q)=>[p[0]+q[0],p[1]+q[1],p[2]+q[2]],
+        mul=(p,s)=>[p[0]*s,p[1]*s,p[2]*s], dot=(p,q)=>p[0]*q[0]+p[1]*q[1]+p[2]*q[2],
+        crs=(p,q)=>[p[1]*q[2]-p[2]*q[1],p[2]*q[0]-p[0]*q[2],p[0]*q[1]-p[1]*q[0]], ln=p=>Math.hypot(p[0],p[1],p[2]);
+  const p0=[a[0],a[1],base], p1=[b[0],b[1],base];
+  let ax=sub(p1,p0); const L=ln(ax); if(L<1e-6) return []; ax=mul(ax,1/L);
+  let u=crs(ax,[0,0,1]); const ul=ln(u)||1e-9; u=mul(u,1/ul);          // horizontal direction perpendicular to the line
+  const w2=crs(ax,u), t=[];                                            // w2 completes the cross-section frame (has the vertical component)
+  const orient=(tri,n)=>dot(crs(sub(tri[1],tri[0]),sub(tri[2],tri[0])),n)<0?[tri[0],tri[2],tri[1]]:tri;
+  if((o.el.getAttribute("data-bar-shape")||"round")==="rect"){
+    const hw=(+o.el.getAttribute("data-bar-w")||4)/2, hh=(+o.el.getAttribute("data-bar-h")||4)/2;
+    const off=[[hw,hh],[-hw,hh],[-hw,-hh],[hw,-hh]].map(([su,sz])=>add(mul(u,su),mul([0,0,1],sz)));
+    const A=off.map(o2=>add(p0,o2)), B=off.map(o2=>add(p1,o2));
+    for(let i=0;i<4;i++){ const j=(i+1)%4, outN=crs(sub(B[i],A[i]),sub(A[j],A[i]));
+      t.push(orient([A[i],A[j],B[j]],outN),orient([A[i],B[j],B[i]],outN)); }
+    t.push(orient([A[0],A[1],A[2]],mul(ax,-1)),orient([A[0],A[2],A[3]],mul(ax,-1)));   // end caps
+    t.push(orient([B[0],B[1],B[2]],ax),orient([B[0],B[2],B[3]],ax));
+  } else {
+    const r=(+o.el.getAttribute("data-bar-d")||4)/2, n=32;
+    const ring=c=>{const A=[];for(let i=0;i<n;i++){const th=2*Math.PI*i/n;A.push(add(c,add(mul(u,r*Math.cos(th)),mul(w2,r*Math.sin(th)))));}return A;};
+    const R0=ring(p0), R1=ring(p1);
+    for(let i=0;i<n;i++){ const j=(i+1)%n, th=2*Math.PI*(i+0.5)/n, rad=add(mul(u,Math.cos(th)),mul(w2,Math.sin(th)));
+      t.push(orient([R0[i],R0[j],R1[j]],rad),orient([R0[i],R1[j],R1[i]],rad)); }
+    for(let i=0;i<n;i++){ const j=(i+1)%n; t.push(orient([p0,R0[i],R0[j]],mul(ax,-1)),orient([p1,R1[i],R1[j]],ax)); }   // round caps
+  }
+  return t;
+}
 function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
+  if(o.mesh) return o.mesh;                                    // a baked 3D part (result of a 3D Combine) - render its mesh as-is
+  if(o.el.getAttribute("data-bar")==="1") return barTris(o);   // a line extruded as a rod / stick (3D-only; combine with parts to bore or add)
   if(o.el.hasAttribute("data-brick")){
     const bz=g("data-z0");   // Base: how far the brick sits above the build plate
     return liftTris(brickTris(g("x"),g("y"),g("data-fit"),g("data-cols")||3,g("data-rows")||2,g("data-z")||9.6,gb("data-studs"),gb("data-dock"),G,g("data-slope"),o.el.getAttribute("data-inv")==="1"),
@@ -1774,18 +1987,28 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
       return boredBoxTris(outer, inner, z0, z1, bAxis, bD, bh);
     }
   }
-  // Sloped block: a rectangular block with its top ramped down toward the front edge (see slopedBoxTris).
-  // Gated to AXIS-ALIGNED rectangles exactly the way the axle bore above is - the profile is swept along one
-  // axis, so a rotated or freeform outline has no unambiguous direction to fall in. Skipped when the block
-  // has sockets or holes: both cut the body into shapes with flat tops, which a ramp would contradict. It
-  // returns here, so a sloped block carries no studs either - the top it would stand them on is not level.
-  const sRun=g("data-slope-run");
-  if(sRun>0 && (t==="rect"||t==="polygon") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length)){
+  // Sloped top ("roof"): each edge can ramp inward (see roofTris). Gated (Stage A) to AXIS-ALIGNED rectangles
+  // with no sockets or holes - a socketed/holed top is not level, so a ramp would contradict it, and a sloped
+  // top carries no studs. Per-edge angles come from data-slopes (or the legacy single slope); all-0 = flat.
+  const slopeInv = o.el.getAttribute("data-slope-inv")==="1";   // Invert: mirror the slope in Z (top stays full, the underside falls away - fills an overhang)
+  if((t==="rect"||t==="polygon") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length)){
     const outer = t==="rect" ? [[g("x"),g("y")],[g("x")+g("width"),g("y")],[g("x")+g("width"),g("y")+g("height")],[g("x"),g("y")+g("height")]] : o.poly;
     if(isRectRing(outer)){
-      const bb=bbox([outer]);
-      return slopedBoxDirTris(bb[0]-G, bb[1]-G, (bb[2]-bb[0])+2*G, (bb[3]-bb[1])+2*G, z0, z1, sRun, g("data-slope-dir"));
+      const bb=bbox([outer]), gr=[[bb[0]-G,bb[1]-G],[bb[2]+G,bb[1]-G],[bb[2]+G,bb[3]+G],[bb[0]-G,bb[3]+G]];   // grown outline, canonical order: edge 0 front / 1 right / 2 back / 3 left
+      const angles=rfEdgeAngles(o, gr);
+      if(angles.some(a=>a>0)) return roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
+    } else if(t==="polygon" && objClosed(o) && rfConvex(o.poly)){   // any convex outline (triangle, pentagon, ...): per-edge slope aligned to its own edges
+      const base = G>0 ? offsetRing(o.poly,G) : rfOpen(o.poly);
+      const angles=rfEdgeAngles(o, base);
+      if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
     }
+  }
+  // Cone: a circle whose rim tapers inward toward the top (one angle for the whole rim). Moderate taper -> a
+  // truncated cone; steep -> a full cone (apex). Same roof engine, uniform run on every facet. No studs.
+  if(t==="circle" && o.el.getAttribute("data-sockets")!=="1"){
+    const cone=Math.max(0,Math.min(80,+o.el.getAttribute("data-cone")||0));
+    if(cone>0){ const base=rfConeBase(g("cx"),g("cy"),g("r")+G), run=rfRuns([cone],z1-z0,ROOF_LIP)[0];
+      return roofTris(base, z0, z1, base.map(()=>run), ROOF_LIP, slopeInv); }
   }
   const solid=(t==="polygon"||o.el.getAttribute("data-sockets")==="1") && fuse ? offsetRing(o.poly,G) : o.poly;
   let tris = o.el.getAttribute("data-sockets")==="1" ? socketedSolid(o.poly,z0,z1,fit,skips,solid)   // LEGO sockets in its underside: a grid of fused cell prisms, one hole each
@@ -1796,25 +2019,60 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
   if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
   return tris;
 }
+// ---- Grouping = BUNDLE (TinkerCAD-style): a group's members move and select together but each keeps its own
+// 3D geometry - solids stay separate printed pieces, and a shape marked Hole makes no material on its own.
+// Merging and carving are the Combine tool's job (baked), not the group's. gpath = [outermost..innermost]
+// group ids; a plain (flat) group is a one-link path, and Ungroup peels one level. ----
+function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[o.group]:[]); }
+// A bundle that contains a Hole PREVIEWS the boolean live (each solid carved by the holes that reach it) so a
+// grouped solid+hole shows the hole WITHOUT baking - a staging view before Combine (the objects stay separate
+// and Ungroup-able; Combine is still what bakes). Cached per bundle by a geometry stamp so orbiting never
+// recomputes and only an EDITED bundle rebuilds; the CSG runs on the fast weld-only path (see cleanMesh).
+let _grpPrev=new Map();   // outermost group id -> {stamp, outs:[mesh,...]}
+function grpStamp(members){ return members.map(o=>{ const e=o.el;
+    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
-  // onlyIds (optional Set) limits the build to a selection, for exporting ONE piece at a time. Selecting any
-  // member of a fused group pulls in the WHOLE group, because a fused group IS one printed piece - exporting
-  // half of one would write a part that cannot print.
+  // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
   const bricks=objects.filter(o=>o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));   // hollow parametric
   const plain=objects.filter(o=>!partOf(o)&&o.el&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase())&&(+o.el.getAttribute("data-z")||0)>0);
-  let bodies=bricks.concat(plain);
+  const bars=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1"&&o.poly&&o.poly.length>=2);   // lines extruded as rods/sticks
+  const meshes=objects.filter(o=>o.mesh&&o.el);   // baked parts from a 3D Combine
+  let all=bricks.concat(plain).concat(bars).concat(meshes);
   if(onlyIds && onlyIds.size){
-    const grp=new Set(); bodies.forEach(o=>{ if(onlyIds.has(o.id) && o.group!=null) grp.add(o.group); });
-    bodies=bodies.filter(o=> onlyIds.has(o.id) || (o.group!=null && grp.has(o.group)) );   // whole groups, never a fragment
+    const grp=new Set(); all.forEach(o=>{ if(onlyIds.has(o.id)){ const p=gpathOf(o); if(p.length)grp.add(p[0]); } });
+    all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group (bundle), never a fragment
   }
-  const per={}; bodies.forEach(o=>{ if(o.group!=null) per[o.group]=(per[o.group]||0)+1; });   // bodies per group; 2+ = fused into one printed piece
-  const parts=new Map();                                                                      // a PART is one printed piece: a fused group, or a body on its own
-  bodies.forEach(o=>{ const fuse=o.group!=null && per[o.group]>1, key=o.group!=null ? "g"+o.group : "o"+o.id;
-    if(!parts.has(key)) parts.set(key,[]);
-    parts.get(key).push(...bodyTris(o,fuse)); });
-  const list=Array.from(parts.values());
-  return {tris:[].concat.apply([],list), n:bodies.length, bricks:bricks.length, parts:list};
+  const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
+  const parts=[];
+  const bper={}; brickBodies.forEach(o=>{ if(o.group!=null)bper[o.group]=(bper[o.group]||0)+1; });   // bricks keep the old weld-by-group; their hollow meshes do not go through the boolean
+  const bmap=new Map();
+  brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
+  bmap.forEach(t=>parts.push(t));
+  // Non-brick bodies group by their OUTERMOST bundle. A bundle with NO hole stays a plain bundle (each solid
+  // its own piece - non-touching shapes are fine, they just coexist). A bundle that HOLDS a hole previews the
+  // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
+  // so a grouped solid+hole renders and EXPORTS as a solid-with-a-hole without baking. No forced union of
+  // solids - Intersect and a single merged mesh stay the Combine tool's job.
+  const useCache = !(onlyIds && onlyIds.size);
+  const buckets=new Map();   // outermost group id (or "solo<id>" for ungrouped) -> members
+  nonBrick.forEach(o=>{ const g=gpathOf(o), key=g.length?g[0]:("solo"+o.id); if(!buckets.has(key))buckets.set(key,[]); buckets.get(key).push(o); });
+  buckets.forEach((members,key)=>{
+    const holes=members.filter(isHole), solids=members.filter(o=>!isHole(o));
+    if(!holes.length){ solids.forEach(o=>{ const t=bodyTris(o,false); if(t.length) parts.push(t); }); return; }   // bundle with no hole -> plain bundle
+    const stamp=grpStamp(members); let c=useCache?_grpPrev.get(key):null;
+    if(!c || c.stamp!==stamp){
+      const holeMeshes=holes.map(operandMesh).filter(m=>m&&m.length);
+      const outs=[];
+      solids.forEach(o=>{ let m=operandMesh(o); if(!m||!m.length) return;
+        for(const hm of holeMeshes){ m=cleanMesh(mesh3D("subtract",m,hm),1e-4,true); if(!m.length) break; }   // carve each hole; a full cover empties the solid (it vanishes), a miss leaves it unchanged
+        if(m.length) outs.push(m); });
+      c={stamp, outs}; if(useCache) _grpPrev.set(key,c);
+    }
+    c.outs.forEach(m=>{ if(m.length) parts.push(m); });
+  });
+  const list=parts.filter(p=>p.length);
+  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -1823,9 +2081,10 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
 // design, which is the right thing when the pieces are laid out to print together in one job.
 async function exportSTL(){
   const sel=new Set(selectedIds());
-  const {tris,n,bricks,parts}=buildTris(sel.size?sel:null);
+  const {n,bricks,parts}=buildTris(sel.size?sel:null);
   if(!n){ say(sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
                        : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
                             sel.size?"sangala-part.stl":"sangala-model.stl","STL model",".stl");
   if(!name){ say("Export canceled - nothing written."); return; }
@@ -1866,7 +2125,7 @@ function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so B
   pvSetTris(b); renderPreview();
 }
 function renderPreview(){
-  const pv=$("pv"), g=pv.getContext("2d"), W=pv.width, H=pv.height;
+  const pv=$("pv"), g=pv.getContext("2d",{willReadFrequently:true}), W=pv.width, H=pv.height;   // the z-buffer reads back every frame - hint the browser so getImageData is fast
   const bg=g.createLinearGradient(0,0,0,H); bg.addColorStop(0,"#dfe7ef"); bg.addColorStop(1,"#c3cedb");
   g.fillStyle=bg; g.fillRect(0,0,W,H);
   const ca=Math.cos(pvYaw),sa=Math.sin(pvYaw),ce=Math.cos(pvPitch),se=Math.sin(pvPitch);
@@ -1945,8 +2204,9 @@ function openPreview(){
   pvSetTris(b); pvOn=true;
   $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
+  $("plateRow").style.display="flex";                  // the build-plate toggle only makes sense while the 3D View is up
   pvBounds(); renderPreview();
-  say("3D preview - drag to rotate, scroll to zoom. Press 3D View again to edit.");
+  say('3D Preview: Drag to rotate. Scroll to zoom. Press "3D View" again to edit.');   // panel top text (above the build-plate toggle) while the view is open
 }
 function sizePvToCv(){   // match #pv's box + drawing buffer to the design canvas's current on-screen rectangle
   const pv=$("pv"), board=cv.parentElement;
@@ -1956,8 +2216,8 @@ function sizePvToCv(){   // match #pv's box + drawing buffer to the design canva
   pv.style.width=cr.width+"px"; pv.style.height=cr.height+"px";
   pv.width=Math.max(1,Math.round(cr.width)); pv.height=Math.max(1,Math.round(cr.height));   // square-pixel buffer at the shown size
 }
-function closePreview(){ pvOn=false; $("pv").style.display="none"; $("pvhint").style.display="none"; $("bPreview").classList.remove("on"); }
-function togglePreview(){ pvOn?closePreview():openPreview(); }
+function closePreview(){ pvOn=false; $("pv").style.display="none"; $("pvhint").style.display="none"; $("plateRow").style.display="none"; $("bPreview").classList.remove("on"); }
+function togglePreview(){ if(pvOn){ closePreview(); if(mode3D) say('Design in 3D. Then "Export STL" to 3D print.'); } else openPreview(); }   // closing the view (still in 3D) restores the mode's top text
 $("bPreview").onclick=togglePreview;
 $("showPlate").onchange=e=>{ pvPlate=e.target.checked; if(pvPlate && pvPitch<0.05) pvPitch=0.05;   // re-frame (bed in/out of view) and re-render if the preview is up
   if(pvOn){ pvBounds(); renderPreview(); } };
@@ -1975,12 +2235,12 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   $("bMode").classList.toggle("on",on);                          // blue .on glyph tile when in 3D
   $("bMode").innerHTML=on?'<span class="glyph">📦</span><small>3D</small>':'<span class="glyph">📐</span><small>2D</small>';   // label flips 2D<->3D each click
   $("bStl").style.display=on?"":"none";
-  $("bPreview").style.display=on?"":"none"; if(!on) closePreview();   // 3D preview is a 3D-only tool
-  $("plateRow").style.display=on?"flex":"none";                       // build-plate toggle applies to the 3D preview
+  $("bPreview").style.display=on?"":"none"; if(!on) closePreview();   // 3D preview is a 3D-only tool (closePreview also hides the build-plate toggle)
   $("tBrick").style.display=on?"":"none";                         // Brick is a 3D/LEGO feature: hide it until 3D is enabled
   $("tSnap").style.display=on?"none":"";                          // Snap! draws with a turtle - a 2D drawing tool, so hide it in 3D
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
-  say(on?"Design in 3D, then Export STL for the 3D printer."      // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
+  ["fabHead","make","matHead","material","bar"].forEach(id=>$(id).style.display=on?"none":"");   // Fabricate/Make It + Material picker + its progress bar are die-cutter (2D) controls; 3D exports an STL instead
+  say(on?'Design in 3D. Then "Export STL" to 3D print.'            // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
        :(connected?"Connected. Open a design or load the test square.":"Connect to the Die Cutter to begin."));
   if(!on && activeTool==="brick") setTool("select");             // don't leave a hidden tool active
   refreshEditPanel();
@@ -2025,7 +2285,8 @@ function serializeState(){
       tag: (o.el&&o.el.tagName)? o.el.tagName.toLowerCase():null,
       attrs: (o.el&&o.el.attributes)? Array.from(o.el.attributes).map(a=>[a.name,a.value]):[],
       kind:o.kind, orig:o.orig, poly: o.poly? o.poly.map(p=>[p[0],p[1]]):null,
-      holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:o.group })) };
+      holes: o.holes? o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+      mesh: o.mesh? o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:o.group, gpath:o.gpath?o.gpath.slice():null })) };   // mesh + nesting path carry through Undo/Redo
 }
 function commit(){ if(histBusy) return; const s=JSON.stringify(serializeState());   // push a snapshot unless it matches the current top
   if(hist.length && hist[hist.length-1]===s) return;                                 // no change -> no push, and the redo chain survives
@@ -2038,7 +2299,8 @@ function restoreState(st){
   objects = st.objs.map(so=>{ let el=null;
     if(so.tag){ el=document.createElementNS(SVGNS,so.tag); so.attrs.forEach(a=>el.setAttribute(a[0],a[1])); svgEl.appendChild(el); }
     return { id:so.id, el:el, kind:so.kind, orig:so.orig, poly: so.poly? so.poly.map(p=>[p[0],p[1]]):null,
-             holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null, group:so.group }; });
+             holes: so.holes? so.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+             mesh: so.mesh? so.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null, group:so.group, gpath:so.gpath?so.gpath.slice():null }; });
   objSeq=st.objSeq; groupSeq=st.groupSeq; printFile=st.printFile;
   selId=null; selId2=null; selImg2=false; selMulti=[]; selNode=null; if(refImg)refImg.sel=false;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();
@@ -2294,14 +2556,21 @@ function updateCombine(){
   const [o1,o2]=combineOperands();
   const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
   const twoShapes = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
+  // 3D: a multi-selection of 2+ non-brick shapes can Combine at once (union merges solids + carves holes;
+  // intersect keeps the overlap). 2D stays a two-shape operation.
+  const multi3D = mode3D && selMulti.length>=2 && selMulti.map(id=>objects.find(o=>o.id===id)).filter(o=>o&&!isBrick(o)).length>=2;
+  const canCombine = twoShapes || multi3D;
   // shape + photo -> Intersect crops the photo to the shape. No Shift+click needed: a single shape over a
   // photo is unambiguous (only a 2nd shape, not the photo, is armed by Shift+click). This is the vignette.
-  const imgOperand = o1 && !isBrick(o1) && !twoShapes && refImg && refImg.img;
-  if($("pUnion")) $("pUnion").disabled = !twoShapes;
-  if($("pDiff"))  $("pDiff").disabled  = !twoShapes;
-  if($("pInt"))   $("pInt").disabled   = !(twoShapes || imgOperand);
-  const hint=$("combinehint"); if(hint){ hint.style.display=(twoShapes||imgOperand)?"none":"block";
-    hint.textContent = imgOperand ? "Intersect crops the photo to the shape." : "Select two shapes - Shift+click a 2nd, or sweep a box around both - or a shape over the photo."; }
+  const imgOperand = o1 && !isBrick(o1) && !twoShapes && !multi3D && refImg && refImg.img;
+  if($("pDiff")) $("pDiff").style.display = mode3D ? "none" : "";   // 3D difference is done by marking a shape Hole and grouping, so drop it from the 3D Combine menu; 2D keeps all three
+  if($("pUnion")) $("pUnion").disabled = !canCombine;
+  if($("pDiff"))  $("pDiff").disabled  = !twoShapes;   // Difference stays a two-shape op (and is hidden in 3D)
+  if($("pInt"))   $("pInt").disabled   = !(canCombine || imgOperand);
+  const hint=$("combinehint"); if(hint){ hint.style.display=(canCombine||imgOperand)?"none":"block";
+    hint.textContent = imgOperand ? "Intersect crops the photo to the shape."
+      : mode3D ? "Select two or more shapes - Shift+click to add each, or sweep a box around them."
+      : "Select two shapes - Shift+click a 2nd, or sweep a box around both - or a shape over the photo."; }
 }
 // create a node-editable <polygon> object from a result ring (design mm, open ring).
 // Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
@@ -2314,10 +2583,208 @@ function makePolyObj(ring, kind){
   const o={id:++objSeq, el:el, kind:kind||"cut", orig:kind||"cut", poly:r.concat([[r[0][0],r[0][1]]])};
   objects.push(o); return o;
 }
+/* ---------- 3D mesh boolean (BSP CSG) - combine true SOLIDS, e.g. bore a bar through a part ----------
+   Used when a Combine operand is a 3D bar or an already-baked 3D part: the flat 2D boolean cannot express
+   a horizontal rod cutting through a solid, or a hole through a curved / sloped shape. Subtract bores a
+   hole, Union adds a peg, Intersect keeps the overlap. csg.js-style: build a BSP of each mesh, clip one
+   against the other, recombine. Validated (dev harness) by point-membership over box / cylinder / wedge
+   parts with through / blind / angled / rectangular holes - watertight, outward normals. */
+const mesh3D=(function(){
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+        mul=(a,s)=>[a[0]*s,a[1]*s,a[2]*s], dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+        cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+        len=a=>Math.hypot(a[0],a[1],a[2]), norm=a=>{const l=len(a)||1e-30;return[a[0]/l,a[1]/l,a[2]/l];},
+        lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+  const EPS=1e-5, planeOf=vs=>{const n=norm(cross(sub(vs[1],vs[0]),sub(vs[2],vs[0])));return{n,w:dot(n,vs[0])};};
+  const poly=vs=>({vs,pl:planeOf(vs)}), clonePoly=p=>({vs:p.vs.map(v=>v.slice()),pl:{n:p.pl.n.slice(),w:p.pl.w}});
+  function split(pl,p,cf,cb,fr,bk){ let ty=0; const t=[];
+    for(const v of p.vs){const d=dot(pl.n,v)-pl.w;const c=d<-EPS?2:d>EPS?1:0;ty|=c;t.push(c);}
+    if(ty===0){(dot(pl.n,p.pl.n)>0?cf:cb).push(p);}
+    else if(ty===1){fr.push(p);} else if(ty===2){bk.push(p);}
+    else{const f=[],b=[];
+      for(let i=0;i<p.vs.length;i++){const j=(i+1)%p.vs.length,ti=t[i],tj=t[j],vi=p.vs[i],vj=p.vs[j];
+        if(ti!==2)f.push(vi); if(ti!==1)b.push(vi.slice());
+        if((ti|tj)===3){const den=dot(pl.n,sub(vj,vi));const tt=Math.abs(den)>1e-12?(pl.w-dot(pl.n,vi))/den:0.5;const v=lerp(vi,vj,tt);f.push(v);b.push(v.slice());}}   // den~0 (edge parallel to a garbage sliver-plane) would divide to NaN and make the BSP recurse forever - clamp to the midpoint
+      if(f.length>=3)fr.push(poly(f)); if(b.length>=3)bk.push(poly(b));}}
+  class Node{
+    constructor(polys){this.pl=null;this.f=null;this.b=null;this.polys=[];if(polys)this.build(polys);}
+    invert(){for(const p of this.polys){p.vs.reverse();p.pl={n:mul(p.pl.n,-1),w:-p.pl.w};}
+      if(this.pl)this.pl={n:mul(this.pl.n,-1),w:-this.pl.w};if(this.f)this.f.invert();if(this.b)this.b.invert();
+      const t=this.f;this.f=this.b;this.b=t;}
+    clip(polys){if(!this.pl)return polys.slice();let fr=[],bk=[];
+      for(const p of polys)split(this.pl,p,fr,bk,fr,bk);
+      if(this.f)fr=this.f.clip(fr);if(this.b)bk=this.b.clip(bk);else bk=[];return fr.concat(bk);}
+    clipTo(n){this.polys=n.clip(this.polys);if(this.f)this.f.clipTo(n);if(this.b)this.b.clipTo(n);}
+    all(){let r=this.polys.slice();if(this.f)r=r.concat(this.f.all());if(this.b)r=r.concat(this.b.all());return r;}
+    build(polys){if(!polys.length)return;if(!this.pl)this.pl=polys[0].pl;const fr=[],bk=[];
+      for(const p of polys)split(this.pl,p,this.polys,this.polys,fr,bk);
+      if(fr.length){if(!this.f)this.f=new Node();this.f.build(fr);}
+      if(bk.length){if(!this.b)this.b=new Node();this.b.build(bk);}}
+  }
+  // A degenerate (near-zero-area) or non-finite triangle has no valid plane; feeding it to the BSP gives a
+  // garbage normal that poisons every split (NaN vertices, runaway recursion). Drop them from CSG input AND
+  // output so a sliver produced by one boolean can never corrupt the next - the disease that froze the page
+  // and spat NaN on each successive hole in an iterated Combine.
+  const degenTri=t=>{const c=cross(sub(t[1],t[0]),sub(t[2],t[0]));return len(c)<1e-9;};
+  const finiteTri=t=>t.every(p=>isFinite(p[0])&&isFinite(p[1])&&isFinite(p[2]));
+  const clean=tris=>tris.filter(t=>finiteTri(t)&&!degenTri(t));
+  const toPolys=tris=>clean(tris).map(t=>poly([t[0].slice(),t[1].slice(),t[2].slice()]));
+  const toTris=polys=>{const out=[];for(const p of polys)for(let i=2;i<p.vs.length;i++)out.push([p.vs[0],p.vs[i-1],p.vs[i]]);return clean(out);};
+  return function(op,trisA,trisB){
+    trisA=clean(trisA); trisB=clean(trisB);
+    if(!trisA.length) return op==='union'?trisB.slice():[];
+    if(!trisB.length) return (op==='subtract'||op==='union')?trisA.slice():[];
+    const a=new Node(toPolys(trisA).map(clonePoly)), b=new Node(toPolys(trisB).map(clonePoly));
+    if(op==='union'){a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.all());}
+    else if(op==='subtract'){a.invert();a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.all());a.invert();}
+    else{a.invert();b.clipTo(a);b.invert();a.clipTo(b);b.clipTo(a);a.build(b.all());a.invert();}
+    return toTris(a.all());
+  };
+})();
+// Clean a CSG result for a slicer: WELD coincident vertices (float noise) and remove T-JUNCTIONS (a vertex
+// lying on another triangle's edge - the BSP splits one solid's face against the other's plane but not the
+// neighbor's shared edge, leaving edges shared by !=2 faces). Splitting each straddled edge at the vertices on
+// it makes the mesh manifold. Winding/orientation is preserved (each split fans from the opposite corner).
+// T-junction splits reuse EXISTING welded verts (no new points), so a spatial hash of the verts stays valid
+// through the whole pass - each edge tests only nearby verts, not all of them (a cone CSG can be thousands of
+// triangles; the naive all-verts scan froze the page). A huge-mesh backstop welds only, never hangs.
+// weldOnly (fast path for INTERMEDIATE combines): weld + drop degenerate faces but SKIP the T-junction pass.
+// That pass splits straddled edges - adding triangles - and running it after every Combine compounds the
+// bloat and cost across an iterated design (each hole re-splits an ever-larger mesh: the page froze because
+// the CLEAN, not the CSG, was O(mesh) per hole). Intermediate combines stay geometrically exact but keep
+// their T-junctions; the full manifold clean runs ONCE per piece at STL export, where slicers need it.
+function cleanMesh(tris, eps, weldOnly){
+  eps=eps||1e-4;
+  const verts=[], vmap=new Map(), vkey=p=>Math.round(p[0]/eps)+","+Math.round(p[1]/eps)+","+Math.round(p[2]/eps);
+  const vidx=p=>{ const k=vkey(p); if(vmap.has(k)) return vmap.get(k); const i=verts.length; verts.push([p[0],p[1],p[2]]); vmap.set(k,i); return i; };
+  const aMin=eps*eps*4, triA=f=>{const a=verts[f[0]],b=verts[f[1]],c=verts[f[2]],ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];return 0.5*Math.hypot(uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx);};
+  let faces=tris.map(t=>[vidx(t[0]),vidx(t[1]),vidx(t[2])]).filter(f=>f[0]!==f[1]&&f[1]!==f[2]&&f[2]!==f[0]).filter(f=>triA(f)>aMin);   // drop welded slivers so they never poison a later CSG
+  const emit=()=>faces.map(f=>[verts[f[0]].slice(),verts[f[1]].slice(),verts[f[2]].slice()]);
+  if(weldOnly || faces.length>50000) return emit();   // weld-only fast path, and a pathological-blow-up backstop that never freezes
+  let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9]; for(const v of verts)for(let k=0;k<3;k++){ if(v[k]<mn[k])mn[k]=v[k]; if(v[k]>mx[k])mx[k]=v[k]; }
+  const diag=Math.hypot(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1, cell=Math.max(eps*10, diag/40);
+  const ci=p=>[Math.floor(p[0]/cell),Math.floor(p[1]/cell),Math.floor(p[2]/cell)];
+  const hash=new Map(); for(let vi=0;vi<verts.length;vi++){ const c=ci(verts[vi]), k=c[0]+","+c[1]+","+c[2]; if(!hash.has(k))hash.set(k,[]); hash.get(k).push(vi); }
+  const near=(a,b)=>{ const c0=ci([Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.min(a[2],b[2])]), c1=ci([Math.max(a[0],b[0]),Math.max(a[1],b[1]),Math.max(a[2],b[2])]), out=[];
+    for(let x=c0[0];x<=c1[0];x++)for(let y=c0[1];y<=c1[1];y++)for(let z=c0[2];z<=c1[2];z++){ const arr=hash.get(x+","+y+","+z); if(arr) for(const vi of arr) out.push(vi); } return out; };
+  const onSeg=(p,a,b)=>{ const ab=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], ap=[p[0]-a[0],p[1]-a[1],p[2]-a[2]], L2=ab[0]*ab[0]+ab[1]*ab[1]+ab[2]*ab[2];
+    if(L2<eps*eps) return -1; const t=(ap[0]*ab[0]+ap[1]*ab[1]+ap[2]*ab[2])/L2; if(t<=1e-6||t>=1-1e-6) return -1;
+    const dx=p[0]-(a[0]+ab[0]*t), dy=p[1]-(a[1]+ab[1]*t), dz=p[2]-(a[2]+ab[2]*t); return Math.hypot(dx,dy,dz)<eps ? t : -1; };
+  let changed=true, guard=0;
+  while(changed && guard++<20){ changed=false; const out=[];
+    for(const f of faces){ let sp=null;
+      for(let e=0;e<3;e++){ const ia=f[e], ib=f[(e+1)%3], ic=f[(e+2)%3], a=verts[ia], b=verts[ib], on=[];
+        for(const vi of near(a,b)){ if(vi===ia||vi===ib||vi===ic) continue; const t=onSeg(verts[vi],a,b); if(t>0) on.push([t,vi]); }
+        if(on.length){ on.sort((u,w)=>u[0]-w[0]); sp={ia,ib,ic,on:on.map(o=>o[1])}; break; } }
+      if(!sp){ out.push(f); continue; }
+      changed=true; const chain=[sp.ia, ...sp.on, sp.ib]; for(let i=0;i+1<chain.length;i++) out.push([sp.ic, chain[i], chain[i+1]]); }
+    faces=out; }
+  return emit();
+}
+// Is this operand a 3D SOLID (has real volume)? A bar, a baked part, or a shape given a Depth. Combining two
+// of these must go through the 3D boolean - the flat 2D one rebuilds a depthless outline, dropping Depth and
+// Base (and it cannot represent an elevated base at all: one extrude has a single base/height).
+function is3DSolid(o){ return isBar(o) || !!o.mesh ||
+  (o.el&&o.el.tagName&&/^(rect|circle|polygon)$/.test(o.el.tagName.toLowerCase()) && (+o.el.getAttribute("data-z")||0)>0); }
+// The 3D solid mesh for a Combine operand: a baked mesh as-is, a bar swept from its line, or an extruded
+// shape (rect/circle/polygon with a Depth). A flat shape with no Depth is not a solid -> null.
+function operandMesh(o){
+  if(o.mesh) return o.mesh;
+  if(isBar(o)) return barTris(o);
+  const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
+  if(/^(rect|circle|polygon)$/.test(t) && (+o.el.getAttribute("data-z")||0)>0) return bodyTris(o,false);
+  return null;
+}
+// A baked 3D part: carries its mesh directly and a flat footprint (the part's outline) for the 2D canvas.
+function makeMeshObj(footprint, mesh, kind, holes){
+  let r=footprint.map(p=>[p[0],p[1]]); while(r.length>1 && _samePt(r[0],r[r.length-1])) r.pop();
+  const el=svgNode("polygon",{points:r.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "),"data-mesh":"1"});
+  const o={id:++objSeq, el:el, kind:kind||"cut", orig:"cut", poly:r.concat([[r[0][0],r[0][1]]]), mesh:mesh};
+  if(holes&&holes.length){   // carved openings, drawn dashed on the 2D plan so a hole stays visible with 3D View off (annotation only - the mesh already has them baked in)
+    o.holes=holes.map(h=>{ let g=h.map(p=>[p[0],p[1]]); if(g.length>1&&_samePt(g[0],g[g.length-1]))g.pop(); return g.concat([[g[0][0],g[0][1]]]); }).filter(h=>h.length>=4);
+    if(o.holes.length) syncHolesToEl(o); else delete o.holes; }
+  objects.push(o); return o;
+}
+// The flat outline of a hole operand, for annotating a combined part's opening on the 2D plan. A shape -> its
+// own footprint; a bar -> the rectangle its cross-section sweeps along the line (its center line has no area).
+function holeFootprint(o){
+  if(!isBar(o)) return (o.poly&&o.poly.length>=3) ? o.poly.map(p=>[p[0],p[1]]) : null;
+  const a=o.poly[0], b=o.poly[o.poly.length-1], dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
+  const rect=o.el.getAttribute("data-bar-shape")==="rect";
+  const w=(rect?+o.el.getAttribute("data-bar-w"):+o.el.getAttribute("data-bar-d"))||4, hx=-dy/L*w/2, hy=dx/L*w/2;
+  return [[a[0]+hx,a[1]+hy],[b[0]+hx,b[1]+hy],[b[0]-hx,b[1]-hy],[a[0]-hx,a[1]-hy],[a[0]+hx,a[1]+hy]];
+}
+function bool3D(op,o1,o2){ bool3Dn(op,[o1,o2]); }   // 2-operand shim; the engine is N-ary
+// Combine N SOLIDS in true 3D and bake ONE part. Union honors the Solid/Hole flag (solids merge, holes carve);
+// Intersect keeps the region common to all. A 3D Difference is expressed as Hole+Union, so the 3D menu doesn't
+// offer it - the literal diff path (subtract each later operand from the first) stays only for back-compat.
+function bool3Dn(op, ops){
+  ops = (ops||[]).filter(Boolean);
+  const wm = ops.map(o=>({o, m:operandMesh(o)})).filter(x=>x.m&&x.m.length);
+  if(wm.length<2){ say("To combine in 3D, give each shape a Depth first - a 3D bar already has its own thickness."); return; }
+  const finiteMesh=m=>m.every(t=>t.every(p=>isFinite(p[0])&&isFinite(p[1])&&isFinite(p[2])));   // a NaN vertex makes the BSP CSG recurse forever - refuse it rather than freeze
+  if(wm.some(x=>!finiteMesh(x.m))){ say("One of these shapes has an invalid size or slope - fix or redraw it, then Combine again."); return; }
+  const solids=wm.filter(x=>!isHole(x.o)), holes=wm.filter(x=>isHole(x.o));
+  const bake=(o,a,b)=>cleanMesh(mesh3D(o,a,b),1e-4,true);   // weld-only (fast) so iterated Combines don't compound; STL export runs the full manifold clean per piece
+  let mesh, carved=false;
+  if(op==="intersect"){
+    let m=wm[0].m; for(let i=1;i<wm.length && m.length;i++) m=bake("intersect",m,wm[i].m); mesh=m;
+  } else if(op==="diff"){
+    let m=wm[0].m; for(let i=1;i<wm.length && m.length;i++){ m=bake("subtract",m,wm[i].m); carved=true; } mesh=m;
+  } else {                                                  // union: merge every solid, then carve every hole
+    if(!solids.length){ say("Mark at least one shape solid - a bundle of only holes carves nothing."); return; }
+    let m=solids[0].m; for(let i=1;i<solids.length;i++) m=bake("union",m,solids[i].m);
+    for(let i=0;i<holes.length && m.length;i++){ m=bake("subtract",m,holes[i].m); carved=true; }
+    mesh=m;
+  }
+  if(!mesh.length){ say(op==="intersect"?"The shapes don't all overlap - nothing to intersect.":carved?"The hole(s) cover the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
+  // ---- 2D footprint for the plan view, FOLDED to match the operation (reads true with 3D View off). A shape
+  // carve = solid minus cutter (notch, or a dashed interior hole); a bar hole = an internal bore (annotate with
+  // a dashed rectangle, do NOT notch the outline); union / intersect = the merged / overlap outline.
+  const region=o=> isBar(o) ? {outer:holeFootprint(o)||[], holes:[]} : {outer:o.poly, holes:o.holes||[]};
+  const ringArea=r=>{ const p=pbOpen(r); let a=0; for(let i=0;i<p.length;i++){ const b=p[(i+1)%p.length]; a+=p[i][0]*b[1]-b[0]*p[i][1]; } return Math.abs(a); };
+  const largest=list=> list.length ? list.slice().sort((x,y)=>ringArea(y.outer)-ringArea(x.outer))[0] : null;
+  const openRing=h=>{ let r=simplify(dedupePoly(pbOpen(h)),0.08); if(r.length<3) r=pbOpen(h); return r.map(p=>[p[0],p[1]]); };
+  const merge=(reg,b,mop)=>{ const n=largest(nestRings(boolShapes(mop, reg, b))); return (n&&n.outer)?{outer:n.outer, holes:n.holes||[]}:reg; };
+  let reg, openings=[];
+  if(op==="intersect"){
+    reg=region(wm[0].o);
+    for(let i=1;i<wm.length;i++){ reg=merge(reg, region(wm[i].o), "intersect"); if(!reg.outer.length) break; }
+  } else if(op==="diff"){
+    reg=region(wm[0].o);
+    for(let i=1;i<wm.length;i++){ const x=wm[i].o; if(isBar(x)){ const hf=holeFootprint(x); if(hf) openings.push(hf); } else reg=merge(reg, {outer:region(x).outer, holes:[]}, "diff"); }
+  } else {
+    reg=region(solids[0].o);
+    for(let i=1;i<solids.length;i++) reg=merge(reg, region(solids[i].o), "union");   // merge the solids' outlines
+    for(const h of holes){ if(isBar(h.o)){ const hf=holeFootprint(h.o); if(hf) openings.push(hf); } else reg=merge(reg, {outer:region(h.o).outer, holes:[]}, "diff"); }   // then carve each hole (a bar bore is annotated, not notched)
+  }
+  let fp = (reg.outer&&reg.outer.length) ? reg.outer.map(p=>[p[0],p[1]]) : region((solids[0]||wm[0]).o).outer.map(p=>[p[0],p[1]]);
+  openings = openings.concat((reg.holes||[]).map(openRing));
+  const kind=(wm.find(x=>!isHole(x.o))||wm[0]).o.kind;
+  wm.forEach(x=>{ if(x.o.el&&x.o.el.remove) x.o.el.remove(); });   // remove only the shapes we actually combined; a selected flat shape (no Depth) is left alone
+  objects=objects.filter(o=>!wm.some(x=>x.o===o));
+  makeMeshObj(fp, mesh, kind, openings);
+  selId=null; selId2=null; selMulti=[]; selNode=null;
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the combined part shows at once
+  const n=wm.length;
+  say((op==="intersect" ? "Intersect (3D): only the overlap of "+n+" shapes kept"
+      : op==="diff" ? "Difference (3D): cut from the first shape"
+      : carved ? "Union (3D): "+n+" shapes merged, hole(s) carved"
+      : "Union (3D): "+n+" shapes merged")+" - one solid part, keeps its Depth and Base. See it in the 3D view.");
+}
 function applyBool(op){
   const [o1,o2]=combineOperands();
   if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
+  if(mode3D){   // 3D: combine as MANY shapes as are selected (union merges solids + carves holes; intersect keeps the common overlap)
+    const notBrick=o=>o&&!(o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));
+    const ids = selMulti.length>=2 ? selMulti.slice() : ((o1&&o2&&o1!==o2)?[o1.id,o2.id]:[]);
+    const ops = ids.map(id=>objects.find(o=>o.id===id)).filter(notBrick);
+    if(ops.length>=2 && ops.some(is3DSolid)){ ensureDoc(); bool3Dn(op, ops); return; }
+    if(ops.length>=2){ say("Give the shapes a Depth first, then Combine in 3D."); return; }
+    say("Pick two or more shapes in 3D: Shift+click to add each, or sweep a box around them."); return;
+  }
   if(!o1||!o2||o1===o2){ say("Pick two shapes: Shift+click a 2nd, or sweep a box around both."); return; }
+  if(is3DSolid(o1)||is3DSolid(o2)){ ensureDoc(); bool3D(op,o1,o2); return; }   // any 3D solid (bar, baked part, or a shape with Depth) -> true 3D boolean, which keeps Depth + Base; only the flat 2D boolean drops them
   ensureDoc();
   const rings=boolShapes(op, {outer:o1.poly, holes:o1.holes}, {outer:o2.poly, holes:o2.holes});
   if(!rings.length){ say(op==="intersect"?"The two shapes don't overlap - nothing to intersect.":"That combine produced an empty result - nothing changed."); return; }
@@ -2386,6 +2853,7 @@ function placeEl(o){
 function translateObj(o,dx,dy){
   if(!o||!o.el||!o.poly||(!dx&&!dy)) return;
   o.poly=o.poly.map(p=>[p[0]+dx,p[1]+dy]);
+  if(o.mesh) o.mesh=o.mesh.map(t=>t.map(p=>[p[0]+dx,p[1]+dy,p[2]]));   // a baked 3D part carries its own mesh - move it with the footprint
   if(o.holes) o.holes=o.holes.map(h=>h.map(p=>[p[0]+dx,p[1]+dy]));   // a hole travels with its frame
   const t=o.el.tagName.toLowerCase();
   if(t==="rect"){ o.el.setAttribute("x",fmtn((+o.el.getAttribute("x")||0)+dx)); o.el.setAttribute("y",fmtn((+o.el.getAttribute("y")||0)+dy)); }
@@ -2707,7 +3175,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, LEGO connectors and paper color
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -2716,7 +3184,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -2859,93 +3327,87 @@ function circlePoly(cx,cy,r){   // ~2 pts/mm of circumference, min 32
   return poly;
 }
 /* ---------- polygon boolean (Union / Difference / Intersect) ----------
-   Arc-selection + stitch: split both boundaries at their crossings, keep each arc
-   by an inside/outside test, then re-stitch into rings. Operands are simple polygon
-   rings (design mm); returns an array of rings (each an OPEN ring). For a die cutter
-   every returned ring is just a closed cut loop, so holes/outer aren't distinguished.
-   Verified against square/circle/off-center cases (see scratchpad clip-test.html). */
+   Edge-arrangement method: cut every edge of both rings at all crossings and at any
+   vertex of the other ring that lies on it, giving atomic segments; then keep each
+   atom oriented so the RESULT interior is on its left (membership tested on the
+   original rings, a hair off the edge). Coincident overlaps dedupe to one segment, so
+   shared and collinear edges - abutting bricks, a slot built from touching rectangles -
+   are handled by construction rather than by luck. One rule serves all three ops (only
+   the result test changes); Difference's reversed inner boundary falls out of the left
+   rule for free. The core (pbArrange) works off a point-membership predicate, so the SAME
+   code does two-ring booleans (polyBool) and holed-region booleans that honor both operands'
+   holes for every op (boolShapes) - which is what lets a shape carry several cut-out windows.
+   Coordinates are design mm; results are OPEN rings for nestRings to pair into outer + holes.
+   This replaces an arc-stitch boolean that dropped or duplicated shared-edge boundaries - a
+   U-shaped slot built from three abutting rectangles extruded mangled, an L-shaped one lost a
+   corner, and Difference/Intersect dropped the first operand's existing holes. Validated by an
+   independent point-membership oracle over hundreds of randomized and degenerate cases (dev
+   harness in scratchpad): strictly better, no regressions. */
 const PB_EPS=1e-9;
 function pbArea(r){ let a=0; for(let i=0,n=r.length;i<n;i++){ const p=r[i],q=r[(i+1)%n]; a+=p[0]*q[1]-q[0]*p[1]; } return a/2; }
 function pbOpen(r){ if(r.length>1 && r[0][0]===r[r.length-1][0] && r[0][1]===r[r.length-1][1]) return r.slice(0,-1); return r.slice(); }
 function pbIn(pt,ring){ let x=pt[0],y=pt[1],inside=false;
   for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
     if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
-function pbSeg(p1,p2,q1,q2){ const dx1=p2[0]-p1[0],dy1=p2[1]-p1[1],dx2=q2[0]-q1[0],dy2=q2[1]-q1[1]; const den=dx1*dy2-dy1*dx2;
-  if(Math.abs(den)<1e-12) return null;
+function pbSegX(p1,p2,q1,q2){ const dx1=p2[0]-p1[0],dy1=p2[1]-p1[1],dx2=q2[0]-q1[0],dy2=q2[1]-q1[1],den=dx1*dy2-dy1*dx2;
+  if(Math.abs(den)<1e-12) return null;                                                    // parallel/collinear -> handled by vertex-on-edge splitting, not here
   const a=((q1[0]-p1[0])*dy2-(q1[1]-p1[1])*dx2)/den, b=((q1[0]-p1[0])*dy1-(q1[1]-p1[1])*dx1)/den;
   if(a<-PB_EPS||a>1+PB_EPS||b<-PB_EPS||b>1+PB_EPS) return null;
-  return {a:Math.min(1,Math.max(0,a)), b:Math.min(1,Math.max(0,b))}; }
-function pbAugment(ring,buckets){ const aug=[];
-  for(let i=0;i<ring.length;i++){ aug.push({x:ring[i][0],y:ring[i][1],isInt:false,id:-1});
-    const bk=buckets[i]; if(bk){ bk.sort((u,v)=>u.alpha-v.alpha); bk.forEach(n=>aug.push({x:n.ix,y:n.iy,isInt:true,id:n.id})); } }
-  return aug; }
-function pbArcs(aug,side){ const idx=[]; for(let i=0;i<aug.length;i++) if(aug[i].isInt) idx.push(i);
-  if(idx.length===0) return []; const out=[];
-  for(let k=0;k<idx.length;k++){ const s=idx[k], e=idx[(k+1)%idx.length]; const pts=[]; let i=s;
-    while(true){ pts.push([aug[i].x,aug[i].y]); if(i===e && pts.length>1) break; i=(i+1)%aug.length; if(pts.length>aug.length+2) break; }
-    out.push({startId:aug[s].id, endId:aug[e].id, pts:pts, side:side}); }
-  return out; }
-function pbRep(a){ const p=a.pts; if(p.length>=3) return [(p[0][0]+p[1][0]+p[2][0])/3,(p[0][1]+p[1][1]+p[2][1])/3];
-  return [(p[0][0]+p[p.length-1][0])/2,(p[0][1]+p[p.length-1][1])/2]; }
-function pbRev(a){ return {startId:a.endId, endId:a.startId, pts:a.pts.slice().reverse(), side:a.side}; }
-function pbDedupe(ring){ const out=[];
-  for(const p of ring){ const last=out[out.length-1]; if(!last||Math.hypot(last[0]-p[0],last[1]-p[1])>1e-7) out.push(p); }
-  while(out.length>1 && Math.hypot(out[0][0]-out[out.length-1][0],out[0][1]-out[out.length-1][1])<1e-7) out.pop();
-  return out; }
-function polyBool(op, Aring, Bring){
-  let A=pbOpen(Aring), B=pbOpen(Bring);
+  return [p1[0]+dx1*a, p1[1]+dy1*a]; }                                                    // the proper crossing point
+function pbOnSeg(p,a,b){ const cr=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]), L=Math.hypot(b[0]-a[0],b[1]-a[1])||1e-30;
+  if(Math.abs(cr)/L>1e-6) return -1;                                                      // p not on the line of ab
+  const l2=(b[0]-a[0])**2+(b[1]-a[1])**2, t=l2?((p[0]-a[0])*(b[0]-a[0])+(p[1]-a[1])*(b[1]-a[1]))/l2:0;
+  return (t>-PB_EPS&&t<1+PB_EPS)?Math.min(1,Math.max(0,t)):-1; }                          // param where p sits on ab, else -1
+function pbKey(p){ return Math.round(p[0]/1e-5)+","+Math.round(p[1]/1e-5); }              // snap key so coincident points merge
+// Arrange every edge of `rings` into a planar subdivision - each edge split at all crossings
+// and at any vertex lying on it - then keep each atomic segment that BOUNDS the target region:
+// interior on one side (res(pt)=true), exterior on the other, oriented interior-on-left.
+// Coincident/overlapping atoms merge, so shared and collinear edges are handled by construction.
+// Kept atoms stitch head-to-tail into OPEN rings. `res` is any point-membership predicate - which
+// is what lets one core serve BOTH the two-ring polyBool and the holed-region boolShapes below.
+function pbArrange(rings, res){
+  const edges=[]; for(const r of rings){ const R=pbOpen(r); if(R.length<3) continue; for(let i=0;i<R.length;i++) edges.push([R[i],R[(i+1)%R.length]]); }
+  const verts=[]; for(const r of rings){ for(const p of pbOpen(r)) verts.push(p); }        // every original vertex...
+  for(let i=0;i<edges.length;i++) for(let j=i+1;j<edges.length;j++){ const x=pbSegX(edges[i][0],edges[i][1],edges[j][0],edges[j][1]); if(x) verts.push(x); }   // ...plus every crossing
+  const seen=new Map();                                                                   // atomize each edge; coincident atoms merge to one
+  for(const [a,b] of edges){ const ts=[0,1];
+    for(const v of verts){ const t=pbOnSeg(v,a,b); if(t>PB_EPS&&t<1-PB_EPS) ts.push(t); }
+    ts.sort((x,y)=>x-y);
+    for(let i=0;i+1<ts.length;i++){ const t0=ts[i],t1=ts[i+1]; if(t1-t0<PB_EPS) continue;
+      const p=[a[0]+(b[0]-a[0])*t0,a[1]+(b[1]-a[1])*t0], q=[a[0]+(b[0]-a[0])*t1,a[1]+(b[1]-a[1])*t1];
+      const k=[pbKey(p),pbKey(q)].sort().join("|"); if(!seen.has(k)) seen.set(k,[p,q]); } }
+  const kept=[];                                                                          // keep each atom oriented so the result interior is on its LEFT
+  for(const [p,q] of seen.values()){
+    const mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2,dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1e-30,e=Math.min(1e-4,L*0.25);
+    const nx=-dy/L*e, ny=dx/L*e, lft=res([mx+nx,my+ny]), rgt=res([mx-nx,my-ny]);
+    if(lft&&!rgt) kept.push([p,q]); else if(rgt&&!lft) kept.push([q,p]); }                 // (both same -> not a boundary edge -> dropped)
+  const starts=new Map(); kept.forEach((edg,i)=>{ const k=pbKey(edg[0]); if(!starts.has(k)) starts.set(k,[]); starts.get(k).push(i); });
+  const used=new Array(kept.length).fill(false), out=[];                                  // stitch directed atoms head-to-tail into rings
+  for(let s=0;s<kept.length;s++){ if(used[s]) continue; const ring=[]; let cur=s, guard=0;
+    while(cur!=null && !used[cur] && ++guard<100000){ used[cur]=true; ring.push(kept[cur][0]);
+      const cand=(starts.get(pbKey(kept[cur][1]))||[]).filter(i=>!used[i]); cur=cand.length?cand[0]:null; }
+    const clean=[]; for(const p of ring){ const l=clean[clean.length-1]; if(!l||Math.abs(l[0]-p[0])>1e-6||Math.abs(l[1]-p[1])>1e-6) clean.push(p); }
+    while(clean.length>1 && Math.abs(clean[0][0]-clean[clean.length-1][0])<1e-6 && Math.abs(clean[0][1]-clean[clean.length-1][1])<1e-6) clean.pop();
+    if(clean.length>=3 && Math.abs(pbArea(clean))>1e-6) out.push(clean); }                 // drop degenerate / zero-area rings
+  return out;
+}
+function polyBool(op, Aring, Bring){                                                       // two SIMPLE rings -> array of OPEN result rings
+  const A=pbOpen(Aring), B=pbOpen(Bring);
   if(A.length<3||B.length<3) return [];
-  if(pbArea(A)<0) A=A.slice().reverse();
-  if(pbArea(B)<0) B=B.slice().reverse();
-  const aB={}, bB={}; let idc=0;
-  for(let i=0;i<A.length;i++){ const a1=A[i],a2=A[(i+1)%A.length];
-    for(let j=0;j<B.length;j++){ const b1=B[j],b2=B[(j+1)%B.length]; const r=pbSeg(a1,a2,b1,b2); if(!r) continue;
-      const ix=a1[0]+(a2[0]-a1[0])*r.a, iy=a1[1]+(a2[1]-a1[1])*r.a, id=idc++;
-      (aB[i]=aB[i]||[]).push({alpha:r.a,ix,iy,id}); (bB[j]=bB[j]||[]).push({alpha:r.b,ix,iy,id}); } }
-  if(idc===0){ const aInB=pbIn(A[0],B), bInA=pbIn(B[0],A);
-    if(op==='union'){ if(bInA) return [A]; if(aInB) return [B]; return [A,B]; }
-    if(op==='intersect'){ if(bInA) return [B]; if(aInB) return [A]; return []; }
-    if(bInA) return [A,B]; if(aInB) return []; return [A]; }   // diff
-  const augA=pbAugment(A,aB), augB=pbAugment(B,bB);
-  const arA=pbArcs(augA,'A'), arB=pbArcs(augB,'B'); const keep=[];
-  arA.forEach(a=>{ const inB=pbIn(pbRep(a),B); if(op==='intersect'?inB:!inB) keep.push(a); });     // union/diff keep A outside B
-  arB.forEach(a=>{ const inA=pbIn(pbRep(a),A); const k=op==='intersect'?inA:op==='union'?!inA:inA; // diff keeps B inside A
-    if(k) keep.push(op==='diff'?pbRev(a):a); });
-  const byStart=new Map(); keep.forEach(a=>{ if(!byStart.has(a.startId)) byStart.set(a.startId,[]); byStart.get(a.startId).push(a); });
-  const used=new Set(); const result=[];
-  keep.forEach((seed,si)=>{ if(used.has(si)) return; const ring=[]; let cur=seed, curIdx=si, guard=0;
-    while(cur && !used.has(curIdx) && ++guard<100000){ used.add(curIdx);
-      for(let t=0;t<cur.pts.length-1;t++) ring.push(cur.pts[t]);
-      const nexts=byStart.get(cur.endId)||[]; let ni=-1;
-      for(const cand of nexts){ const gi=keep.indexOf(cand); if(!used.has(gi)){ ni=gi; break; } }
-      if(ni<0) break; cur=keep[ni]; curIdx=ni; if(curIdx===si) break; }
-    const d=pbDedupe(ring); if(d.length>=3) result.push(d); });
-  return result;
+  const res=p=>{ const a=pbIn(p,A), b=pbIn(p,B); return op==='union'?(a||b):op==='intersect'?(a&&b):(a&&!b); };
+  return pbArrange([A,B], res);
 }
-// polyBool works on two SIMPLE outlines. This wraps it to respect each operand's HOLES (a frame's window).
-// Union is the case that needs it: merging a shape onto a frame must keep the frame's window as a hole - minus
-// whatever the merged shape now fills - instead of silently dropping every hole and collapsing the frame to a
-// filled outline (which is why unioning the crane onto the shadowbox left only the bare square). Difference
-// and Intersect keep the plain outer-only path: their common use (carving a frame OUT of a solid) has no holed
-// operand. Returns a FLAT ring list for nestRings to re-pair into outer+holes, exactly like polyBool's output.
-function subtractSolid(ring, S){   // ring minus S's SOLID region (S.outer, with S's own holes punched back out)
-  const frags = polyBool('diff', ring, S.outer);                                     // the part of ring outside S entirely
-  (S.holes||[]).forEach(h => polyBool('intersect', ring, h).forEach(r=>frags.push(r)));   // + the part sitting inside one of S's holes
-  return frags;
-}
+// Boolean of two SHAPES that may each carry holes, for ANY hole count and all three ops. A
+// shape's filled region is its outer ring minus its hole rings; feeding every ring of both shapes
+// to the arrangement and testing that region membership keeps exactly the edges bounding
+// (regionA op regionB). This is what lets you cut a SECOND (or third) window into a frame -
+// Difference and Intersect no longer drop the first operand's holes - and it subsumes the old
+// union-only hole handling (merging a shape onto a frame keeps the frame's window). nestRings
+// re-pairs the returned rings into outer + holes by containment.
 function boolShapes(op, A, B){   // A,B = {outer, holes}
-  const ah=A.holes||[], bh=B.holes||[];
-  if(op!=='union' || (!ah.length && !bh.length)) return polyBool(op, A.outer, B.outer);   // no holes, or diff/intersect -> plain path
-  const rings = polyBool('union', A.outer, B.outer);        // the combined outer boundary (>=1 ring)
-  ah.forEach(h => subtractSolid(h, B).forEach(r=>rings.push(r)));   // A's window(s), minus B's solid: the part still open
-  // B's windows contribute ONLY where they fall outside A's outer entirely. Anything inside A's outer is either
-  // A's own solid, or - where the two windows overlap - already emitted by an A-window term above. Subtracting
-  // by A's SOLID here (like A does) would re-emit that shared overlap as a 2nd coincident hole ring: the die
-  // cutter would trace it twice and even-odd fill would cancel (re-fill) it. Subtracting by A's OUTER instead
-  // deliberately drops the part A already owns, so each open region is emitted exactly once. (A solid A has no
-  // holes, so this reduces to plain h - A.outer - the crane-onto-frame case is unaffected either way.)
-  bh.forEach(h => polyBool('diff', h, A.outer).forEach(r=>rings.push(r)));
-  return rings;                                            // nestRings pairs these back into outer + holes by containment
+  const inReg=(p,S)=> pbIn(p,S.outer) && !(S.holes||[]).some(h=>pbIn(p,h));
+  const res=p=>{ const a=inReg(p,A), b=inReg(p,B); return op==='union'?(a||b):op==='intersect'?(a&&b):(a&&!b); };
+  return pbArrange([A.outer, ...(A.holes||[]), B.outer, ...(B.holes||[])], res);
 }
 function closeTest(){$("testmenu").style.display="none";}
 $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTestMenu").getBoundingClientRect();const open=t.style.display!=="flex";
@@ -2991,12 +3453,21 @@ const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;
   +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
 function dimText(o){
   if(!o||!o.el) return "";
+  if(o.mesh){   // a baked 3D part: only its z is adjustable (thickness + elevation); footprint x/y is baked. No blurb - just the Depth/Base fields in 3D, nothing in 2D
+    if(!mode3D) return "";
+    let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
+    const b=isFinite(lo)?lo:0, d=isFinite(hi)?hi-b:0;
+    const fld=(lab,key,val)=>'<td style="text-align:left">'+lab+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+MM_UNIT.step+'" data-dim="'+key+'" value="'+MM_UNIT.f(val)+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">'+MM_UNIT.lab+'</td>';
+    return '<table style="border-collapse:collapse"><tr>'
+      +fld("Depth","meshdepth",d)+'<td style="width:1.2rem"></td>'+fld("Base","meshbase",b)+'</tr></table>';
+  }
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
   let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
   if(t==="rect"){ rows=[[["Width",R("width"),"width"],["X",R("x"),"x"]],[["Height",R("height"),"height"],["Y",R("y"),"y"]]]; lockableWH=true;
     if(mode3D){ if(o.el.hasAttribute("data-brick")) rows.push([["Fit",R("data-fit"),"fit"],null]);   // brick: depth is parametric, only Fit (clutch clearance) is tunable
-                else { rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);
-                       rows.push([["Slope",R("data-slope-run"),"sloperun"],null]); } } }   // ramps the top down toward the front edge - 0 = flat
+                else { rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); } } }   // per-side Slope fields are added below (roof)
   else if(t==="circle"){ rows=[[["Diameter",2*R("r"),"d"],["X",R("cx"),"x"]],[null,["Y",R("cy"),"y"]]];
     if(mode3D) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]); }
   else if(t==="polygon"||t==="polyline"){   // freeform shape (drawn, traced, or Combine/Difference result): resize by its bounding box
@@ -3009,7 +3480,6 @@ function dimText(o){
       rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]]; lockableWH=true;
     }
     if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
-    if(mode3D && objClosed(o) && isRectRing(o.poly)) rows.push([["Slope",R("data-slope-run"),"sloperun"],null]);   // a Combine result that is still a rectangle can ramp too
   }
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
@@ -3019,57 +3489,127 @@ function dimText(o){
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
-  if(mode3D && R("data-slope-run")>0){   // which edge the ramp falls toward; only worth showing once there IS a slope
-    const sd=((Math.round(R("data-slope-dir"))%4)+4)%4;
-    const opt=(v,l)=>'<option value="'+v+'"'+(sd===v?' selected':'')+'>'+l+'</option>';
-    html+='<div style="margin-top:.3rem" title="Which edge the sloping top falls toward.">Slope faces '
-      +'<select class="dimin" data-dim="slopedir" style="width:auto;text-align:left">'
-      +opt(0,"front")+opt(1,"right")+opt(2,"back")+opt(3,"left")+'</select></div>';
+  // Per-side Slope: ramp any side of a rectangular top inward. Angle in degrees from vertical, 0 = flat. Front
+  // / Right / Back / Left are the -Y / +X / +Y / -X edges (canonical order, matching the roof builder).
+  // Per-side Slope: ramp any side of a convex top inward. Angle deg from vertical, 0 = flat. Aligned to the
+  // shape's own footprint edges (data-slopes). A rectangle gets friendly Front/Right/Back/Left names; any other
+  // convex outline (triangle, pentagon, ...) gets numbered sides. Focusing a field highlights that edge on the mat.
+  const slopeOk = mode3D && !o.el.hasAttribute("data-brick") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length) && objClosed(o);
+  const rectish = slopeOk && (t==="rect" || (t==="polygon" && isRectRing(o.poly)));
+  const convexPoly = slopeOk && t==="polygon" && !rectish && rfConvex(o.poly);
+  if(rectish || convexPoly){
+    const ang=rfEdgeAngles(o, rfOpen(o.poly));
+    const sf=(lab,idx)=>'<td style="text-align:left">'+lab+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="1" min="0" max="80" data-dim="slope'+idx+'" value="'+Math.round(ang[idx])+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td>';
+    let body;
+    if(rectish) body='<tr>'+sf("Front",0)+'<td style="width:.8rem"></td>'+sf("Back",2)+'</tr><tr>'+sf("Left",3)+'<td style="width:.8rem"></td>'+sf("Right",1)+'</tr>';
+    else { body=''; for(let i=0;i<ang.length;i+=2){ body+='<tr>'+sf("Side "+(i+1),i)+'<td style="width:.8rem"></td>'+(i+1<ang.length?sf("Side "+(i+2),i+1):'<td></td><td></td><td></td>')+'</tr>'; } }
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +'<div class="hint" style="margin-bottom:.25rem" title="Ramp each side of the top inward. 0 = flat (a vertical wall). The angle is measured from vertical.">Slope each side (0 = flat)</div>'
+      +'<table style="border-collapse:collapse">'+body+'</table>'
+      +(ang.some(a=>a>0) ? '<div style="margin-top:.35rem">'+flag("slopeinv","Invert",o.el.getAttribute("data-slope-inv")==="1","Turn the slope upside down: the top stays full and flat, and the UNDERSIDE falls away instead - the shape that fills the underside of an overhang.")+'</div>' : '')
+      +'</div>';
+  }
+  if(mode3D && t==="circle" && o.el.getAttribute("data-sockets")!=="1"){   // a circle can taper to a cone (one angle for the whole rim)
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +'<div class="hint" style="margin-bottom:.25rem" title="Taper the rim inward toward the top. 0 = a straight cylinder; a moderate taper gives a truncated cone, a steep one a full cone (apex). Angle from vertical.">Cone taper (0 = straight)</div>'
+      +'<table style="border-collapse:collapse"><tr><td style="text-align:left">Taper:</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="1" min="0" max="80" data-dim="cone" value="'+Math.round(R("data-cone"))+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td></tr></table>'
+      +(R("data-cone")>0 ? '<div style="margin-top:.35rem">'+flag("slopeinv","Invert",o.el.getAttribute("data-slope-inv")==="1","Turn the cone upside down: the top stays full and the UNDERSIDE tapers away instead - fills the underside of an overhang.")+'</div>' : '')
+      +'</div>';
   }
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
     html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
       "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
   }
-  if(mode3D && !o.el.hasAttribute("data-brick")){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath
+  if(mode3D && !o.el.hasAttribute("data-brick") && objClosed(o)){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath (closed shapes only - an open line has no top face)
     const st=o.el.getAttribute("data-studs")==="1", sk=o.el.getAttribute("data-sockets")==="1";
     html+='<div style="margin-top:.45rem">'
       +flag("studs","Studs (top)",st,"LEGO studs on the top face, on the 8 mm grid wherever one fits. Click a stud on the mat to remove it.")
       +flag("sockets","Sockets (bottom)",sk,"Holes in the underside that clip onto the studs of the part below. Needs a Depth of about 5 mm or more.")+'</div>';
     if(st||sk) html+='<table style="border-collapse:collapse;margin-top:.35rem"><tr>'+cell(["Fit",R("data-fit"),"fit"])+'</tr></table>';   // clutch clearance: shaves the stud, opens the socket
-    // Axle hole: a round bore through a box (a solid rectangle, or a hollow frame from Difference). 3D only.
-    const boxLike = t==="rect" || (t==="polygon" && o.poly && isRectRing(o.poly));
-    if(boxLike){
-      const boreOn = (o.el.getAttribute("data-bore-axis")==="x"||o.el.getAttribute("data-bore-axis")==="y") && (+o.el.getAttribute("data-bore-d")||0)>0;
-      html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
-        +flag("bore","Axle hole (round)",boreOn,"A round hole bored straight through both walls for an axle. The two openings line up on their own, so a rod turns freely.");
-      if(boreOn){
-        const bz0=+o.el.getAttribute("data-z0")||0, bz=+o.el.getAttribute("data-z")||0;
-        const hz=Math.round((o.el.hasAttribute("data-bore-h")? +o.el.getAttribute("data-bore-h") : bz0+bz/2)*10)/10;
-        const dia=Math.round((+o.el.getAttribute("data-bore-d")||3.2)*10)/10;
-        html+='<div style="margin-top:.3rem">'+flag("borex","Across the width",o.el.getAttribute("data-bore-axis")==="x","Bore side-to-side across the width instead of front-to-back along the length.")+'</div>'
-          +'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(["Hole ⌀",dia,"bored"])+'<td style="width:1rem"></td>'+cell(["Height",hz,"boreh"])+'</tr></table>';
-      }
-      html+='</div>';
+    // (The old "Axle hole (round)" bore control was removed - a hole is now made with the Solid/Hole role + Combine.
+    //  The bodyTris bore branch stays so any pre-existing bored design still opens; there is just no UI to add one.)
+  }
+  if(mode3D && t==="polyline" && o.poly && o.poly.length===2){   // a straight line can become a 3D BAR (rod / stick): a hole when subtracted from a part, a peg when added
+    const barOn=o.el.getAttribute("data-bar")==="1", shp=o.el.getAttribute("data-bar-shape")||"round";
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +flag("bar","3D bar",barOn,"Turn this line into a solid 3D bar running along its length, at the Base height. Combine it with a part: Difference bores a hole, Union adds a peg.");
+    if(barOn){
+      const opt=(v,l,val)=>'<option value="'+v+'"'+(shp===val?' selected':'')+'>'+l+'</option>';
+      const rowc=(a,b)=>'<table style="border-collapse:collapse;margin-top:.3rem"><tr>'+cell(a)+'<td style="width:1rem"></td>'+cell(b)+'</tr></table>';
+      html+='<div style="margin-top:.3rem">Cross-section <select class="dimin" data-dim="barshape" style="width:auto;text-align:left">'
+        +opt(0,"round","round")+opt(1,"rectangle","rect")+'</select></div>';
+      html+= shp==="rect" ? rowc(["Height",R("data-bar-h")||4,"barh"],null)+rowc(["Width",R("data-bar-w")||4,"barw"],null)
+                          : rowc(["Diameter",R("data-bar-d")||4,"bard"],null);
+      html+= rowc(["Base",R("data-z0"),"z0"],null);   // Base sets the bar's height above the plate
     }
+    html+='</div>';
+  }
+  if(mode3D && is3DSolid(o)){   // Solid vs Hole: a hole carves a void out of the solids it is grouped with (unchecked = a normal solid shape)
+    html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
+      +flag("hole","Hole",isHole(o),"Make this a hole: grouped with solid shapes, it carves a void out of them instead of adding material. Unchecked = a solid shape. Its outline shows dotted.")+'</div>';
   }
   return html;
 }
 function showDims(o){ const el=$("editdims"), html=dimText(o); el.innerHTML=html; el.style.display=html?"block":"none"; }
+// Lock ratio in 3D: the object's Depth (thickness) tracks its Width/Height by the same factor, so a locked
+// resize scales it uniformly in all three dimensions. Base (elevation) is a position, not a size, so it stays.
+// Skipped for a brick, whose height is parametric.
+function scaleDepth(o,s){
+  if(!o.el||!o.el.getAttribute||o.el.hasAttribute("data-brick")||!(s>0)||Math.abs(s-1)<1e-9) return;
+  const z=+o.el.getAttribute("data-z")||0; if(z>0) o.el.setAttribute("data-z", fmtn(Math.max(0.1, z*s)));
+}
+// The other half of Lock ratio in 3D: a Depth edit scales the 2D footprint (Width/Height) by the same factor,
+// anchored like the Width/Height edits (rect: its x,y corner; circle: center; polygon: bbox min).
+function scaleFootprint(o,s){
+  if(!o.el||!o.el.getAttribute||o.el.hasAttribute("data-brick")||!(s>0)||Math.abs(s-1)<1e-9) return;
+  const t=o.el.tagName.toLowerCase(), N=x=>+o.el.getAttribute(x)||0;
+  if(t==="rect"){ const x=N("x"),y=N("y"),nw=Math.max(1,N("width")*s),nh=Math.max(1,N("height")*s);
+    o.el.setAttribute("width",fmtn(nw)); o.el.setAttribute("height",fmtn(nh));
+    o.poly=[[x,y],[x+nw,y],[x+nw,y+nh],[x,y+nh],[x,y]]; }
+  else if(t==="circle"){ const cx=N("cx"),cy=N("cy"),nr=Math.max(0.25,N("r")*s);
+    o.el.setAttribute("r",fmtn(nr)); o.poly=circlePoly(cx,cy,nr); }
+  else if(t==="polygon"||t==="polyline"){ const bb=bbox([o.poly]),minX=bb[0],minY=bb[1], sp=p=>[minX+(p[0]-minX)*s,minY+(p[1]-minY)*s];
+    o.poly=o.poly.map(sp); if(o.holes)o.holes=o.holes.map(h=>h.map(sp)); placeEl(o); }
+}
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
-  if(dim==="slopedir"){ o.el.setAttribute("data-slope-dir", String(((Math.round(v)%4)+4)%4)); if(!live)showDims(o); pvRefresh(); return; }   // which edge the ramp falls toward
-  if(dim==="sloperun"){ o.el.setAttribute("data-slope-run",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // sloped block: how far in from the front edge the top ramps down
-  if(dim==="z"||dim==="z0"){ o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
+  if(dim==="cone"){ o.el.setAttribute("data-cone",fmtn(Math.max(0,Math.min(80,v)))); if(!live)showDims(o); pvRefresh(); return; }   // circle rim taper -> cone
+  if(/^slope\d+$/.test(dim)){   // per-side roof: set one edge's slope angle (deg from vertical, 0 = flat) in data-slopes (aligned to the footprint edges)
+    const idx=+dim.slice(5), ang=rfEdgeAngles(o, rfOpen(o.poly)); ang[idx]=Math.max(0,Math.min(80,v));
+    o.el.setAttribute("data-slopes", ang.map(a=>fmtn(a)).join(","));
+    o.el.removeAttribute("data-slope-run"); o.el.removeAttribute("data-slope-dir");   // migrated to per-edge
+    if(!live)showDims(o); pvRefresh(); return; }
+  if(dim==="meshbase"){ if(o.mesh&&o.mesh.length){   // baked part: set how high the lowest point sits by shifting every triangle's z rigidly (footprint x/y unchanged)
+      const cur=o.mesh.reduce((m,t)=>Math.min(m,t[0][2],t[1][2],t[2][2]),Infinity), d=Math.max(0,v)-(isFinite(cur)?cur:0);
+      if(d){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],p[2]+d])); if(!live) syncMeshToEl(o); } }
+    if(!live)showDims(o); pvRefresh(); return; }
+  if(dim==="meshdepth"){ if(o.mesh&&o.mesh.length){   // baked part: set thickness by scaling every triangle's z about the base (lowest point fixed, grows upward - footprint x/y unchanged)
+      let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
+      const cur=hi-lo, s=cur>1e-6 ? Math.max(0.1,v)/cur : 1;
+      if(s!==1){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],lo+(p[2]-lo)*s])); if(!live) syncMeshToEl(o); } }
+    if(!live)showDims(o); pvRefresh(); return; }
+  if(dim==="z"||dim==="z0"){
+    if(dim==="z" && mode3D && o.el.getAttribute("data-lockratio")==="1"){   // Lock ratio (symmetric): a Depth edit scales Width/Height to match
+      const oldZ=+o.el.getAttribute("data-z")||0; if(oldZ>1e-6 && v>0.1) scaleFootprint(o, v/oldZ); }
+    o.el.setAttribute(dim==="z"?"data-z":"data-z0",fmtn(Math.max(0,v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // draw(): the stud overlay appears once Depth > 0; preview updates live
   if(dim==="fit"){ o.el.setAttribute("data-fit",fmtn(clampFit(v))); if(!live)showDims(o); draw(); pvRefresh(); return; }   // clutch clearance (may be negative = tighter); draw(): the connector circles change size with it
   if(dim==="bored"){ o.el.setAttribute("data-bore-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }   // axle-hole diameter (3D only, no 2D redraw needed)
   if(dim==="boreh"){ o.el.setAttribute("data-bore-h",fmtn(Math.max(0,v))); if(!live)showDims(o); pvRefresh(); return; }     // axle-hole height up the wall
+  if(dim==="barshape"){ o.el.setAttribute("data-bar-shape", v===0?"round":"rect"); showDims(o); pvRefresh(); return; }       // 3D bar cross-section: round vs rectangle (swaps which size fields show)
+  if(dim==="bard"){ o.el.setAttribute("data-bar-d",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar diameter (round)
+  if(dim==="barw"){ o.el.setAttribute("data-bar-w",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar width (rect)
+  if(dim==="barh"){ o.el.setAttribute("data-bar-h",fmtn(Math.max(0.5,v))); if(!live)showDims(o); pvRefresh(); return; }       // bar thickness (rect)
   if(!mode3D && units==="in") v=v*25.4;   // by here dim is a 2D length (width/height/x/y/d), typed in the display unit; geometry is stored in mm. In 3D the field shows mm (see cell()), so the typed value is already mm - no conversion.
   const t=o.el.tagName.toLowerCase(), N=s=>+o.el.getAttribute(s)||0;
   if(t==="rect"){ let x=N("x"),y=N("y"),w=N("width"),h=N("height");
     const locked=o.el.getAttribute("data-lockratio")==="1";   // Lock ratio: the OTHER side follows so Width:Height holds
-    if(dim==="width"){ const nw=Math.max(1,v); if(locked&&w>1e-6) h=fmtn(h*(nw/w)); w=nw; }
-    else if(dim==="height"){ const nh=Math.max(1,v); if(locked&&h>1e-6) w=fmtn(w*(nh/h)); h=nh; }
+    if(dim==="width"){ const nw=Math.max(1,v); if(locked&&w>1e-6){ const s=nw/w; h=fmtn(h*s); if(mode3D) scaleDepth(o,s); } w=nw; }
+    else if(dim==="height"){ const nh=Math.max(1,v); if(locked&&h>1e-6){ const s=nh/h; w=fmtn(w*s); if(mode3D) scaleDepth(o,s); } h=nh; }
     else if(dim==="x")x=v; else if(dim==="y")y=v;
     o.el.setAttribute("x",fmtn(x));o.el.setAttribute("y",fmtn(y));o.el.setAttribute("width",fmtn(w));o.el.setAttribute("height",fmtn(h));
     o.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
@@ -3106,6 +3646,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
     if(dim==="width"  && curW>1e-6) sx=Math.max(1,v)/curW;
     if(dim==="height" && curH>1e-6) sy=Math.max(1,v)/curH;
     if(locked){ if(dim==="width") sy=sx; else sx=sy; }
+    if(locked && mode3D) scaleDepth(o, dim==="width"?sx:sy);   // uniform 3D scale: Depth tracks the locked Width/Height
     if(sx!==1||sy!==1){
       let angled=false;
       if(o.poly.length<=9 && Math.abs(sx-sy)>1e-6){   // few points (a drawn/rotated shape, not a dense trace) + a non-uniform edit
@@ -3132,6 +3673,13 @@ function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEG
     else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
     showDims(o); pvRefresh(); return; }
   if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
+  if(flag==="hole"){ if(on) o.el.setAttribute("data-role","hole"); else o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Hole; draw() redraws the dotted hole outline, pvRefresh re-evaluates any group it is in
+  if(flag==="slopeinv"){ o.el.setAttribute("data-slope-inv", on?"1":"0"); pvRefresh(); return; }   // invert a sloped shape / cone: the top stays full, the underside falls away
+  if(flag==="bar"){   // turn a line into a 3D bar: seed a round 4 mm rod at a visible height, off strips every bar attribute
+    if(on){ o.el.setAttribute("data-bar","1"); if(!o.el.getAttribute("data-bar-shape")) o.el.setAttribute("data-bar-shape","round");
+      if(!(+o.el.getAttribute("data-bar-d")>0)) o.el.setAttribute("data-bar-d","4"); if(!(+o.el.getAttribute("data-z0")>0)) o.el.setAttribute("data-z0","5"); }
+    else { ["data-bar","data-bar-shape","data-bar-d","data-bar-w","data-bar-h"].forEach(a=>o.el.removeAttribute(a)); }
+    showDims(o); draw(); pvRefresh(); return; }
   if(flag!=="studs" && flag!=="sockets") return;
   o.el.setAttribute(flag==="studs"?"data-studs":"data-sockets", on?"1":"0"); showDims(o); draw(); pvRefresh(); }   // draw(): the connector overlay on the mat
 const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout rebuilds
@@ -3139,6 +3687,11 @@ const onDimEdit=(e,live)=>{ const el=e.target;   // delegated: survives readout 
   else if(el&&el.dataset&&el.dataset.dimflag!=null && !live) applyDimFlag(el.dataset.dimflag, el.checked); };   // checkbox: on change only
 $("editdims").addEventListener("input",  e=>onDimEdit(e,true));    // live: spinner steps and typing update the preview immediately
 $("editdims").addEventListener("change", e=>onDimEdit(e,false));   // commit (blur / Enter): also re-render the rounded readout
+const slopeEdgeOf=e=>{ const d=e.target&&e.target.dataset&&e.target.dataset.dim; return (d&&/^slope\d+$/.test(d))?+d.slice(5):null; };   // which footprint edge a Slope field maps to
+$("editdims").addEventListener("focusin", e=>{ const i=slopeEdgeOf(e); if(i!==null){ slopeHi=i; draw(); } });   // highlight the side a Slope field controls
+$("editdims").addEventListener("focusout",e=>{ const i=slopeEdgeOf(e); if(i!==null){ slopeHi=null; draw(); } });
+$("editdims").addEventListener("mouseover",e=>{ const i=slopeEdgeOf(e); if(i!==null && slopeHi!==i){ slopeHi=i; draw(); } });
+$("editdims").addEventListener("mouseout", e=>{ const i=slopeEdgeOf(e); if(i!==null && document.activeElement!==e.target){ slopeHi=null; draw(); } });
 /* ---------- Brick size controls (Columns / Rows / Depth / Fit), shown when a brick is selected in 3D ---------- */
 function selectedBrick(){   // the brick body object if the current selection is a brick (its group, or the body alone)
   if(selMulti.length){ for(const id of selMulti){ const o=objects.find(x=>x.id===id); if(o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-brick")) return o; } return null; }
@@ -3305,19 +3858,16 @@ function refreshEditPanel(){
     const gs=new Set(selMulti.map(id=>{const o=objects.find(x=>x.id===id); return o?(o.group||0):0;}));
     const isGroup = gs.size===1 && !gs.has(0);   // all selected share one non-null group
     setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
-    $("editinfo").textContent = mode3D ? (isGroup?"Fused: ":"")+selMulti.length+" objects selected"+(isGroup?" - one printed piece.":".")
+    $("editinfo").textContent = mode3D ? (isGroup?"Grouped: ":"")+selMulti.length+" shapes selected"+(isGroup?" - a bundle, they move together.":".")
                                        : (isGroup?"Group of ":"")+selMulti.length+" objects selected. Change them all to:";
     ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
     ["eCut","eScore","ePrint"].forEach(id=>$(id).classList.remove("on"));
     $("editdims").style.display="none"; $("esimprow").style.display="none"; $("eBreak").style.display="none";
     $("groupsrow").style.display="block";
-    $("eGroup").textContent   = mode3D ? "⛓ Fuse into one piece" : "▦ Group";       // in 3D a group IS the printed piece
-    // "Unfuse" reads as its own opposite at a glance, so say what it does. fusedBodies counts the members that
-    // actually carry volume - a brick's stud circles ride along in the selection but are not pieces.
-    const sepN = mode3D ? fusedBodies(selMulti).length : 0;
-    $("eUngroup").textContent = mode3D ? (sepN>1 ? "⛓ Separate into "+sepN+" pieces" : "⛓ Separate the pieces") : "▤ Ungroup";
-    $("eUngroup").title = mode3D ? "Split this back into separate printed pieces - each exports as its own STL again." : "";
-    $("eGroup").title = mode3D ? "Print these as a single solid: they grow a hair so they overlap, and the slicer welds them. They must touch." : "";
+    $("eGroup").textContent   = "▦ Group";                                            // a group is a BUNDLE: members move together, each stays its own piece; grouping nests
+    $("eUngroup").textContent = "▤ Ungroup";
+    $("eUngroup").title = mode3D ? "Step back one grouping level - any inner group stays grouped (click it to select)." : "";
+    $("eGroup").title = mode3D ? "Bundle these so they move and select as one, each still its own piece. To merge or carve them into one part, use the Combine tool. Groups can nest." : "";
     $("eGroup").style.display = isGroup?"none":""; $("eUngroup").style.display = isGroup?"":"none";
     const mbrk=selectedBrick();                               // a grouped brick: offer its size controls too
     if(mode3D && mbrk){ $("editinfo").textContent="LEGO brick selected — adjust its size below."; }
@@ -3329,14 +3879,23 @@ function refreshEditPanel(){
   if(!o){ panel.style.display="none"; showBrickCtl(null); return; }   // panel appears only while a shape is selected
   panel.style.display="block";
   setKindUI();   // hide the die-cutter Cut/Fold/Print controls in 3D mode
-  $("editinfo").textContent = mode3D ? "Selected object." : ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:");
+  $("editinfo").textContent = mode3D ? "" : ("Selected: a "+KIND_LABEL[o.kind]+" object. Change it to:");   // 3D: the "Selected Object" heading already says this - no redundant line
   showDims(o);
   ["eCut","eScore","ePrint","eDelete"].forEach(id=>$(id).disabled=false);
   $("eCut").classList.toggle("on",   o.kind==="cut");
   $("eScore").classList.toggle("on", o.kind==="score");
   $("ePrint").classList.toggle("on", o.kind==="print");
+  const mate = selId2!=null ? objects.find(x=>x.id===selId2) : null;   // a Shift+click 2nd shape: offer Group/Ungroup on the pair, not only Combine
+  if(mate){
+    const isGroup = o.group!=null && o.group===mate.group;
+    $("groupsrow").style.display="block";
+    $("eGroup").textContent="▦ Group"; $("eUngroup").textContent="▤ Ungroup";
+    $("eGroup").title = mode3D ? "Bundle these two so they move and select as one, each still its own piece. To merge or carve them into one part, use the Combine tool." : "";
+    $("eUngroup").title = mode3D ? "Step back one grouping level - any inner group stays grouped." : "";
+    $("eGroup").style.display=isGroup?"none":""; $("eUngroup").style.display=isGroup?"":"none";
+  }
   const tag = o.el && o.el.tagName ? o.el.tagName.toLowerCase() : "";
-  const isPoly = tag==="polygon";   // Simplify only applies to node-built paths
+  const isPoly = tag==="polygon" && !mode3D;   // Simplify only applies to node-built paths, and only in 2D - a 3D part's nodes are not edited that way
   $("esimprow").style.display = isPoly ? "flex" : "none";
   if(isPoly) $("eNodeCount").textContent = ([o.poly].concat(o.holes||[]).reduce((n,r)=>n+(r.length-1),0))+" nodes";   // total across the outline AND every hole
   $("eBreak").style.display = (activeTool==="node" && selNode!=null && (tag==="polygon"||tag==="polyline")
@@ -3368,36 +3927,29 @@ $("eCut").onclick=()=>setKind("cut");
 $("eScore").onclick=()=>setKind("score");
 $("ePrint").onclick=()=>setKind("print");
 $("eDelete").onclick=deleteSel;
-// Group: bind the current multi-selection into one unit (shared .group id) so it moves/selects together.
-// In 3D the same binding means MORE: the group is one printed piece. Its members grow a hair (FUSE_GROW) so they
-// overlap, and the slicer welds them into a single solid - the same fusion that sticks a stud to a brick's roof.
-// No 3D boolean is involved: a slicer only ever ADDS volume, which is why Fuse can union but could never subtract.
-function fusedBodies(ids){   // the members that carry 3D volume (a brick's stud circles ride along but aren't bodies)
-  const set=new Set(ids);
-  return objects.filter(o=>set.has(o.id) && o.el && o.poly && !(o.el.getAttribute&&o.el.getAttribute("data-brickpart")) && (+o.el.getAttribute("data-z")||0)>0);
-}
-function fuseIslands(bs){   // how many separate clumps of touching bodies? 1 = they really will print as one piece
-  const seen=new Set(); let islands=0;
-  bs.forEach(b=>{ if(seen.has(b.id)) return;
-    islands++; const q=[b]; seen.add(b.id);
-    while(q.length){ const c=q.pop();
-      bs.forEach(x=>{ if(!seen.has(x.id) && bodiesTouch(c,x)){ seen.add(x.id); q.push(x); } }); } });
-  return islands;
-}
-function groupSel(){
-  if(selMulti.length<2){ say("Select two or more objects first (drag a box around them), then "+(mode3D?"Fuse":"Group")+"."); return; }
-  groupSeq++; const set=new Set(selMulti); objects.forEach(o=>{ if(set.has(o.id)) o.group=groupSeq; });
+// Group: bind the current multi-selection into one unit (shared .group / gpath id) so it moves/selects together.
+// This is a BUNDLE in both modes - it never merges or carves geometry; each member stays its own piece. In 3D,
+// merging/carving is the Combine tool's job. Grouping nests, so Ungroup peels one level (see groupSel/ungroupSel).
+// The set Group/Ungroup act on: a marquee multi-selection, or - so Shift+click works the same as a sweep - the
+// Shift+click pair (selId + selId2). This is why grouping is offered for BOTH selection gestures.
+function groupIds(){ return selMulti.length>=2 ? selMulti.slice() : (selId!=null && selId2!=null && objects.some(o=>o.id===selId2) ? [selId, selId2] : (selMulti.length?selMulti.slice():[])); }
+function groupSel(){   // NEST: the new group becomes the OUTERMOST level, so a later ungroup peels just this step (TinkerCAD-style)
+  const ids=groupIds();
+  if(ids.length<2){ say("Select two or more objects first (drag a box around them, or Shift+click a 2nd), then Group."); return; }
+  groupSeq++; const set=new Set(ids);
+  objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); p.unshift(groupSeq); o.gpath=p; o.group=groupSeq; } });
+  selMulti=ids; selId=null; selId2=null;   // the grouped set is now one selection (a Shift+click pair becomes a group)
   refreshEditPanel(); draw(); pvRefresh();
-  if(!mode3D){ say("Grouped "+selMulti.length+" objects - they now select and move as one. Ungroup to separate them."); return; }
-  const bs=fusedBodies(selMulti), islands=bs.length?fuseIslands(bs):0;
-  say(bs.length<2 ? "Fused, but only "+bs.length+" of these has a Depth - give the others one and they will print as a single piece."
-    : islands>1   ? "Fused "+bs.length+" shapes, but they sit in "+islands+" separate clumps - they will still print as "+islands+" pieces. Move them until they touch or overlap."
-    : "Fused "+bs.length+" shapes into one printed piece - Export STL writes it as a single STL. Unfuse to separate them.");
+  say(mode3D
+    ? "Grouped "+ids.length+" shapes - they move and select as one, but each stays its own piece (a bundle). To merge or carve them into a single part, use the Combine tool. Ungroup steps back one level."
+    : "Grouped "+ids.length+" objects - they select and move as one. Ungroup to separate them.");
 }
-function ungroupSel(){
-  const set=new Set(selMulti); let n=0; objects.forEach(o=>{ if(set.has(o.id)&&o.group!=null){ o.group=null; n++; } });
+function ungroupSel(){   // PEEL one level: remove the outermost group id from each selected member; the inner grouping (if any) survives
+  const ids=groupIds(), set=new Set(ids.length?ids:(selId!=null?[selId]:[])); let n=0;
+  objects.forEach(o=>{ if(set.has(o.id)){ const p=gpathOf(o).slice(); if(p.length){ p.shift(); o.gpath=p; o.group=p.length?p[0]:null; n++; } } });
+  selMulti=[]; selId=null; selId2=null;   // the loose set is no longer one selection; click to pick the inner group or a shape
   refreshEditPanel(); draw(); pvRefresh();
-  say(mode3D ? "Separated into "+n+" pieces - each prints on its own again." : "Ungrouped "+n+" objects.");
+  say(mode3D ? "Ungrouped one level - "+n+" item"+(n!==1?"s":"")+" stepped out. Any inner group stays; click it to select." : "Ungrouped "+n+" objects.");
 }
 $("eGroup").onclick=groupSel;
 $("eUngroup").onclick=ungroupSel;
@@ -3509,9 +4061,22 @@ cv.addEventListener("click",(e)=>{
     if(!fillOf(o) || !o.poly || o.poly.length<3 || !objClosed(o)) continue;
     if(ptInPoly(mx,my,placePoly(o.poly))){ hit=o; break; } }
   const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
-  if(e.shiftKey && selId!=null){                 // Shift+click picks the 2nd operand (orange) for Combine
-    if(hit && hit.id!==selId){ selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect."); }
-    else if(onImg && refImg && refImg.img){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
+  if(e.shiftKey && activeTool!=="node" && (selMulti.length || selId!=null)){   // Shift+click builds up a selection to Group (or, for two loose shapes, to Combine)
+    const wholeGroup = ob => (ob && ob.group!=null) ? objects.filter(z=>z.group===ob.group).map(z=>z.id) : (ob?[ob.id]:[]);   // clicking any member pulls in its whole (outermost) bundle
+    if(hit){
+      if(selMulti.length){                            // already a multi / group selection -> ADD the clicked object's whole group (bundle a group with a new shape, TinkerCAD-style)
+        const s=new Set(selMulti); wholeGroup(hit).forEach(id=>s.add(id));
+        selMulti=[...s]; selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+        say("Added to the selection - "+selMulti.length+" objects. Group to bundle them (Shift+click more to keep adding)."); }
+      else if(hit.id!==selId){
+        const sel1=objects.find(x=>x.id===selId);
+        if(selId2!=null || hit.group!=null || (sel1&&sel1.group!=null)){   // a group is involved, or this is a 3rd pick -> a 2-operand Combine no longer fits; promote to a Group-able multi-selection
+          const s=new Set([...wholeGroup(sel1), ...(selId2!=null?wholeGroup(objects.find(x=>x.id===selId2)):[]), ...wholeGroup(hit)]);
+          selMulti=[...s]; selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;
+          say("Selected "+selMulti.length+" objects. Group to bundle them."); }
+        else { selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect, or Group to bundle them."); } }   // two loose single shapes: the Combine 2nd operand, still Group-able as a pair
+    }
+    else if(onImg && refImg && refImg.img && selId!=null){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
   } else if(hit && hit.group!=null && activeTool!=="node"){   // a grouped object -> select the whole group (moves/deletes as one).
     selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;   // EXCEPT the Node tool, which edits ONE shape - it falls through below and picks the individual object out of the group (e.g. the frame of a tabbed shadowbox)
     say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
@@ -3524,6 +4089,8 @@ cv.addEventListener("click",(e)=>{
 /* ---------- in-plane rotation: a handle above the shape spins it about its center ---------- */
 function rotatePts(pts,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // rotate points around (cx,cy) by ang radians
   return pts.map(p=>{ const dx=p[0]-cx,dy=p[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c]; }); }
+function rotMeshTris(mesh,cx,cy,ang){ const c=Math.cos(ang),s=Math.sin(ang);   // spin a baked part's mesh about the vertical axis at (cx,cy); z (height) unchanged
+  return mesh.map(t=>t.map(v=>{ const dx=v[0]-cx,dy=v[1]-cy; return [cx+dx*c-dy*s, cy+dx*s+dy*c, v[2]]; })); }
 function rotHandle(o,k){   // handle anchored to the first-edge midpoint (which rotates WITH the shape), offset outward from center; null when N/A
   const t=o.el&&o.el.tagName?o.el.tagName.toLowerCase():"";
   if(!(t==="rect"||t==="polygon")) return null;                                   // circles are symmetric
@@ -3591,7 +4158,7 @@ cv.addEventListener("mousedown",(e)=>{
       if(rh && Math.hypot(mx-rh.x,my-rh.y)*k<=10){ ensurePolygon(ro);
         let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9; ro.poly.forEach(p=>{if(p[0]<mnx)mnx=p[0];if(p[0]>mxx)mxx=p[0];if(p[1]<mny)mny=p[1];if(p[1]>mxy)mxy=p[1];});
         const cx=(mnx+mxx)/2, cy=(mny+mxy)/2, px=(mx-pp.ox)/pp.s, py=(my-pp.oy)/pp.s;
-        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),startHoles:ro.holes?ro.holes.map(h=>h.map(p=>[p[0],p[1]])):null,a0:Math.atan2(py-cy,px-cx),moved:false};
+        drag={mode:"rotate",obj:ro,cx:cx,cy:cy,startPoly:ro.poly.map(p=>[p[0],p[1]]),startHoles:ro.holes?ro.holes.map(h=>h.map(p=>[p[0],p[1]])):null,startMesh:ro.mesh?ro.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,a0:Math.atan2(py-cy,px-cx),moved:false};
         cv.style.cursor="grabbing"; e.preventDefault(); return; } }
   }
   if(selMulti.length){   // group rotate handle - same idea, spins every member around the shared bounding-box center
@@ -3606,6 +4173,7 @@ cv.addEventListener("mousedown",(e)=>{
         const tag=o.el.tagName.toLowerCase();
         return { o:o, tag:tag, startPoly:o.poly?o.poly.map(p=>[p[0],p[1]]):null,
                  startHoles: o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,
+                 startMesh: o.mesh?o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,
                  cx0: tag==="circle"?(+o.el.getAttribute("cx")||0):null, cy0: tag==="circle"?(+o.el.getAttribute("cy")||0):null };
       }).filter(Boolean);
       drag={mode:"grouprotate",members:members,cx:cx,cy:cy,a0:Math.atan2(py-cy,px-cx),moved:false};
@@ -3627,6 +4195,7 @@ cv.addEventListener("mousedown",(e)=>{
             return { o:o, t:o.el.tagName.toLowerCase(),
                      poly:o.poly.map(p=>[p[0],p[1]]),
                      holes:o.holes?o.holes.map(h2=>h2.map(p=>[p[0],p[1]])):null,
+                     mesh:o.mesh?o.mesh.map(t=>t.map(v=>[v[0],v[1],v[2]])):null,
                      cx:N("cx"), cy:N("cy"), r:N("r"), x:N("x"), y:N("y"), w:N("width"), hh:N("height") }; })};
         cv.style.cursor=hit.c; e.preventDefault(); return; } }
   }
@@ -3678,14 +4247,28 @@ cv.addEventListener("mousedown",(e)=>{
     const onImg = refImg && mx>=refImg.x&&mx<=refImg.x+refImg.w&&my>=refImg.y&&my<=refImg.y+refImg.h;
     if(!(refImg&&refImg.sel) && !onImg && !objects.some(onObjId)){ marquee={x0:mx,y0:my,x1:mx,y1:my}; e.preventDefault(); return; }
   }
-  if(selId==null) return;
+  if(!e.shiftKey){   // Grab the topmost shape UNDER THE POINTER to move it - its whole INTERIOR is a grip, not
+    // just the thin outline (hunting for the exact stroke is what made a shape hard to pick up). Works with or
+    // without an existing selection, so you can grab a DIFFERENT shape directly. Grouped shapes are handled
+    // above; Shift is left alone so Shift+click still builds a group / picks the Combine operand (click handler).
+    const {mx,my,k}=evtMM(e); let pick=null;
+    for(let i=objects.length-1;i>=0;i--){ const c=objects[i]; if(!c.el||!c.poly||c.group!=null) continue;
+      const p=placePoly(c.poly); let on=false;
+      if(p.length>=3 && objClosed(c) && ptInPoly(mx,my,p)) on=true;
+      else for(let j=0;j+1<p.length;j++) if(segDist(mx,my,p[j][0],p[j][1],p[j+1][0],p[j+1][1])*k<=8){ on=true; break; }
+      if(on){ pick=c; break; } }
+    if(!pick){ if(selId==null) return; }   // pressed off every shape and nothing was selected -> nothing to grab
+    else { if(pick.id!==selId){ selId=pick.id; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; draw(); refreshEditPanel(); } suppressClick=true; }   // suppressClick: a body press selects AND holds the shape, so a click that doesn't drag won't deselect it
+  } else if(selId==null) return;   // Shift held with nothing selected: no move to start; let the click handler do the Shift+click
   const o=objects.find(x=>x.id===selId); if(!o||!o.el) return;
   const t=o.el.tagName.toLowerCase();
   const {mx,my,k}=evtMM(e), disp=placePoly(shapeNodes(o)), pp=placeParams();
-  if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, or any stroke from an imported design (a Snap! drawing arrives as
-    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);   // polylines, a Silhouette file as paths): no parametric resize, but drag the body to move it
-    if(mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys))
-      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),origHoles:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,sh0:elShift(o),moved:false,
+  if(t!=="rect"&&t!=="circle"){   // a node-edited polygon, an imported stroke, or an open line/bar: no parametric resize, but drag the body to move it
+    const xs=disp.map(q=>q[0]),ys=disp.map(q=>q[1]);
+    let grab = mx>=Math.min(...xs)&&mx<=Math.max(...xs)&&my>=Math.min(...ys)&&my<=Math.max(...ys);
+    if(!grab) for(let i=0;i+1<disp.length;i++) if(segDist(mx,my,disp[i][0],disp[i][1],disp[i+1][0],disp[i+1][1])*k<=8){ grab=true; break; }   // an open line/bar has no interior - grab it near the stroke, the same 8 px that clicking uses
+    if(grab)
+      drag={mode:"polymove",obj:o,start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],orig:o.poly.map(p=>[p[0],p[1]]),origHoles:o.holes?o.holes.map(h=>h.map(p=>[p[0],p[1]])):null,origMesh:o.mesh?o.mesh.map(tr=>tr.map(p=>[p[0],p[1],p[2]])):null,sh0:elShift(o),moved:false,
             snap:snapTargets(new Set([o.id])),self:snapSample(o.poly)},cv.style.cursor="move",e.preventDefault();
     return; }
   const N=s=>+o.el.getAttribute(s)||0;
@@ -3741,6 +4324,7 @@ window.addEventListener("mousemove",(e)=>{
         ensurePolygon(o);                                   // an imported <path> can only be TRANSLATED, never re-pointed,
         o.poly=m.poly.map(S);                               // so swap it for an editable polygon first - the same step rotate takes
         if(m.holes) o.holes=m.holes.map(hh=>hh.map(S));     // a window travels with its frame, at the frame's scale
+        if(o.mesh && m.mesh) o.mesh=m.mesh.map(t=>t.map(v=>[drag.ax+(v[0]-drag.ax)*sx, drag.ay+(v[1]-drag.ay)*sy, v[2]]));   // a baked part scales its mesh footprint to match; height (z) is unchanged
         placeEl(o);
       }
     });
@@ -3802,6 +4386,7 @@ window.addEventListener("mousemove",(e)=>{
     drag.members.forEach(m=>{ const o=m.o; if(!m.startPoly) return;
       o.poly=rotatePts(m.startPoly,drag.cx,drag.cy,delta);
       if(m.startHoles) o.holes=m.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
+      if(m.startMesh) o.mesh=rotMeshTris(m.startMesh,drag.cx,drag.cy,delta);   // a baked part in the group spins its mesh too
       if(m.tag==="circle"){ const c=rotatePts([[m.cx0,m.cy0]],drag.cx,drag.cy,delta)[0];
         o.el.setAttribute("cx",fmtn(c[0])); o.el.setAttribute("cy",fmtn(c[1])); }
       else placeEl(o); });
@@ -3827,6 +4412,7 @@ window.addEventListener("mousemove",(e)=>{
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
     if(drag.origHoles) o.holes=drag.origHoles.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
+    if(drag.origMesh) o.mesh=drag.origMesh.map(tr=>tr.map(p=>[p[0]+ddx,p[1]+ddy,p[2]]));   // a baked 3D part carries its own mesh - move it with the footprint
     o.el.setAttribute("data-shx",fmtn(drag.sh0[0]+ddx)); o.el.setAttribute("data-shy",fmtn(drag.sh0[1]+ddy));
     placeEl(o);
     drag.moved=true; draw(); return; }
@@ -3835,6 +4421,7 @@ window.addEventListener("mousemove",(e)=>{
     if(e.shiftKey){ const step=Math.PI/12; delta=Math.round(delta/step)*step; }   // Shift snaps to 15 deg (45 / 90 for square fits)
     o.poly=rotatePts(drag.startPoly,drag.cx,drag.cy,delta);
     if(drag.startHoles) o.holes=drag.startHoles.map(h=>rotatePts(h,drag.cx,drag.cy,delta));
+    if(drag.startMesh) o.mesh=rotMeshTris(drag.startMesh,drag.cx,drag.cy,delta);   // a baked part spins its mesh with the footprint
     o.el.setAttribute("points", o.poly.slice(0,-1).map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "));
     drag.moved=true; draw(); return; }
   if(drag.shape==="line"){ const a=drag.anchor;                       // the fixed end; the other end tracks the cursor
@@ -3890,7 +4477,7 @@ window.addEventListener("mouseup",()=>{
                 +". Ctrl-Z undoes it.")
              : "Resized.");
     }
-    draw(); refreshEditPanel(); return; }
+    draw(); refreshEditPanel(); if(d.moved) pvRefresh(); return; }   // pvRefresh: a resized baked part updates in the 3D view / STL too
   if(drag.mode==="groupmove"){ const moved=drag.moved; drag=null; cv.style.cursor="default"; if(moved){ suppressClick=true; say(selMulti.length+" object"+(selMulti.length!==1?"s":"")+" moved."); } draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; draw(); return; }
   if(drag.draw){   // finish drawing: discard a too-small (click-only) shape, else keep it & auto-release to select
@@ -3909,7 +4496,7 @@ window.addEventListener("mouseup",()=>{
     draw(); refreshEditPanel(); return;
   }
   if(drag.mode==="node"){ suppressClick=true; if(drag.moved) say("Moved a node."); drag=null; cv.style.cursor="default"; draw(); return; }   // keep the node selected (filled)
-  if(drag.mode==="polymove"){ if(drag.moved) suppressClick=true; drag=null; cv.style.cursor="default"; return; }
+  if(drag.mode==="polymove"){ if(drag.moved){ suppressClick=true; pvRefresh(); } drag=null; cv.style.cursor="default"; return; }   // pvRefresh: a moved bar or baked part shifts in 3D too
   if(drag.mode==="rotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated the shape."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.mode==="grouprotate"){ if(drag.moved){ suppressClick=true; pvRefresh(); say("Rotated "+drag.members.length+" objects."); } drag=null; cv.style.cursor="default"; refreshEditPanel(); draw(); return; }
   if(drag.moved){ suppressClick=true; const el=drag.obj.el; let msg;
