@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.104 -->
+<!-- SANGALA_VERSION: 2026-07-24.105 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2485,15 +2485,21 @@ function updateCombine(){
   const [o1,o2]=combineOperands();
   const isBrick=o=>o&&o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick");
   const twoShapes = o1&&o2&&o1!==o2 && !isBrick(o1) && !isBrick(o2);
+  // 3D: a multi-selection of 2+ non-brick shapes can Combine at once (union merges solids + carves holes;
+  // intersect keeps the overlap). 2D stays a two-shape operation.
+  const multi3D = mode3D && selMulti.length>=2 && selMulti.map(id=>objects.find(o=>o.id===id)).filter(o=>o&&!isBrick(o)).length>=2;
+  const canCombine = twoShapes || multi3D;
   // shape + photo -> Intersect crops the photo to the shape. No Shift+click needed: a single shape over a
   // photo is unambiguous (only a 2nd shape, not the photo, is armed by Shift+click). This is the vignette.
-  const imgOperand = o1 && !isBrick(o1) && !twoShapes && refImg && refImg.img;
+  const imgOperand = o1 && !isBrick(o1) && !twoShapes && !multi3D && refImg && refImg.img;
   if($("pDiff")) $("pDiff").style.display = mode3D ? "none" : "";   // 3D difference is done by marking a shape Hole and grouping, so drop it from the 3D Combine menu; 2D keeps all three
-  if($("pUnion")) $("pUnion").disabled = !twoShapes;
-  if($("pDiff"))  $("pDiff").disabled  = !twoShapes;
-  if($("pInt"))   $("pInt").disabled   = !(twoShapes || imgOperand);
-  const hint=$("combinehint"); if(hint){ hint.style.display=(twoShapes||imgOperand)?"none":"block";
-    hint.textContent = imgOperand ? "Intersect crops the photo to the shape." : "Select two shapes - Shift+click a 2nd, or sweep a box around both - or a shape over the photo."; }
+  if($("pUnion")) $("pUnion").disabled = !canCombine;
+  if($("pDiff"))  $("pDiff").disabled  = !twoShapes;   // Difference stays a two-shape op (and is hidden in 3D)
+  if($("pInt"))   $("pInt").disabled   = !(canCombine || imgOperand);
+  const hint=$("combinehint"); if(hint){ hint.style.display=(canCombine||imgOperand)?"none":"block";
+    hint.textContent = imgOperand ? "Intersect crops the photo to the shape."
+      : mode3D ? "Select two or more shapes - Shift+click to add each, or sweep a box around them."
+      : "Select two shapes - Shift+click a 2nd, or sweep a box around both - or a shape over the photo."; }
 }
 // create a node-editable <polygon> object from a result ring (design mm, open ring).
 // Simplify first (same ~0.08 mm tolerance the cut path uses) so dense curve runs -
@@ -2637,57 +2643,75 @@ function holeFootprint(o){
   const w=(rect?+o.el.getAttribute("data-bar-w"):+o.el.getAttribute("data-bar-d"))||4, hx=-dy/L*w/2, hy=dx/L*w/2;
   return [[a[0]+hx,a[1]+hy],[b[0]+hx,b[1]+hy],[b[0]-hx,b[1]-hy],[a[0]-hx,a[1]-hy],[a[0]+hx,a[1]+hy]];
 }
-function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar or an already-baked part)
-  const mA=operandMesh(o1), mB=operandMesh(o2);
-  if(!mA||!mB){ say("To combine in 3D, give the solid part a Depth first - the 3D bar already has its own thickness."); return; }
+function bool3D(op,o1,o2){ bool3Dn(op,[o1,o2]); }   // 2-operand shim; the engine is N-ary
+// Combine N SOLIDS in true 3D and bake ONE part. Union honors the Solid/Hole flag (solids merge, holes carve);
+// Intersect keeps the region common to all. A 3D Difference is expressed as Hole+Union, so the 3D menu doesn't
+// offer it - the literal diff path (subtract each later operand from the first) stays only for back-compat.
+function bool3Dn(op, ops){
+  ops = (ops||[]).filter(Boolean);
+  const wm = ops.map(o=>({o, m:operandMesh(o)})).filter(x=>x.m&&x.m.length);
+  if(wm.length<2){ say("To combine in 3D, give each shape a Depth first - a 3D bar already has its own thickness."); return; }
   const finiteMesh=m=>m.every(t=>t.every(p=>isFinite(p[0])&&isFinite(p[1])&&isFinite(p[2])));   // a NaN vertex makes the BSP CSG recurse forever - refuse it rather than freeze
-  if(!finiteMesh(mA)||!finiteMesh(mB)){ say("One of these shapes has an invalid size or slope - fix or redraw it, then Combine again."); return; }
-  // Union honors the Solid/Hole flag (TinkerCAD-style): a shape marked Hole subtracts instead of adding, so
-  // Union combines everything - solids merge, holes carve. Difference/Intersect stay literal two-operand ops.
-  const carved = op==="union" && (isHole(o1)!==isHole(o2));
-  const mesh = cleanMesh(op==="union"
-    ? ( isHole(o1)&&!isHole(o2) ? mesh3D("subtract",mB,mA)      // the hole (o1) cut out of the solid (o2)
-      : isHole(o2)&&!isHole(o1) ? mesh3D("subtract",mA,mB)      // the hole (o2) cut out of the solid (o1)
-      : mesh3D("union",mA,mB) )                                 // both solid (or both hole) -> merge
-    : mesh3D(op==="diff"?"subtract":op, mA, mB), 1e-4, true);   // weld-only (fast) so iterated Combines don't compound; STL export runs the full manifold clean per piece
-  if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":carved?"The hole covers the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
-  // ---- 2D footprint for the plan view: computed to MATCH the operation so it reads true with 3D View off.
-  // A shape carve uses the 2D region difference (solid minus cutter): the outline notches where the cutter bit
-  // an edge and shows a dashed hole where the cutter was interior - the cutter's own outline never survives. A
-  // bar carve keeps the solid's outline and marks the bore as a dashed swept-rectangle (an internal bore does
-  // not breach the top face, so it must not notch the outline). Union/Intersect take the merged / overlap outline.
+  if(wm.some(x=>!finiteMesh(x.m))){ say("One of these shapes has an invalid size or slope - fix or redraw it, then Combine again."); return; }
+  const solids=wm.filter(x=>!isHole(x.o)), holes=wm.filter(x=>isHole(x.o));
+  const bake=(o,a,b)=>cleanMesh(mesh3D(o,a,b),1e-4,true);   // weld-only (fast) so iterated Combines don't compound; STL export runs the full manifold clean per piece
+  let mesh, carved=false;
+  if(op==="intersect"){
+    let m=wm[0].m; for(let i=1;i<wm.length && m.length;i++) m=bake("intersect",m,wm[i].m); mesh=m;
+  } else if(op==="diff"){
+    let m=wm[0].m; for(let i=1;i<wm.length && m.length;i++){ m=bake("subtract",m,wm[i].m); carved=true; } mesh=m;
+  } else {                                                  // union: merge every solid, then carve every hole
+    if(!solids.length){ say("Mark at least one shape solid - a bundle of only holes carves nothing."); return; }
+    let m=solids[0].m; for(let i=1;i<solids.length;i++) m=bake("union",m,solids[i].m);
+    for(let i=0;i<holes.length && m.length;i++){ m=bake("subtract",m,holes[i].m); carved=true; }
+    mesh=m;
+  }
+  if(!mesh.length){ say(op==="intersect"?"The shapes don't all overlap - nothing to intersect.":carved?"The hole(s) cover the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
+  // ---- 2D footprint for the plan view, FOLDED to match the operation (reads true with 3D View off). A shape
+  // carve = solid minus cutter (notch, or a dashed interior hole); a bar hole = an internal bore (annotate with
+  // a dashed rectangle, do NOT notch the outline); union / intersect = the merged / overlap outline.
   const region=o=> isBar(o) ? {outer:holeFootprint(o)||[], holes:[]} : {outer:o.poly, holes:o.holes||[]};
   const ringArea=r=>{ const p=pbOpen(r); let a=0; for(let i=0;i<p.length;i++){ const b=p[(i+1)%p.length]; a+=p[i][0]*b[1]-b[0]*p[i][1]; } return Math.abs(a); };
   const largest=list=> list.length ? list.slice().sort((x,y)=>ringArea(y.outer)-ringArea(x.outer))[0] : null;
   const openRing=h=>{ let r=simplify(dedupePoly(pbOpen(h)),0.08); if(r.length<3) r=pbOpen(h); return r.map(p=>[p[0],p[1]]); };
-  let fp, openings=[];
-  const barCut = carved && isBar(isHole(o1)?o1:o2);   // a bar hole = an internal bore; keep the solid outline, annotate the bore
-  if(carved && !barCut){                              // shape carve -> true 2D difference (notch or interior hole); a solid's existing holes ride through the region boolean
-    const solid=isHole(o1)?o2:o1, cutter=isHole(o1)?o1:o2;
-    const n=largest(nestRings(boolShapes("diff", region(solid), {outer:region(cutter).outer, holes:[]})));
-    if(n&&n.outer){ fp=n.outer.map(p=>[p[0],p[1]]); openings=(n.holes||[]).map(openRing); } else fp=region(solid).outer.map(p=>[p[0],p[1]]);
-  } else if(barCut){                                  // bar bore -> solid outline (with its holes) + a dashed swept rectangle marking the bore
-    const solid=isHole(o1)?o2:o1, bar=isHole(o1)?o1:o2;
-    fp=region(solid).outer.map(p=>[p[0],p[1]]); openings=(solid.holes||[]).map(h=>h.map(p=>[p[0],p[1]]));
-    const hf=holeFootprint(bar); if(hf) openings.push(hf);
-  } else {                                            // union of solids, or intersect -> the merged / overlap outline, any enclosed voids preserved
-    const n=largest(nestRings(boolShapes(op==="intersect"?"intersect":"union", region(o1), region(o2))));
-    if(n&&n.outer){ fp=n.outer.map(p=>[p[0],p[1]]); openings=(n.holes||[]).map(openRing); } else fp=region(o1).outer.map(p=>[p[0],p[1]]);
+  const merge=(reg,b,mop)=>{ const n=largest(nestRings(boolShapes(mop, reg, b))); return (n&&n.outer)?{outer:n.outer, holes:n.holes||[]}:reg; };
+  let reg, openings=[];
+  if(op==="intersect"){
+    reg=region(wm[0].o);
+    for(let i=1;i<wm.length;i++){ reg=merge(reg, region(wm[i].o), "intersect"); if(!reg.outer.length) break; }
+  } else if(op==="diff"){
+    reg=region(wm[0].o);
+    for(let i=1;i<wm.length;i++){ const x=wm[i].o; if(isBar(x)){ const hf=holeFootprint(x); if(hf) openings.push(hf); } else reg=merge(reg, {outer:region(x).outer, holes:[]}, "diff"); }
+  } else {
+    reg=region(solids[0].o);
+    for(let i=1;i<solids.length;i++) reg=merge(reg, region(solids[i].o), "union");   // merge the solids' outlines
+    for(const h of holes){ if(isBar(h.o)){ const hf=holeFootprint(h.o); if(hf) openings.push(hf); } else reg=merge(reg, {outer:region(h.o).outer, holes:[]}, "diff"); }   // then carve each hole (a bar bore is annotated, not notched)
   }
-  const kind=([o1,o2].find(o=>!isHole(o))||o1).kind;
-  [o1,o2].forEach(o=>{ if(o.el&&o.el.remove) o.el.remove(); });
-  objects=objects.filter(o=>o!==o1&&o!==o2);
+  let fp = (reg.outer&&reg.outer.length) ? reg.outer.map(p=>[p[0],p[1]]) : region((solids[0]||wm[0]).o).outer.map(p=>[p[0],p[1]]);
+  openings = openings.concat((reg.holes||[]).map(openRing));
+  const kind=(wm.find(x=>!isHole(x.o))||wm[0]).o.kind;
+  wm.forEach(x=>{ if(x.o.el&&x.o.el.remove) x.o.el.remove(); });   // remove only the shapes we actually combined; a selected flat shape (no Depth) is left alone
+  objects=objects.filter(o=>!wm.some(x=>x.o===o));
   makeMeshObj(fp, mesh, kind, openings);
   selId=null; selId2=null; selMulti=[]; selNode=null;
-  renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the bored / joined part shows at once
-  say((carved?"Union (3D): the hole cut out of the solid"
-      :op==="diff"?"Difference (3D): the 2nd shape cut out"
-      :op==="union"?"Union (3D): the two merged"
-      :"Intersect (3D): only the overlap kept")+" - one solid part, keeps its Depth and Base. See it in the 3D view.");
+  renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the combined part shows at once
+  const n=wm.length;
+  say((op==="intersect" ? "Intersect (3D): only the overlap of "+n+" shapes kept"
+      : op==="diff" ? "Difference (3D): cut from the first shape"
+      : carved ? "Union (3D): "+n+" shapes merged, hole(s) carved"
+      : "Union (3D): "+n+" shapes merged")+" - one solid part, keeps its Depth and Base. See it in the 3D view.");
 }
 function applyBool(op){
   const [o1,o2]=combineOperands();
   if(op==="intersect" && !o2 && refImg && refImg.img && o1){ cropToShape(); return; }   // shape over photo (no 2nd shape): Intersect = crop photo to shape
+  if(mode3D){   // 3D: combine as MANY shapes as are selected (union merges solids + carves holes; intersect keeps the common overlap)
+    const notBrick=o=>o&&!(o.el&&o.el.hasAttribute&&o.el.hasAttribute("data-brick"));
+    const ids = selMulti.length>=2 ? selMulti.slice() : ((o1&&o2&&o1!==o2)?[o1.id,o2.id]:[]);
+    const ops = ids.map(id=>objects.find(o=>o.id===id)).filter(notBrick);
+    if(ops.length>=2 && ops.some(is3DSolid)){ ensureDoc(); bool3Dn(op, ops); return; }
+    if(ops.length>=2){ say("Give the shapes a Depth first, then Combine in 3D."); return; }
+    say("Pick two or more shapes in 3D: Shift+click to add each, or sweep a box around them."); return;
+  }
   if(!o1||!o2||o1===o2){ say("Pick two shapes: Shift+click a 2nd, or sweep a box around both."); return; }
   if(is3DSolid(o1)||is3DSolid(o2)){ ensureDoc(); bool3D(op,o1,o2); return; }   // any 3D solid (bar, baked part, or a shape with Depth) -> true 3D boolean, which keeps Depth + Base; only the flat 2D boolean drops them
   ensureDoc();

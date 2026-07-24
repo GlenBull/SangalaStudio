@@ -252,9 +252,16 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     through `bodyTris(o,fuse)`.)
   - **Combine (`bool3D`) = MERGE/CARVE, baked.** This is where geometry actually combines. **Union honors the
     Solid/Hole flag** (TinkerCAD-style): a Hole operand subtracts, a solid unions — so Union alone does both
-    (solids merge, holes carve), validated by the oracle (`union_hole_test.js`, mism=0). **Menu is
-    mode-specific:** 2D = Union / Difference / Intersect; **3D = Union / Intersect only** (`pDiff` hidden when
-    `mode3D` — Difference is unneeded because Hole + Union carves). Combine bakes one mesh, keeps Depth/Base,
+    (solids merge, holes carve), validated by the oracle (`union_hole_test.js`, mism=0). **N-ary in 3D
+    (`bool3Dn`, 2026-07-24): Combine takes AS MANY shapes as are selected** — union merges every solid then
+    carves every hole; intersect keeps the region common to all. `applyBool` routes `selMulti` (2+) through
+    `bool3Dn` in `mode3D`; `bool3D(op,o1,o2)` is now a 2-operand shim over it, and `updateCombine` enables the
+    buttons for a 2+ multi-selection. Removes only the shapes it actually combined (a selected flat/no-Depth
+    shape is left alone), bakes ONE part with a footprint FOLDED to match the op. Validated: 3 chained solids +
+    1 hole → one part, vol 10000−360=9640; 3-box intersect → 1000 (`nary_test.js`/`nary_test2.js`, real
+    `applyBool`). **Menu is mode-specific:** 2D = Union / Difference / Intersect (two shapes); **3D = Union /
+    Intersect only** (`pDiff` hidden when `mode3D` — Difference is unneeded because Hole + Union carves).
+    Combine bakes one mesh, keeps Depth/Base,
     and is destructive (undo/redo to reposition). A bar bores a hole by being marked Hole and Combined. The BSP
     CSG (`mesh3D`) leaves T-junctions on subtract/intersect (a face split against one solid's plane but not the
     neighbor's shared edge → edges shared by ≠2 faces → slicers flag "non-manifold"), so `bool3D` runs the
