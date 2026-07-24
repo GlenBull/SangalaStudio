@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.110 -->
+<!-- SANGALA_VERSION: 2026-07-24.111 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -262,7 +262,7 @@
       <option>Pen (draw)</option>
     </select>
     <div id="bar"><div id="barfill"></div></div>
-    <div id="status">Connect to the Die Cutter to begin.</div>
+    <div id="status">Open a design or draw a shape to begin.</div>
     <label id="plateRow" style="display:none;align-items:center;gap:.45rem;cursor:pointer;margin:.55rem 0 .1rem;color:#5a4a34;font-size:.9rem;font-weight:600" title="Show the A1 Mini build plate in the 3D View. Turn off to orbit under the object and see its underside.">
       <input type="checkbox" id="showPlate" style="width:auto;margin:0"> Show the build plate (A1&nbsp;Mini)</label>
     <div id="tracetune" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
@@ -961,7 +961,7 @@ async function connect(){
   try{
     const r=await fetch("/connect"); const j=await r.json();
     if(j.ok){connected=true;MAT_W=j.width||203;$("conn").textContent="Connected: "+j.model;
-      $("make").disabled=false;say("Connected. Open a design or load the test square.");draw();}
+      $("make").disabled=false;say("Connected. Load your material and press Make It! when your design is ready.");draw();}
     else{connected=false;$("conn").textContent="Not connected";say("Could not connect: "+j.error);}
   }catch(e){say("Could not reach the helper: "+e.message);}
 }
@@ -980,7 +980,7 @@ async function makeIt(){
     // marks off -> plain cut, no registration
     pl=placed(); spl=placedScore(); url="/cut";
   }
-  if(!pl.length && !spl.length){say("Open a design or load the test square first.");return;}
+  if(!pl.length && !spl.length){say("Open a design or draw a shape first.");return;}
   const body=bodyOf(hdrStr(pen), pl, perforate(spl,4,1.2));
   $("make").disabled=true;
   say(showMarks?"Registering to the printed marks, then making it...":(pen?"Drawing...":"Making..."));
@@ -2249,7 +2249,7 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
   ["fabHead","make","matHead","material","bar"].forEach(id=>$(id).style.display=on?"none":"");   // Fabricate/Make It + Material picker + its progress bar are die-cutter (2D) controls; 3D exports an STL instead
   say(on?'Design in 3D. Then "Export STL" to 3D print.'            // 3D has no die cutter, so drop the "Connect to the Die Cutter" prompt
-       :(connected?"Connected. Open a design or load the test square.":"Connect to the Die Cutter to begin."));
+       :(connected?"Connected. Load your material and press Make It! when your design is ready.":"Open a design or draw a shape to begin."));
   if(!on && activeTool==="brick") setTool("select");             // don't leave a hidden tool active
   refreshEditPanel();
 }
