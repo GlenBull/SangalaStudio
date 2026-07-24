@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-23.99 -->
+<!-- SANGALA_VERSION: 2026-07-24.100 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1966,9 +1966,10 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
 // design, which is the right thing when the pieces are laid out to print together in one job.
 async function exportSTL(){
   const sel=new Set(selectedIds());
-  const {tris,n,bricks,parts}=buildTris(sel.size?sel:null);
+  const {n,bricks,parts}=buildTris(sel.size?sel:null);
   if(!n){ say(sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
                        : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
                             sel.size?"sangala-part.stl":"sangala-model.stl","STL model",".stl");
   if(!name){ say("Export canceled - nothing written."); return; }
@@ -2482,7 +2483,7 @@ const mesh3D=(function(){
     else{const f=[],b=[];
       for(let i=0;i<p.vs.length;i++){const j=(i+1)%p.vs.length,ti=t[i],tj=t[j],vi=p.vs[i],vj=p.vs[j];
         if(ti!==2)f.push(vi); if(ti!==1)b.push(vi.slice());
-        if((ti|tj)===3){const tt=(pl.w-dot(pl.n,vi))/dot(pl.n,sub(vj,vi));const v=lerp(vi,vj,tt);f.push(v);b.push(v.slice());}}
+        if((ti|tj)===3){const den=dot(pl.n,sub(vj,vi));const tt=Math.abs(den)>1e-12?(pl.w-dot(pl.n,vi))/den:0.5;const v=lerp(vi,vj,tt);f.push(v);b.push(v.slice());}}   // den~0 (edge parallel to a garbage sliver-plane) would divide to NaN and make the BSP recurse forever - clamp to the midpoint
       if(f.length>=3)fr.push(poly(f)); if(b.length>=3)bk.push(poly(b));}}
   class Node{
     constructor(polys){this.pl=null;this.f=null;this.b=null;this.polys=[];if(polys)this.build(polys);}
@@ -2499,9 +2500,17 @@ const mesh3D=(function(){
       if(fr.length){if(!this.f)this.f=new Node();this.f.build(fr);}
       if(bk.length){if(!this.b)this.b=new Node();this.b.build(bk);}}
   }
-  const toPolys=tris=>tris.map(t=>poly([t[0].slice(),t[1].slice(),t[2].slice()]));
-  const toTris=polys=>{const out=[];for(const p of polys)for(let i=2;i<p.vs.length;i++)out.push([p.vs[0],p.vs[i-1],p.vs[i]]);return out;};
+  // A degenerate (near-zero-area) or non-finite triangle has no valid plane; feeding it to the BSP gives a
+  // garbage normal that poisons every split (NaN vertices, runaway recursion). Drop them from CSG input AND
+  // output so a sliver produced by one boolean can never corrupt the next - the disease that froze the page
+  // and spat NaN on each successive hole in an iterated Combine.
+  const degenTri=t=>{const c=cross(sub(t[1],t[0]),sub(t[2],t[0]));return len(c)<1e-9;};
+  const finiteTri=t=>t.every(p=>isFinite(p[0])&&isFinite(p[1])&&isFinite(p[2]));
+  const clean=tris=>tris.filter(t=>finiteTri(t)&&!degenTri(t));
+  const toPolys=tris=>clean(tris).map(t=>poly([t[0].slice(),t[1].slice(),t[2].slice()]));
+  const toTris=polys=>{const out=[];for(const p of polys)for(let i=2;i<p.vs.length;i++)out.push([p.vs[0],p.vs[i-1],p.vs[i]]);return clean(out);};
   return function(op,trisA,trisB){
+    trisA=clean(trisA); trisB=clean(trisB);
     if(!trisA.length) return op==='union'?trisB.slice():[];
     if(!trisB.length) return (op==='subtract'||op==='union')?trisA.slice():[];
     const a=new Node(toPolys(trisA).map(clonePoly)), b=new Node(toPolys(trisB).map(clonePoly));
@@ -2518,13 +2527,19 @@ const mesh3D=(function(){
 // T-junction splits reuse EXISTING welded verts (no new points), so a spatial hash of the verts stays valid
 // through the whole pass - each edge tests only nearby verts, not all of them (a cone CSG can be thousands of
 // triangles; the naive all-verts scan froze the page). A huge-mesh backstop welds only, never hangs.
-function cleanMesh(tris, eps){
+// weldOnly (fast path for INTERMEDIATE combines): weld + drop degenerate faces but SKIP the T-junction pass.
+// That pass splits straddled edges - adding triangles - and running it after every Combine compounds the
+// bloat and cost across an iterated design (each hole re-splits an ever-larger mesh: the page froze because
+// the CLEAN, not the CSG, was O(mesh) per hole). Intermediate combines stay geometrically exact but keep
+// their T-junctions; the full manifold clean runs ONCE per piece at STL export, where slicers need it.
+function cleanMesh(tris, eps, weldOnly){
   eps=eps||1e-4;
   const verts=[], vmap=new Map(), vkey=p=>Math.round(p[0]/eps)+","+Math.round(p[1]/eps)+","+Math.round(p[2]/eps);
   const vidx=p=>{ const k=vkey(p); if(vmap.has(k)) return vmap.get(k); const i=verts.length; verts.push([p[0],p[1],p[2]]); vmap.set(k,i); return i; };
-  let faces=tris.map(t=>[vidx(t[0]),vidx(t[1]),vidx(t[2])]).filter(f=>f[0]!==f[1]&&f[1]!==f[2]&&f[2]!==f[0]);
+  const aMin=eps*eps*4, triA=f=>{const a=verts[f[0]],b=verts[f[1]],c=verts[f[2]],ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];return 0.5*Math.hypot(uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx);};
+  let faces=tris.map(t=>[vidx(t[0]),vidx(t[1]),vidx(t[2])]).filter(f=>f[0]!==f[1]&&f[1]!==f[2]&&f[2]!==f[0]).filter(f=>triA(f)>aMin);   // drop welded slivers so they never poison a later CSG
   const emit=()=>faces.map(f=>[verts[f[0]].slice(),verts[f[1]].slice(),verts[f[2]].slice()]);
-  if(faces.length>50000) return emit();   // pathological CSG blow-up: weld-only backstop, never freeze
+  if(weldOnly || faces.length>50000) return emit();   // weld-only fast path, and a pathological-blow-up backstop that never freezes
   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9]; for(const v of verts)for(let k=0;k<3;k++){ if(v[k]<mn[k])mn[k]=v[k]; if(v[k]>mx[k])mx[k]=v[k]; }
   const diag=Math.hypot(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1, cell=Math.max(eps*10, diag/40);
   const ci=p=>[Math.floor(p[0]/cell),Math.floor(p[1]/cell),Math.floor(p[2]/cell)];
@@ -2590,7 +2605,7 @@ function bool3D(op,o1,o2){   // Combine two SOLIDS in true 3D (one of them a bar
     ? ( isHole(o1)&&!isHole(o2) ? mesh3D("subtract",mB,mA)      // the hole (o1) cut out of the solid (o2)
       : isHole(o2)&&!isHole(o1) ? mesh3D("subtract",mA,mB)      // the hole (o2) cut out of the solid (o1)
       : mesh3D("union",mA,mB) )                                 // both solid (or both hole) -> merge
-    : mesh3D(op==="diff"?"subtract":op, mA, mB));               // weld + de-T-junction so the STL is manifold for slicers
+    : mesh3D(op==="diff"?"subtract":op, mA, mB), 1e-4, true);   // weld-only (fast) so iterated Combines don't compound; STL export runs the full manifold clean per piece
   if(!mesh.length){ say(op==="intersect"?"The two solids don't overlap - nothing to intersect.":carved?"The hole covers the whole solid - nothing left.":"That combine produced an empty result - nothing changed."); return; }
   // ---- 2D footprint for the plan view: computed to MATCH the operation so it reads true with 3D View off.
   // A shape carve uses the 2D region difference (solid minus cutter): the outline notches where the cutter bit

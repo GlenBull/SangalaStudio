@@ -239,10 +239,28 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
     neighbor's shared edge → edges shared by ≠2 faces → slicers flag "non-manifold"), so `bool3D` runs the
     result through **`cleanMesh`** (weld coincident verts + split each straddled edge at the vertices on it,
     winding preserved) → manifold STL, volume unchanged. Validated `cleanmesh.js` (nm→0, vol diff ~1e-14).
-    Cleaning is at bake time; a part combined before this fix needs a re-Combine to clean up. **Perf:** the
-    T-junction test is spatial-hashed (splits reuse existing welded verts, so the hash is valid throughout) —
-    a naive all-verts scan froze the page on a cone CSG (thousands of tris); hashed it's ~8× faster (a
-    cone+cone union 1113→82 ms). A >50k-tri backstop welds only rather than hang.
+    **Where the clean runs (settled 2026-07-24, iterated-Combine freeze fix):** `bool3D` bakes **weld-only**
+    (`cleanMesh(...,1e-4,true)` — weld coincident verts + drop degenerate slivers, but SKIP the T-junction
+    pass); the **full manifold clean runs once per piece at STL export** (`exportSTL` maps each `part` through
+    `cleanMesh`). Reason: the T-junction pass ADDS triangles (it splits straddled edges), and running it after
+    every Combine compounds across an iterated design — each new hole re-splits an ever-larger mesh, so the
+    COST was O(mesh) per hole and the page froze on the 4th-ish round hole cut into a many-combine solid (not
+    the CSG — the clean). Weld-only intermediates stay geometrically exact (volume tracks perfectly) and keep
+    their T-junctions until export, where slicers need manifold. Validated: 16 iterated holes each <300 ms,
+    NaN=0 throughout (`app_sim.js`); known-good CSG suite still nm→0 with identical volumes (`suite_new.js`).
+    A baked part therefore persists a weld-only (non-manifold-until-export) mesh in `data-mesh-tris`; the STL
+    is cleaned at export, and cleaning is per-piece (never across pieces, which would weld separate parts).
+    **CSG robustness (same fix):** `mesh3D` now DROPS degenerate (cross-length <1e-9) and non-finite triangles
+    from CSG input AND output, and `split` clamps a near-zero denominator (`|den|>1e-12 ? … : 0.5`) — an
+    iterated boolean was accumulating sliver triangles whose garbage plane-normals divided to NaN and made the
+    BSP recurse forever, which is why each successive hole "reported several NaN errors before resolving." With
+    the drop+clamp a sliver can no longer poison the next Combine. **Perf:** the T-junction test is
+    spatial-hashed (splits reuse existing welded verts, so the hash is valid throughout) — a naive all-verts
+    scan froze the page on a cone CSG (thousands of tris); hashed it's ~8× faster (a cone+cone union
+    1113→82 ms). A >50k-tri backstop welds only rather than hang. **Known remaining limit:** the BSP still
+    re-fragments flat faces each subtract (a slab top chopped by a cutter's infinite side-planes), so a VERY
+    heavy iterated design (many high-facet holes) can still bloat past ~50k tris and then export non-manifold
+    via the backstop — a coplanar-face merge is the follow-up cure if a real design hits it.
   - **The *Hole* flag** (Stage 1: checkbox in shape details for `mode3D && is3DSolid`; draws blue-dotted
     `#1a5fb4`, `data-role="hole"`) only produces an effect inside Combine — a bundled/ungrouped hole shows
     nothing in 3D until Combined.
