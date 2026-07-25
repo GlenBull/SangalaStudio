@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-24.111 -->
+<!-- SANGALA_VERSION: 2026-07-25.112 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3497,6 +3497,12 @@ function dimText(o){
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+  if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape.
+    // Sits directly under the Width/Height/Depth/Base table, which is what it governs (in 3D it couples Depth too).
+    // Below the Slope box instead, it has no rule of its own and reads as one of the slope controls next to Invert.
+    html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
+      "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
+  }
   // Per-side Slope: ramp any side of a rectangular top inward. Angle in degrees from vertical, 0 = flat. Front
   // / Right / Back / Left are the -Y / +X / +Y / -X edges (canonical order, matching the roof builder).
   // Per-side Slope: ramp any side of a convex top inward. Angle deg from vertical, 0 = flat. Aligned to the
@@ -3527,10 +3533,6 @@ function dimText(o){
       +'<td style="padding-left:.15rem;color:#8a7350">&deg;</td></tr></table>'
       +(R("data-cone")>0 ? '<div style="margin-top:.35rem">'+flag("slopeinv","Invert",o.el.getAttribute("data-slope-inv")==="1","Turn the cone upside down: the top stays full and the UNDERSIDE tapers away instead - fills the underside of an overhang.")+'</div>' : '')
       +'</div>';
-  }
-  if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape
-    html+='<div style="margin-top:.3rem">'+flag("lockratio","Lock ratio",o.el.getAttribute("data-lockratio")==="1",
-      "Keep the current Width:Height ratio - changing one adjusts the other to match.")+'</div>';
   }
   if(mode3D && !o.el.hasAttribute("data-brick") && objClosed(o)){   // an extruded shape can carry LEGO connectors: studs on top, sockets underneath (closed shapes only - an open line has no top face)
     const st=o.el.getAttribute("data-studs")==="1", sk=o.el.getAttribute("data-sockets")==="1";
