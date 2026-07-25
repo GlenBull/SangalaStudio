@@ -10,6 +10,7 @@ $full = (Resolve-Path $Path).Path
 $w = New-Object -ComObject Word.Application; $w.Visible = $false
 $doc = $w.Documents.Open($full, $false, $true)   # ConfirmConversions=false, ReadOnly=true
 $orphans = @(); $noKeep = @(); $auto = 0
+$blankRuns = @(); $blankRun = 0; $blankPage = 0
 $deepest = @{}                                   # page -> lowest content top seen (points), for underfilled-page detection
 foreach ($p in $doc.Paragraphs) {
   try { if ($p.SpaceBeforeAuto -or $p.SpaceAfterAuto) { $auto++ } } catch {}
@@ -18,6 +19,22 @@ foreach ($p in $doc.Paragraphs) {
     $vp = $p.Range.Information($wdVerticalPositionRelativeToPage)
     if (-not $deepest.ContainsKey($pg) -or $vp -gt $deepest[$pg]) { $deepest[$pg] = $vp }
   }
+  # Runs of consecutive EMPTY paragraphs are invisible vertical padding. They caused a 92 pt hole above
+  # section 5 of the Tech Manual that no other check could see: the underfilled test measures the BOTTOM of
+  # a page and the gap was interior, while each individual step was a normal ~30 pt. The tell is the blanks.
+  $isBlank = ($p.Range.Text.Trim().Length -eq 0) -and (-not $p.Range.Information(12)) -and ($p.Range.InlineShapes.Count -eq 0)
+  if ($isBlank) {
+    if ($blankRun -eq 0) { $blankPage = $pg }
+    $blankRun++
+  } else {
+    if ($blankRun -ge 2) {
+      $bt = ($p.Range.Text -replace '\s+', ' ').Trim()
+      if ($bt.Length -gt 44) { $bt = $bt.Substring(0, 44) + '...' }
+      $blankRuns += ,@($blankPage, "page $blankPage : $blankRun blank paragraphs before '$bt'")
+    }
+    $blankRun = 0
+  }
+
   $st = $p.Style.NameLocal
   if ($st -like 'Heading*') {
     $txt = $p.Range.Text.Trim()
@@ -89,8 +106,12 @@ Write-Output ("ORPHANED headings right now: " + $orphans.Count)
 $orphans | ForEach-Object { Write-Output ("  ! " + $_) }
 Write-Output ("UNDERFILLED pages (content spills, leaving a near-empty page) - review each: " + $underfilled.Count)
 $underfilled | ForEach-Object { Write-Output ("  ? " + $_) }
+# a cover page is padded with blanks on purpose, so ignore runs there
+$blanks = @($blankRuns | Where-Object { $_[0] -ge $firstContentPage } | ForEach-Object { $_[1] })
+Write-Output ("RUNS of blank paragraphs (invisible vertical gaps): " + $blanks.Count)
+$blanks | ForEach-Object { Write-Output ("  _ " + $_) }
 Write-Output ("FLOATING figures in text boxes - CHECK each still sits beside its narrative: " + $floats.Count)
 $floats | ForEach-Object { Write-Output ("  ~ " + $_) }
 if ($verMismatch -ne '') { Write-Output ("COVER VERSION: " + $verMismatch) }
-if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0 -and $verMismatch -eq '') { Write-Output "PAGINATION CLEAN" }
+if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0 -and $verMismatch -eq '' -and $blanks.Count -eq 0) { Write-Output "PAGINATION CLEAN" }
 if ($floats.Count -gt 0) { Write-Output "(the floating figures above still need a human eye - CLEAN does not cover them)" }
