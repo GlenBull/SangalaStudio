@@ -52,8 +52,11 @@ USB only, user-mode.** This constraint is absolute.
   ("Table N. <caption>"); tables are **numbered sequentially through the document**; the
   **column-heading row sits in the row directly below the title**. (Draft the number + caption for
   Glen's approval — I can't clone these.)
-  **(B) Visual formatting — clone the EXACT values from Table 8 of the Tech Manual, do NOT
-  reconstruct from memory:**
+  **(B) Visual formatting — clone the EXACT values from an existing Tech Manual table, do NOT
+  reconstruct from memory.** (This used to say "Table 8"; the manual has only Tables 1–5, and all
+  five carry the identical format — Arial 10 pt, cell paragraph spacing before=60/after=40 twips,
+  table centered, merged bold title row, italic centered heading row, double rule under the headings.
+  **Table 4** is the exemplar to copy from; verified 2026-07-25.)
   1. Table **centered on the page**.
   2. **Arial 10 pt** throughout.
   3. **Cell paragraph spacing: 3 pt before, 2 pt after** on every cell — this is PARAGRAPH spacing
