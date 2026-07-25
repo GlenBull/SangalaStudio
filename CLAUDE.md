@@ -84,11 +84,23 @@ USB only, user-mode.** This constraint is absolute.
 
 ## Approval & git safety
 - **Auto-approve (standing consent):** work confined to this repo, the temp
-  scratch folder, and pushing commits to this GitHub repo. No need to ask.
-- **Always ask first:** anything outside the repo (other drives, the user's
-  Dropbox), system/account settings, network to anywhere other than this GitHub
+  scratch folder, pushing commits to this GitHub repo, and **the Dropbox
+  `AI Sandbox\Design through Making\Sangala Tools` tree** (see the publishing rule
+  below). No need to ask.
+- **Always ask first:** the rest of the user's Dropbox and any other drive,
+  system/account settings, network to anywhere other than this GitHub
   repo, and any history-losing git — force-push, hard reset that drops commits,
   branch deletion.
+- **PUBLISH DOC UPDATES TO DROPBOX — standing practice (set by Glen 2026-07-25).**
+  `Sangala Tools` is how **Moses** gets the current **User Guide** and **Tech
+  Manual**, so a new version of either is not finished until it is there. When a
+  new version is delivered: copy it into the right subfolder (the guide and manual
+  both live in `Sangala Tools\Sangala Studio Files`), then move the version it
+  supersedes into that folder's own `Archive` subfolder — so the folder shows only
+  the current version, mirroring how `Documents/` and `Documents/.Archive` work in
+  the repo. Do this without being asked; it is part of shipping the doc. (The app
+  itself needs no copying — `Update SangalaStudio.cmd` pulls the page and exe from
+  GitHub.)
 - **Commit and push after each verified-good change** — one change, verify it's
   good (see line-14 physical-test rule for machine-facing changes), then commit
   and push so any regression is a `git diff` away, not a guess.
