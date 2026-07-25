@@ -111,6 +111,20 @@ namespace DieCutterApp
             //  * MatTG "3" - the mat code is Studio-sniffed and unverified for the Cameo; tune if the mat misfeeds
             //    (or read her Cameo 2's mat setting from Silhouette Studio).
             else if (pid.Contains("pid_112b")) { ModelName = "Silhouette Cameo 2"; WidthMm = 304.0; MatTG = "3"; EyeRightMm = 0; }
+            // The rest of the Cameo family, widths from the same reference driver. EyeRightMm 0 throughout:
+            // every Cameo in that table carries margin_left 0 (the Cameo 5 is the one exception, at -6), and 0
+            // is what made registration work on the Cameo 2. MatTG "3" follows the Cameo 2 as well - the same
+            // unverified value, and the same place to look first if a mat misfeeds.
+            else if (pid.Contains("pid_1121")) { ModelName = "Silhouette Cameo"; WidthMm = 304.0; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_112f")) { ModelName = "Silhouette Cameo 3"; WidthMm = 304.8; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_1137")) { ModelName = "Silhouette Cameo 4"; WidthMm = 304.8; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_1138")) { ModelName = "Silhouette Cameo 4 Plus"; WidthMm = 372.0; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_1139")) { ModelName = "Silhouette Cameo 4 Pro"; WidthMm = 600.0; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_1140")) { ModelName = "Silhouette Cameo 5"; WidthMm = 330.2; MatTG = "3"; EyeRightMm = 0; }
+            else if (pid.Contains("pid_1141")) { ModelName = "Silhouette Cameo 5 Plus"; WidthMm = 372.0; MatTG = "3"; EyeRightMm = 0; }
+            // NOT listed: the Cameo Pro MK-II (pid_1146) and the Cameo 5 alphas. The reference driver marks
+            // them as using FOUR registration marks; this engine prints and scans the standard three, so they
+            // would cut but fail to register. Better to fall back than to claim support that misleads.
             else { ModelName = "Silhouette Portrait 3"; WidthMm = 203.0; MatTG = "3"; EyeRightMm = 30; }
 
             const uint GENERIC_RW = 0x80000000u | 0x40000000u;
