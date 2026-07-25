@@ -53,8 +53,12 @@ foreach ($s in $doc.Shapes) {
 
 $pages = $doc.ComputeStatistics(2)               # wdStatisticPages = 2
 $usableBottom = $doc.PageSetup.PageHeight - $doc.PageSetup.BottomMargin
+# A cover page is mostly white by design, so skip it. Detected by the first section carrying a
+# title page, which is how the cover suppresses its own page number.
+$firstContentPage = 1
+if ($doc.Sections(1).PageSetup.DifferentFirstPageHeaderFooter) { $firstContentPage = 2 }
 $underfilled = @()
-for ($pg = 1; $pg -lt $pages; $pg++) {           # every page BUT the last
+for ($pg = $firstContentPage; $pg -lt $pages; $pg++) {   # every page BUT the cover and the last
   if ($deepest.ContainsKey($pg)) {
     $slack = $usableBottom - $deepest[$pg]
     if ($slack -gt 216) { $underfilled += ("page $pg : ~$([math]::Round($slack/72,1)) in blank at the bottom - a few lines overflowed onto it; tighten page $($pg-1) to pull them back") }
