@@ -255,14 +255,19 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
 Toolbar: Connect · **Save** (💾) · Open · **Export SVG** (📄) · **Export STL** (🔷, 3D only) · **Marks** (toggle, default OFF) · Print · **Test**
 (menu: Test square / Scan test / Manual align) · Settings (gear). Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
-- **Three file actions, distinct on purpose (2026-07-24):** **Save** writes a `.project` file (JSON) that
+- **Three file actions, distinct on purpose (2026-07-24):** **Save** writes a `.model` file (JSON) that
   reopens EXACTLY as saved; **Export SVG** (was "Save SVG") writes an interchange SVG for TinkerCAD / the die
-  cutter; **Export STL** writes a 3D-print mesh. `.project` = `collectProject()` — the verbatim `serializeState()`
+  cutter; **Export STL** writes a 3D-print mesh. `.model` = `collectProject()` — the verbatim `serializeState()`
   object snapshot (the SAME one Undo restores, so NO re-sampling) PLUS the globals SVG drops: `mode3D`, `units`,
   the Silhouette settings (force/speed/blade/passes/scale), `material`, position (offx/offy), the Marks toggle,
   and `view`. `openProject()` runs `restoreState()` then re-applies those globals (`setUnits` FIRST — it rewrites
   the position fields — then restore their saved values; `setMode3D` LAST to re-lay the toolbar), and is routed
-  through the **Open** button by the `.project` extension (accept list + `openFile`). An **in-progress trace IS
+  through the **Open** button by the `.model` extension (accept list + `openFile`). **The extension is `.model`
+  (set 2026-07-25), because these designs are published to the Educational CAD Model Library at CADLibrary.org
+  and a student meets the same word at both ends.** Do NOT use `.studio` — Silhouette Studio is installed on the
+  same machines and claims it, so the file shows Silhouette's icon and looks like theirs. `.sangala` names the
+  whole suite, not one tool in it, and `.project` is too generic. Both earlier names still OPEN, so nothing
+  already saved is stranded; only writing changed. An **in-progress trace IS
   stored** (`refImage`, format version 2): the source photo (data URL), placement, the Remove-BG **mask** (also a
   data URL — so reopening recomputes the fast `SangalaBg.trace` from it and NEVER re-runs the ONNX model), and the
   threshold/pathomit tuning. `restoreRefImage()` decodes it async (photo, then mask, then re-trace) and re-opens
