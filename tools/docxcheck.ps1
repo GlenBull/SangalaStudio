@@ -24,8 +24,12 @@ foreach ($p in $doc.Paragraphs) {
     if (-not $p.KeepWithNext) { $noKeep += $txt }
     $nx = $p.Next()
     if ($nx -ne $null) {
-      $np = $nx.Range.Information($wdActiveEndPageNumber)
-      if ($pg -ne $np) { $orphans += ("p$pg -> p$np  $txt") }   # heading and its first line split across a page break
+      # Compare the heading's page with the page its text BEGINS on. Information() reports the page a
+      # range ENDS on, so asking the whole next paragraph flags any paragraph that merely spills over
+      # the break - which is a false alarm, and cost three bogus reports on Ver 5.8. Collapse to the start.
+      $ns = $nx.Range.Duplicate; $ns.End = $ns.Start
+      $np = $ns.Information($wdActiveEndPageNumber)
+      if ($pg -ne $np) { $orphans += ("p$pg -> p$np  $txt") }   # heading stranded: its text starts on the next page
     }
   }
 }
