@@ -48,8 +48,11 @@ USB only, user-mode.** This constraint is absolute.
      (Shift+Enter) at a word boundary near the middle. A long first line over a stub is wrong.
 - **A FIGURE IN A TEXT BOX IS DELIBERATE — never flag it as a defect (Glen, 2026-07-25).** He
   sometimes puts a figure AND its caption inside a Word text box and turns on Wrap Text, so the pair
-  cannot be separated and the narrative flows beside it (User Guide Ver 5.9, Figure 16, page 12). He
-  uses it sparingly, because a floating box drifts as the text around it changes. Two consequences:
+  cannot be separated and the narrative flows beside it (User Guide Ver 6.1, Figure 15, page 12). He
+  uses it sparingly, because a floating box drifts as the text around it changes. Three consequences:
+  - **The caption spacing rule does NOT apply inside the box.** A boxed caption carries no 3 pt
+    space-before, because the box supplies its own padding — confirmed by Glen 2026-07-25. Do not
+    "fix" it to match the other captions; that is the one place the four-part caption rule bends.
   - **Counting captions or images? Strip `<mc:Fallback>` FIRST.** Word stores the box twice inside one
     `<mc:AlternateContent>` — a modern `wps:txbx` and a legacy `v:textbox` fallback — so a naive scan
     sees the caption twice and reports a phantom duplicate figure. I made exactly that mistake on 5.9
