@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-25.112 -->
+<!-- SANGALA_VERSION: 2026-07-25.113 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1041,7 +1041,7 @@ let snapWin=null;
 $("tSnap").onclick=()=>{
   snapWin=window.open("https://snap.berkeley.edu/snap/snap.html","sangala_snap");
   if(!snapWin){ say("The browser blocked the Snap! window - allow pop-ups for this page and press Snap! again."); return; }
-  say("Opened Snap!. Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"send pen trails to Sangala\" will deliver the drawing straight to this mat.");
+  say("Opened Snap!. Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"Send Paths to Sangala Studio\" will deliver the drawing straight to this mat.");
 };
 // Serialize the design (the selection if there is one, else the whole mat) as a small MONOCHROME SVG,
 // so Snap! can paint it onto its stage. Black outlines - a fold line stays dashed so its kind survives.
