@@ -63,9 +63,13 @@ USB only, user-mode.** This constraint is absolute.
     cover it — the script says so explicitly, because only a human can judge it.
 - **"Snap!" — the exclamation mark is ITALIC, the word is not** (Glen, 2026-07-25). It is part of the
   language's name, and italicizing it separates it from sentence punctuation: `Snap` in the body face,
-  then `!` in an italic run. That is how the User Guide sets it in running text (a fully italic caption
-  or heading simply carries the whole name). **The Tech Manual does not follow this yet** — 18
-  occurrences, none with an italic mark — so match the guide when next revising it.
+  then `!` in an italic run. Three cases:
+  - **Running text — split it.** This is the rule; it is how the User Guide sets it, and the Tech
+    Manual has followed since Ver 2.4.
+  - **Headings — leave the whole name PLAIN.** Settled by Glen 2026-07-25: do not italicize the mark
+    in a heading. Both guides do it this way.
+  - **A run that is already italic throughout** (a caption, an italic lead-in label) needs nothing —
+    the mark is italic by inclusion.
 - **TABLES — two kinds of rule; apply ALL and VERIFY each before delivering.**
   **(A) Structure/content conventions I must APPLY (these are NOT in the XML — cannot be cloned;
   I generate them):** every table has a **numbered title with a descriptive caption**
