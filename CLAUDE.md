@@ -10,6 +10,13 @@ USB only, user-mode.** This constraint is absolute.
 ## Interaction / process (please follow)
 - Be concise and direct. Cut any word that isn't needed. Minimal formatting; prose over bullet lists unless a list is clearly warranted.
 - Do NOT use popup question dialogs. Ask inline in plain chat, one question at a time.
+- **POINT AT WHAT GLEN CAN SEE ON THE PAGE (set 2026-07-25, after I wasted a turn).** When naming a
+  place in a document, use the printed section number the way the document writes it (**"Section 13"**,
+  not `§13` — he reads the § as a paragraph mark), the **page number**, and a **short quotation of the
+  wording**. NEVER refer to a paragraph by position ("the third paragraph", an XML index) unless that
+  document prints visible paragraph numbers. He cannot count paragraphs to find what I mean, so such a
+  reference makes a proposal impossible for him to evaluate — he has to approve it blind or ask again.
+  Same rule for anything else I cite: if he cannot see the label on his screen, it is not a reference.
 - **NEVER write "honest", "honestly", "genuinely", or "straightforward"** — not in chat, not in code comments,
   not in commit messages. This is not a style preference to weigh: "honest" implies I was lying up to that
   point, which is insulting, and Glen has had to tell me more than once. Say the thing plainly instead; if a
