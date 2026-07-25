@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-25.120 -->
+<!-- SANGALA_VERSION: 2026-07-25.124 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1052,11 +1052,28 @@ $("tSnap").onclick=(e)=>{ e.stopPropagation(); const t=$("snapmenu"), r=$("tSnap
   const open=t.style.display!=="flex";
   if(open){ t.style.left=(r.right+8)+"px"; t.style.top=Math.max(8,r.top)+"px"; }
   t.style.display=open?"flex":"none"; };
+// Snap! and TurtleStitch import a block library straight from the address: "#open:" followed by the XML
+// ITSELF (not a URL - the handler tests whether the text starts with <blocks). That goes through their
+// ordinary droppedText path, so the user never has to do File > Import.
+//
+// The obvious route - their postMessage API, {selector, params} - looks tidier and is a trap. After
+// running the method it posts the RESPONSE back to window.top, and since the editor is top-level that is
+// itself; its own handler sees a message still carrying a selector and calls the method a second time with
+// no arguments. The real import succeeds and the echo fails, so every launch reported
+// 'Expected "=" after attribute name' against a library that is perfectly valid.
+//
+// Fetched once at startup, because window.open must stay inside the click to avoid the pop-up blocker.
+let snapLibXml=null;
+fetch("/snap/library.xml",{cache:"no-store"}).then(r=>r.ok?r.text():null).then(t=>{
+  if(t && t.indexOf("<blocks")>=0) snapLibXml=t;
+}).catch(()=>{});
 function openBlockEditor(url,label){
   $("snapmenu").style.display="none";
-  snapWin=window.open(url,"sangala_snap");
+  snapWin=window.open(snapLibXml ? (url+"#open:"+encodeURIComponent(snapLibXml)) : url, "sangala_snap");
   if(!snapWin){ say("The browser blocked the "+label+" window - allow pop-ups for this page and press Snap! again."); return; }
-  say("Opened "+label+". Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"Send Paths to Sangala Studio\" will deliver the drawing straight to this mat.");
+  say(snapLibXml
+    ? ("Opened "+label+" with the Sangala blocks already loaded - look for the palette called Sangala Studio Tools. Tick \"JavaScript extensions\" in its settings, then Send Paths to Sangala Studio delivers the drawing to this mat.")
+    : ("Opened "+label+". Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and Send Paths to Sangala Studio will deliver the drawing straight to this mat."));
 }
 $("mSnapBerkeley").onclick=()=>openBlockEditor("https://snap.berkeley.edu/snap/snap.html","Snap!");
 $("mTurtleStitch").onclick=()=>openBlockEditor("https://turtlestitch.org/static/run/index.html","TurtleStitch");
