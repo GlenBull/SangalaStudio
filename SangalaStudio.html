@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-25.115 -->
+<!-- SANGALA_VERSION: 2026-07-25.116 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -185,6 +185,10 @@
   <button id="mManual">🕹️ Manual Align</button>
   <button id="mUnload">⏏️ Unload Mat</button>
   <button id="mRaw">⌨️ Send GPGL…</button>
+</div>
+<div id="snapmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <button id="mSnapBerkeley" title="Open Snap! - the original block language, with fifteen years of turtle programs behind it">Snap!</button>
+  <button id="mTurtleStitch" title="Open TurtleStitch - the Snap! fork used for embroidery and paper design">TurtleStitch</button>
 </div>
 <div id="savemenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mSaveSvg" title="Export an SVG for TinkerCAD or the die cutter (re-sampled on reopen)">📄 Save as SVG</button>
@@ -1038,11 +1042,23 @@ function tookFromSnap(text){
 // Snap! hands the drawing back through that window. No CORS, no local-network permission, and the ordinary
 // Snap! - with fifteen years of turtle programs behind it - keeps working exactly as it is.
 let snapWin=null;
-$("tSnap").onclick=()=>{
-  snapWin=window.open("https://snap.berkeley.edu/snap/snap.html","sangala_snap");
-  if(!snapWin){ say("The browser blocked the Snap! window - allow pop-ups for this page and press Snap! again."); return; }
-  say("Opened Snap!. Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"Send Paths to Sangala Studio\" will deliver the drawing straight to this mat.");
-};
+// The button offers a choice: ordinary Snap!, or TurtleStitch - a Snap! fork whose users code
+// embroidery AND paper-cut designs, and who otherwise have to route through Silhouette Studio.
+// Either way Sangala must be the one that OPENS the window, or there is no opener to answer through.
+$("tSnap").onclick=(e)=>{ e.stopPropagation(); const t=$("snapmenu"), r=$("tSnap").getBoundingClientRect();
+  const open=t.style.display!=="flex";
+  if(open){ t.style.left=(r.right+8)+"px"; t.style.top=Math.max(8,r.top)+"px"; }
+  t.style.display=open?"flex":"none"; };
+function openBlockEditor(url,label){
+  $("snapmenu").style.display="none";
+  snapWin=window.open(url,"sangala_snap");
+  if(!snapWin){ say("The browser blocked the "+label+" window - allow pop-ups for this page and press Snap! again."); return; }
+  say("Opened "+label+". Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"Send Paths to Sangala Studio\" will deliver the drawing straight to this mat.");
+}
+$("mSnapBerkeley").onclick=()=>openBlockEditor("https://snap.berkeley.edu/snap/snap.html","Snap!");
+$("mTurtleStitch").onclick=()=>openBlockEditor("https://turtlestitch.org/run","TurtleStitch");
+document.addEventListener("click",(e)=>{ const t=$("snapmenu");
+  if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tSnap").contains(e.target)) t.style.display="none"; });
 // Serialize the design (the selection if there is one, else the whole mat) as a small MONOCHROME SVG,
 // so Snap! can paint it onto its stage. Black outlines - a fold line stays dashed so its kind survives.
 // (No fill or color: Sangala does not author those yet. When it does, this is where they would ride along.)
@@ -1061,7 +1077,7 @@ function designToMonoSvg(){
   return '<svg xmlns="http://www.w3.org/2000/svg" width="'+fmtn(w)+'" height="'+fmtn(h)+'" viewBox="'+fmtn(x0)+' '+fmtn(y0)+' '+fmtn(w)+' '+fmtn(h)+'">'+body+'</svg>';
 }
 window.addEventListener("message",e=>{
-  if(!/^https?:\/\/([a-z]+\.)?snap\.berkeley\.edu$/.test(e.origin)) return;   // only Snap! may talk to us
+  if(!/^https?:\/\/([a-z0-9-]+\.)?(snap\.berkeley\.edu|turtlestitch\.org)$/.test(e.origin)) return;   // only Snap! or TurtleStitch may talk to us
   const d=e.data; if(!d) return;
   if(d.sangala==="svg" && typeof d.svg==="string" && d.svg.indexOf("<svg")>=0){   // Snap! -> Sangala: a turtle drawing arrives
     tookFromSnap(d.svg);
