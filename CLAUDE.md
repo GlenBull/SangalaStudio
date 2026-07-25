@@ -38,6 +38,11 @@ USB only, user-mode.** This constraint is absolute.
   text edits only; run no document-wide formatting commands). Regenerating wipes his manual
   formatting and has caused repeated rework. New version = copy to the next version number, edit,
   then MOVE the prior version into the `Documents/.Archive` subfolder (the docs live in `Documents/`, which shows only the current version of each).
+- **BUMP THE VERSION LINE ON THE COVER, every time.** The User Guide's cover carries a "Version X.Y"
+  line and nothing updates it automatically, so it drifts silently — it read 6.2 on a file named Ver 7.2
+  before anyone noticed. Whenever a new version is produced, set that line to match the filename.
+  `docxcheck.ps1` now compares the two and withholds `PAGINATION CLEAN` on a mismatch; documents with no
+  cover page (the Tech Manual) are skipped.
 - Body = **Times New Roman 11 pt**, black, never below 11 pt; code identifiers in Consolas.
 - Numbered lists for step sequences; **3 pt space after each list item**. A label leading a list
   item is **italic** (not bold). Labels: Title-Case every word EXCEPT words in parentheses (lowercase).

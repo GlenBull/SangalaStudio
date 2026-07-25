@@ -51,12 +51,29 @@ foreach ($s in $doc.Shapes) {
   } catch {}
 }
 
+# Cover version vs filename. The cover carries a "Version X.Y" line that nothing updates on its own,
+# so it silently drifts every time a new version is saved - it had gone five revisions stale before
+# anyone noticed. Compare it with the (Ver X.Y) in the filename.
+$hasCover = $doc.Sections(1).PageSetup.DifferentFirstPageHeaderFooter
+$verMismatch = ''
+$fileVer = ''
+if ((Split-Path $full -Leaf) -match '\(Ver\s*([0-9.]+)\)') { $fileVer = $matches[1] }
+if ($fileVer -ne '' -and $hasCover) {          # a document with no cover page has nothing to check
+  $coverVer = ''
+  foreach ($p in $doc.Paragraphs) {
+    if ($p.Range.Information($wdActiveEndPageNumber) -gt 2) { break }
+    if ($p.Range.Text -match 'Version\s+([0-9.]+)') { $coverVer = $matches[1]; break }
+  }
+  if ($coverVer -eq '') { $verMismatch = "no 'Version X.Y' line found on the cover (filename says $fileVer)" }
+  elseif ($coverVer -ne $fileVer) { $verMismatch = "cover says Version $coverVer but the filename says $fileVer" }
+}
+
 $pages = $doc.ComputeStatistics(2)               # wdStatisticPages = 2
 $usableBottom = $doc.PageSetup.PageHeight - $doc.PageSetup.BottomMargin
 # A cover page is mostly white by design, so skip it. Detected by the first section carrying a
 # title page, which is how the cover suppresses its own page number.
 $firstContentPage = 1
-if ($doc.Sections(1).PageSetup.DifferentFirstPageHeaderFooter) { $firstContentPage = 2 }
+if ($hasCover) { $firstContentPage = 2 }
 $underfilled = @()
 for ($pg = $firstContentPage; $pg -lt $pages; $pg++) {   # every page BUT the cover and the last
   if ($deepest.ContainsKey($pg)) {
@@ -74,5 +91,6 @@ Write-Output ("UNDERFILLED pages (content spills, leaving a near-empty page) - r
 $underfilled | ForEach-Object { Write-Output ("  ? " + $_) }
 Write-Output ("FLOATING figures in text boxes - CHECK each still sits beside its narrative: " + $floats.Count)
 $floats | ForEach-Object { Write-Output ("  ~ " + $_) }
-if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0) { Write-Output "PAGINATION CLEAN" }
+if ($verMismatch -ne '') { Write-Output ("COVER VERSION: " + $verMismatch) }
+if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0 -and $verMismatch -eq '') { Write-Output "PAGINATION CLEAN" }
 if ($floats.Count -gt 0) { Write-Output "(the floating figures above still need a human eye - CLEAN does not cover them)" }
