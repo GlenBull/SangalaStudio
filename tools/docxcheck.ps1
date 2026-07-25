@@ -33,6 +33,24 @@ foreach ($p in $doc.Paragraphs) {
     }
   }
 }
+# Floating figures in text boxes. Glen anchors a figure + its caption in a text box and wraps text
+# around it, to keep the pair together and use the space beside a list. That is deliberate, not a
+# defect - but the box floats, so a revision that adds or removes narrative can leave it stranded
+# beside the wrong text. This cannot be judged mechanically, so report it for eyes every run.
+$floats = @()
+foreach ($s in $doc.Shapes) {
+  try {
+    $cap = ''
+    if ($s.TextFrame.HasText) { $cap = ($s.TextFrame.TextRange.Text -replace '\s+', ' ').Trim() }
+    $a = $s.Anchor
+    $apg = $a.Information($wdActiveEndPageNumber)
+    $atx = ($a.Paragraphs(1).Range.Text -replace '\s+', ' ').Trim()
+    if ($atx.Length -gt 58) { $atx = $atx.Substring(0, 58) + '...' }
+    if ($cap.Length -gt 58) { $cap = $cap.Substring(0, 58) + '...' }
+    $floats += ("p$apg  box: $cap`n        anchored to: $atx")
+  } catch {}
+}
+
 $pages = $doc.ComputeStatistics(2)               # wdStatisticPages = 2
 $usableBottom = $doc.PageSetup.PageHeight - $doc.PageSetup.BottomMargin
 $underfilled = @()
@@ -50,4 +68,7 @@ Write-Output ("ORPHANED headings right now: " + $orphans.Count)
 $orphans | ForEach-Object { Write-Output ("  ! " + $_) }
 Write-Output ("UNDERFILLED pages (content spills, leaving a near-empty page) - review each: " + $underfilled.Count)
 $underfilled | ForEach-Object { Write-Output ("  ? " + $_) }
+Write-Output ("FLOATING figures in text boxes - CHECK each still sits beside its narrative: " + $floats.Count)
+$floats | ForEach-Object { Write-Output ("  ~ " + $_) }
 if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0) { Write-Output "PAGINATION CLEAN" }
+if ($floats.Count -gt 0) { Write-Output "(the floating figures above still need a human eye - CLEAN does not cover them)" }

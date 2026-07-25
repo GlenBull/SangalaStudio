@@ -46,6 +46,23 @@ USB only, user-mode.** This constraint is absolute.
   3. **Italic** — the whole caption.
   4. **If it wraps to two lines, BALANCE them** (roughly equal length) with a manual line break
      (Shift+Enter) at a word boundary near the middle. A long first line over a stub is wrong.
+- **A FIGURE IN A TEXT BOX IS DELIBERATE — never flag it as a defect (Glen, 2026-07-25).** He
+  sometimes puts a figure AND its caption inside a Word text box and turns on Wrap Text, so the pair
+  cannot be separated and the narrative flows beside it (User Guide Ver 5.9, Figure 16, page 12). He
+  uses it sparingly, because a floating box drifts as the text around it changes. Two consequences:
+  - **Counting captions or images? Strip `<mc:Fallback>` FIRST.** Word stores the box twice inside one
+    `<mc:AlternateContent>` — a modern `wps:txbx` and a legacy `v:textbox` fallback — so a naive scan
+    sees the caption twice and reports a phantom duplicate figure. I made exactly that mistake on 5.9
+    and called his Figure 16 a duplicate; it was one box.
+  - **CHECK ALIGNMENT AFTER EVERY REVISION.** The box floats, so added or deleted narrative can strand
+    it beside the wrong text. `docxcheck.ps1` now prints every floating figure with its caption and the
+    paragraph it is anchored to; confirm that pairing still makes sense. `PAGINATION CLEAN` does NOT
+    cover it — the script says so explicitly, because only a human can judge it.
+- **"Snap!" — the exclamation mark is ITALIC, the word is not** (Glen, 2026-07-25). It is part of the
+  language's name, and italicizing it separates it from sentence punctuation: `Snap` in the body face,
+  then `!` in an italic run. That is how the User Guide sets it in running text (a fully italic caption
+  or heading simply carries the whole name). **The Tech Manual does not follow this yet** — 18
+  occurrences, none with an italic mark — so match the guide when next revising it.
 - **TABLES — two kinds of rule; apply ALL and VERIFY each before delivering.**
   **(A) Structure/content conventions I must APPLY (these are NOT in the XML — cannot be cloned;
   I generate them):** every table has a **numbered title with a descriptive caption**
