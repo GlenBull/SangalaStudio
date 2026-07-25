@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-25.116 -->
+<!-- SANGALA_VERSION: 2026-07-25.119 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1031,10 +1031,13 @@ function centerDesign(){   // a turtle drawing carries Snap!'s own corner as its
   const dx=W/2-(mnx+mxx)/2, dy=H/2-(mny+mxy)/2;
   objects.forEach(o=>translateObj(o,dx,dy));
 }
-function tookFromSnap(text){
+function tookFromSnap(text, via){
   loadSVG(snapSvgToSangala(text));
   centerDesign(); draw();
-  say("Received a drawing from Snap! - "+objects.length+" stroke"+(objects.length!==1?"s":"")+" on the mat. Put a pen in the holder and press Make It to draw it.");
+  // Name the route. Two paths can deliver a drawing - the window link, which needs no permission, and the
+  // local-bridge fallback, which does - and they were indistinguishable on screen, so there was no way to
+  // tell which one had actually carried a design.
+  say("Received a drawing from "+(via||"Snap!")+" - "+objects.length+" stroke"+(objects.length!==1?"s":"")+" on the mat. They arrive as cut lines: press Make It to cut them out, or put a pen in the tool holder to draw them instead.");
 }
 // The browser will NOT let a page on the public web (snap.berkeley.edu) call into a program on your own
 // machine - Chrome denies "the loopback address space", and no server header overrides it. But two WINDOWS
@@ -1056,7 +1059,7 @@ function openBlockEditor(url,label){
   say("Opened "+label+". Import the Sangala blocks there (File > Import, then \"Sangala for Snap.xml\"), and \"Send Paths to Sangala Studio\" will deliver the drawing straight to this mat.");
 }
 $("mSnapBerkeley").onclick=()=>openBlockEditor("https://snap.berkeley.edu/snap/snap.html","Snap!");
-$("mTurtleStitch").onclick=()=>openBlockEditor("https://turtlestitch.org/run","TurtleStitch");
+$("mTurtleStitch").onclick=()=>openBlockEditor("https://turtlestitch.org/static/run/index.html","TurtleStitch");
 document.addEventListener("click",(e)=>{ const t=$("snapmenu");
   if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("tSnap").contains(e.target)) t.style.display="none"; });
 // Serialize the design (the selection if there is one, else the whole mat) as a small MONOCHROME SVG,
@@ -1080,7 +1083,7 @@ window.addEventListener("message",e=>{
   if(!/^https?:\/\/([a-z0-9-]+\.)?(snap\.berkeley\.edu|turtlestitch\.org)$/.test(e.origin)) return;   // only Snap! or TurtleStitch may talk to us
   const d=e.data; if(!d) return;
   if(d.sangala==="svg" && typeof d.svg==="string" && d.svg.indexOf("<svg")>=0){   // Snap! -> Sangala: a turtle drawing arrives
-    tookFromSnap(d.svg);
+    tookFromSnap(d.svg, /turtlestitch/i.test(e.origin) ? "TurtleStitch" : "Snap!");
     if(e.source) e.source.postMessage({sangala:"ok"}, e.origin);
   } else if(d.sangala==="get"){                                                   // Sangala -> Snap!: Snap! asks for the current design
     const svg=designToMonoSvg();
@@ -1094,7 +1097,7 @@ async function pollSnap(){
   try{
     const r=await fetch("/snap/svg",{cache:"no-store"}); if(!r.ok) return;
     const t=await r.text(); if(!t || t.indexOf("<svg")<0) return;
-    tookFromSnap(t);
+    tookFromSnap(t, "the local bridge");
   }catch(e){}                                                   // helper not up, or nothing waiting - stay quiet
 }
 setInterval(pollSnap,1500);
