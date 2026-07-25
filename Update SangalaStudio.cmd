@@ -4,8 +4,9 @@ REM  Update Sangala Studio to the latest version from GitHub.
 REM  Double-click this file. No admin, no install, no git, no compiler needed.
 REM
 REM  This updates BOTH parts of the program in one step:
-REM     SangalaStudio.html  (the page: buttons, tools, fixes)
-REM     SangalaStudio.exe   (the engine that drives the die cutter)
+REM     SangalaStudio.html    (the page: buttons, tools, fixes)
+REM     SangalaStudio.exe     (the engine that drives the die cutter)
+REM     Sangala for Snap.xml  (the blocks Sangala loads into Snap! / TurtleStitch)
 REM  so an ordinary update and a machine-engine update both arrive the same
 REM  way -- you never have to rebuild anything by hand.
 REM
@@ -25,12 +26,17 @@ set "HTML=SangalaStudio.html"
 set "EXE=SangalaStudio.exe"
 set "TMPHTML=SangalaStudio.html.new"
 set "TMPEXE=SangalaStudio.exe.new"
+set "XML=Sangala for Snap.xml"
+set "TMPXML=Sangala for Snap.xml.new"
+REM  The space in the name has to be encoded for the URL; %%20 is a literal %20 in a batch file.
+set "XMLURL=%BASE%/Sangala%%20for%%20Snap.xml"
 
 echo Checking for a newer Sangala Studio...
 echo.
 
 if exist "%TMPHTML%" del "%TMPHTML%" >nul 2>&1
 if exist "%TMPEXE%"  del "%TMPEXE%"  >nul 2>&1
+if exist "%TMPXML%" del "%TMPXML%" >nul 2>&1
 
 REM ---- 1. Download the page. curl is built into Windows 10/11; PowerShell is the fallback.
 call :download "%BASE%/%HTML%" "%TMPHTML%"
@@ -46,7 +52,9 @@ set "LOCALVER="
 for /f "delims=" %%V in ('findstr /c:"SANGALA_VERSION" "%TMPHTML%"') do if not defined REMOTEVER set "REMOTEVER=%%V"
 if exist "%HTML%" for /f "delims=" %%V in ('findstr /c:"SANGALA_VERSION" "%HTML%"') do if not defined LOCALVER set "LOCALVER=%%V"
 
-if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" (
+REM  Same version AND the blocks file already present -> nothing to do. Someone updating from a version
+REM  released before the blocks shipped has the current page but no XML, so the version alone is not enough.
+if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" if exist "%XML%" (
   del "%TMPHTML%" >nul 2>&1
   echo Already up to date - nothing downloaded.
   call :shortcut
@@ -58,11 +66,16 @@ if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" (
 REM ---- 3. There is a newer version. Download the engine too, BEFORE we touch anything.
 echo A newer version is available. Downloading...
 call :download "%BASE%/%EXE%" "%TMPEXE%"
+call :download "%XMLURL%" "%TMPXML%"
 
 REM Sanity-check the engine download: it must exist and be a real program (tens of KB, not an error page).
 set "EXEOK="
 for %%F in ("%TMPEXE%") do if %%~zF GTR 20000 set "EXEOK=1"
 if not defined EXEOK goto :badfile
+
+REM Sanity-check the blocks download: a good one is an XML block library, not an error page.
+find "<blocks" "%TMPXML%" >nul 2>&1
+if errorlevel 1 goto :badfile
 
 REM ---- 4. Both files are downloaded and look complete. Now swap them in.
 REM     The engine may be running (its icon sits in the tray), which locks the file,
@@ -74,8 +87,10 @@ timeout /t 1 /nobreak >nul 2>&1
 REM Keep the current copies as backups, then move the new ones into place.
 if exist "%HTML%" copy /y "%HTML%" "%HTML%.bak" >nul
 if exist "%EXE%"  copy /y "%EXE%"  "%EXE%.bak"  >nul
+if exist "%XML%"  copy /y "%XML%"  "%XML%.bak"  >nul
 
 move /y "%TMPHTML%" "%HTML%" >nul
+move /y "%TMPXML%"  "%XML%"  >nul
 move /y "%TMPEXE%"  "%EXE%"  >nul 2>&1
 if exist "%TMPEXE%" (
   REM The engine was still locked; wait a bit longer and try once more.
@@ -141,6 +156,7 @@ exit /b 1
 :badfile
 del "%TMPHTML%" >nul 2>&1
 del "%TMPEXE%"  >nul 2>&1
+del "%TMPXML%" >nul 2>&1
 :failed
 echo.
 echo Update FAILED - could not download a complete copy.
