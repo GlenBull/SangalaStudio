@@ -25,7 +25,7 @@ if ($OnCommit) { $Apply = $true }
 $ErrorActionPreference = 'Stop'
 $repo   = Split-Path -Parent $PSScriptRoot
 $docs   = Join-Path $repo 'Documents'
-$target = Join-Path $env:USERPROFILE 'UVa Lab School Dropbox\AI Sandbox\Design through Making\Sangala Studio Files'
+$target = Join-Path $env:USERPROFILE 'UVa Lab School Dropbox\AI Sandbox\Design through Making\Sangala Tools\Sangala Studio Files'
 $statef = Join-Path $PSScriptRoot '.publish-state.json'
 
 # ---- what the testers get. Add a line here to sync something else. --------------------------
