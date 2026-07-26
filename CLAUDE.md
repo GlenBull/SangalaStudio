@@ -119,6 +119,15 @@ USB only, user-mode.** This constraint is absolute.
     PRIOR page (tighten the spacing there — usually the autospacing gaps are the culprit) so the stray lines
     pull back up. `docxcheck.ps1` flags these as UNDERFILLED pages; treat each as a judgment call, not an
     auto-fix — sometimes the short page is a legitimate section end.
+  - **PAGINATION CLEAN does not mean the pages look right — know the underfilled test's two blind spots**
+    (learned on the Mosaic guide 1.6, 2026-07-26, when Glen saw "many half-empty pages" the check passed).
+    It flags a page only when MORE than 216 pt (3 in) is blank at the bottom, and it skips the LAST page
+    entirely. So a RUN of consecutive pages each ~2–2.5 in short passes clean but reads ragged, and a
+    near-empty final page is never flagged. After inserting substantial text into a doc with inline figures,
+    measure actual page fill (Word COM: last content position per page vs the text area) — a ~1/3-page inline
+    figure that no longer fits gets pushed whole to the next page and the blank bottoms cascade. The fix that
+    keeps content intact: move the figure WITHIN its section (e.g. right after the section's opening sentence)
+    so it lands where it fits — not spacing tweaks, which cannot recover 150+ pt.
 - Delivery: give the plain Windows file path in text (no preview cards / no `computer://` links).
 
 ## Approval & git safety
