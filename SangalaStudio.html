@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-26.125 -->
+<!-- SANGALA_VERSION: 2026-07-26.126 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -410,6 +410,7 @@ function fmtn(v){ v=Math.round(v*100)/100; return isFinite(v)?v:0; }   // never 
 // Object dimensions honor the Units setting (the same one that drives Position). Only 2D lengths convert; the
 // 3D/LEGO params (Depth/Base/Fit/bore) stay mm - they're metric by nature (LEGO's 8 mm grid, a sub-mm clutch).
 const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
+const PLATE_MM=3.2, PLATE_UNIT={f:v=>Math.round(v/PLATE_MM*100)/100, step:"1", lab:"plates"};   // mosaic parts count Depth/Base in LEGO plates; 3 plates = 1 brick (9.6 mm) - the tile-to-brick unit shift Chapter 5 teaches
 function unit2D(){ return units==="in" ? {f:v=>Math.round(v/25.4*100)/100, step:"0.01", lab:"in"} : MM_UNIT; }
 function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:PAGE_H;   // the MATERIAL page, in its DISPLAYED orientation
   if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
@@ -3647,16 +3648,20 @@ function dimText(o){
       const bb=bbox([o.poly]);
       rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]]; lockableWH=true;
     }
-    if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
+    if(mode3D && objClosed(o)) rows.push(isMosaicPart(o)   // a mosaic mass counts its z in plates (see PLATE_UNIT); other shapes stay mm
+      ? [["Depth",R("data-z"),"zp"],["Base",R("data-z0"),"z0p"]]
+      : [["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
   }
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
-    const u=(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // 3D is always mm (LEGO/print parts are metric); only 2D follows the Units toggle - no mixed units in either view
+    const u=(p[2]==="zp"||p[2]==="z0p")?PLATE_UNIT:(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // 3D is always mm (LEGO/print parts are metric) except mosaic-part z in plates; only 2D follows the Units toggle - no mixed units in either view
     return '<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+  if(mode3D && isMosaicPart(o) && objClosed(o))
+    html+='<div class="hint" style="margin-top:.25rem">3 plates = 1 brick (9.6 mm).</div>';
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape.
     // Sits directly under the Width/Height/Depth/Base table, which is what it governs (in 3D it couples Depth too).
     // Below the Slope box instead, it has no rule of its own and reads as one of the slope controls next to Invert.
@@ -3763,6 +3768,7 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
       const cur=hi-lo, s=cur>1e-6 ? Math.max(0.1,v)/cur : 1;
       if(s!==1){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],lo+(p[2]-lo)*s])); if(!live) syncMeshToEl(o); } }
     if(!live)showDims(o); pvRefresh(); return; }
+  if(dim==="zp"||dim==="z0p"){ dim=(dim==="zp")?"z":"z0"; v=v*PLATE_MM; }   // mosaic-part fields are typed in plates; geometry stays mm
   if(dim==="z"||dim==="z0"){
     if(dim==="z" && mode3D && o.el.getAttribute("data-lockratio")==="1"){   // Lock ratio (symmetric): a Depth edit scales Width/Height to match
       const oldZ=+o.el.getAttribute("data-z")||0; if(oldZ>1e-6 && v>0.1) scaleFootprint(o, v/oldZ); }
