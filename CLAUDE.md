@@ -257,6 +257,10 @@ Dashed folds already work and hold — do NOT "fix" them with shallow blade dept
   reintroduce it without checking direction.
 
 ## UI
+- **All buttons and headings are Title Case** (set by Glen 2026-07-26, in the Mosaic sibling but
+  stated as a permanent rule): "Fit to Photo", "Tile List" — minor words (a, in, to, the) stay
+  lowercase. And never ALL-CAPS a word for emphasis in UI text or tooltips. Sangala Mosaic is
+  swept; Studio's existing labels have NOT been audited against this yet — sweep on next UI pass.
 Toolbar: Connect · **Save** (💾) · Open · **Export SVG** (📄) · **Export STL** (🔷, 3D only) · **Marks** (toggle, default OFF) · Print · **Test**
 (menu: Test square / Scan test / Manual align) · Settings (gear). Green **Make it!** branches
 on the Marks toggle: ON → register + cut (/printcut); OFF → plain cut (/cut).
