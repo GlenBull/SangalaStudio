@@ -82,12 +82,19 @@ def brick(x, y, z, w, d, h, color, studs=True):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
-def slope(x, y, z, w, d, h, dirn, color):
+def slope(x, y, z, w, d, h, dirn, color, inv=False):
     """A slope brick: full height at one edge, ramping to nothing at the opposite one.
-    dirn is the direction the ramp FALLS: '+x', '-x', '+y' or '-y'."""
+    dirn is the direction the ramp FALLS: '+x', '-x', '+y' or '-y'.
+
+    inv=True gives the INVERTED slope (LEGO's 'slope, inverted 45'): the top stays full and flat and
+    the UNDERSIDE falls away instead, so the piece fills the underside of an overhang. It carries a
+    full set of studs, because its top face is whole. This is the same shape Sangala Studio makes
+    with the Invert checkbox on a sloped shape."""
     c0 = col(color)
     if dirn not in ("+x", "-x", "+y", "-y"):
         raise ValueError("slope dirn must be one of '+x', '-x', '+y', '-y' (got %r)" % dirn)
+    if inv:
+        return _slope_inv(x, y, z, w, d, h, dirn, c0)
     def draw(on):
         c = c0 if on else pale(c0)
         edge = shade(c, 0.45 if on else 0.72)
@@ -107,6 +114,42 @@ def slope(x, y, z, w, d, h, dirn, color):
         else:                       # '+y': high at y, ramping down toward the viewer
             s.append(_poly([(x, y, z+h), (x+w, y, z+h), (x+w, y+d, z), (x, y+d, z)], ramp, edge))
             s.append(_poly([(x+w, y, z+h), (x+w, y, z), (x+w, y+d, z)], rgt, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
+def _slope_inv(x, y, z, w, d, h, dirn, c0):
+    """The inverted slope. Its top is a whole rectangle (so it takes a full set of studs) and the
+    material tapers away underneath toward `dirn`. The undersides face downward and are almost
+    edge-on to this camera, so what actually reads is the flat top plus one triangular flank."""
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        top, rgt, lft, und = c, shade(c, 0.80), shade(c, 0.62), shade(c, 0.52)
+        s = [_poly([(x, y, z+h), (x+w, y, z+h), (x+w, y+d, z+h), (x, y+d, z+h)], top, edge)]
+        if dirn == "+x":            # solid at x, tapering to nothing at x+w
+            s.append(_poly([(x, y, z), (x+w, y, z+h), (x+w, y+d, z+h), (x, y+d, z)], und, edge))
+            s.append(_poly([(x, y+d, z), (x+w, y+d, z+h), (x, y+d, z+h)], lft, edge))
+        elif dirn == "-x":          # solid at x+w
+            s.append(_poly([(x, y, z+h), (x+w, y, z), (x+w, y+d, z), (x, y+d, z+h)], und, edge))
+            s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, z+h), (x+w, y, z+h)], rgt, edge))
+            s.append(_poly([(x, y+d, z+h), (x+w, y+d, z), (x+w, y+d, z+h)], lft, edge))
+        elif dirn == "+y":          # solid at y, tapering toward the viewer
+            s.append(_poly([(x, y, z), (x+w, y, z), (x+w, y+d, z+h), (x, y+d, z+h)], und, edge))
+            s.append(_poly([(x+w, y, z), (x+w, y+d, z+h), (x+w, y, z+h)], rgt, edge))
+        else:                       # '-y': solid at y+d, the face toward the viewer stays full
+            s.append(_poly([(x, y, z+h), (x+w, y, z+h), (x+w, y+d, z), (x, y+d, z)], und, edge))
+            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, z+h), (x, y+d, z+h)], lft, edge))
+            s.append(_poly([(x+w, y, z+h), (x+w, y+d, z), (x+w, y+d, z+h)], rgt, edge))
+        r = 0.30; rx = r*U*1.4142; ry = r*U*0.7071; sh = 0.22*V     # the full top carries studs
+        for i in range(int(round(w))):
+            for j in range(int(round(d))):
+                cx, cy = iso(x+i+0.5, y+j+0.5, z+h)
+                s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                         % (cx, cy+sh, rx, ry, shade(c, 0.70), edge))
+                s.append('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>'
+                         % (cx-rx, cy, 2*rx, sh, shade(c, 0.70)))
+                s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                         % (cx, cy, rx, ry, top, edge))
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
