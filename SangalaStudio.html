@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-26.130 -->
+<!-- SANGALA_VERSION: 2026-07-27.131 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -395,7 +395,11 @@ const MATS={Paper:[14,8,3,0,1],"Sticker Paper":[6,3,2,0,1],Cardstock:[30,5,6,0,1
 const isBar     =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-bar")==="1";   // a line extruded as a 3D bar is 3D-only - never sent to the die cutter
 const isHole    =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="hole";   // 3D role: a hole carves a void out of the solids it is grouped with (TinkerCAD-style)
 const isMosaicPart=o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-mosaic")==="1";   // a tile mass imported from a Sangala Mosaic file - its staircase outline is tile edges, not a cut path
-const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o)||isMosaicPart(o);   // a 3D bar, a baked mesh, a hole, or a mosaic mass: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
+// 3D role: a GUIDE is scaffolding, not material. It shows in the preview so you can build against it -
+// the massing an extruded mosaic gives you - but it is never exported, never cut, and never carves or
+// merges with anything. Where a Hole says "take material away", a Guide says "this was never material".
+const isGuide   =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="guide";
+const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o)||isGuide(o)||isMosaicPart(o);   // a 3D bar, a baked mesh, a hole, a guide, or a mosaic mass: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
 const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
 const printObjs =()=>objects.filter(o=>o.kind==="print");
@@ -809,7 +813,7 @@ function draw(){
   // red and blue stay crisp on top and the mat reads as the finished collage rather than a tangle of outlines.
   // Drawn in object order, so a shape added later sits over an earlier one - the collage's layers.
   objects.forEach(o=>{ const f=fillOf(o);
-    if(!f || !o.poly || o.poly.length<3 || !objClosed(o)) return;   // an open stroke (a fold, a turtle trail) encloses nothing
+    if(!f || !o.poly || o.poly.length<3 || !objClosed(o) || isGuide(o)) return;   // an open stroke (a fold, a turtle trail) encloses nothing; a guide stays an outline, so you can see what you place inside it
     ctx.save(); ctx.fillStyle=f; ctx.beginPath();
     const addRing=r=>{ const pr=placePoly(r); pr.forEach((q,i)=>{ const x=q[0]*k, y=q[1]*k; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.closePath(); };
     addRing(o.poly);
@@ -841,7 +845,7 @@ function draw(){
       (o.holes||[]).forEach(h=>{ const hp=placePoly(h); ctx.setLineDash([4,3]); ctx.beginPath(); hp.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); });   // carved openings: dashed, same gray, so a hole stays visible with 3D off
     });
     ctx.restore(); }
-  const mosParts=objects.filter(o=>isMosaicPart(o)&&!o.mesh);   // imported mosaic masses: a soft gray outline over their color fill (drawn above), so two same-color masses stay tellable apart - tile edges, not cut lines
+  const mosParts=objects.filter(o=>isMosaicPart(o)&&!o.mesh&&!isGuide(o));   // imported mosaic masses: a soft gray outline over their color fill (drawn above), so two same-color masses stay tellable apart - tile edges, not cut lines. A guide has its own pale dashed outline below.
   if(mosParts.length){ ctx.save(); ctx.strokeStyle="#8a8a8a"; ctx.lineWidth=1;
     mosParts.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke();
       (o.holes||[]).forEach(h=>{ const hp=placePoly(h); ctx.beginPath(); hp.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); });
@@ -850,6 +854,11 @@ function draw(){
   const barLines=objects.filter(isBar);   // 3D bars are shown on the plan (so you can place and aim them) but never cut - a distinct teal, not the red of a cut
   if(barLines.length){ ctx.save(); ctx.strokeStyle="#0a7ea4"; ctx.lineWidth=2; ctx.lineCap="round";
     barLines.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.stroke(); });
+    ctx.restore(); }
+  const guideObjs=objects.filter(isGuide);   // a Guide reads as a pale long-dashed outline - scaffolding to build against, never material and never exported
+  if(guideObjs.length){ ctx.save(); ctx.strokeStyle="#9aa8b8"; ctx.lineWidth=1.4; ctx.setLineDash([7,4]);
+    guideObjs.forEach(o=>{ const p=placePoly(o.poly); ctx.beginPath(); p.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); if(objClosed(o))ctx.closePath(); ctx.stroke();
+      (o.holes||[]).forEach(h=>{ const hp=placePoly(h); ctx.beginPath(); hp.forEach((q,i)=>{const x=q[0]*k,y=q[1]*k;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); }); });
     ctx.restore(); }
   const holeObjs=objects.filter(isHole);   // a shape marked Hole reads as a blue dotted outline - it carves rather than adds when grouped (excluded from the red cut lines above, so the dots are the only stroke)
   if(holeObjs.length){ ctx.save(); ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1.6; ctx.lineCap="round"; ctx.setLineDash([0.5,4]);
@@ -2213,6 +2222,11 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
     const grp=new Set(); all.forEach(o=>{ if(onlyIds.has(o.id)){ const p=gpathOf(o); if(p.length)grp.add(p[0]); } });
     all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group (bundle), never a fragment
   }
+  // Guides leave the solid build entirely: they never join a bundle, never carve, never export. They are
+  // gathered separately so the preview can show them BEHIND the real parts as something to build against.
+  const guideObjs=all.filter(isGuide);
+  all=all.filter(o=>!isGuide(o));
+  const guideTris=[].concat.apply([], guideObjs.map(o=>{ try{ return bodyTris(o,false); }catch(e){ return []; } }));
   const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
   const parts=[], pcols=[];   // pcols[i] = fixed display color for parts[i] (a mosaic mass wears its tile color); null -> the piece-color cycle
   const partCol=o=>{ if(!isMosaicPart(o)) return null; const f=fillOf(o), m=f&&/^#([0-9a-f]{6})$/i.exec(f);
@@ -2245,7 +2259,8 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   });
   const list=[], lcols=[];
   parts.forEach((p,i)=>{ if(p.length){ list.push(p); lcols.push(pcols[i]); } });
-  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list, cols:lcols};
+  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list, cols:lcols,
+          guides:guideTris, nGuide:guideObjs.length};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -2254,9 +2269,10 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
 // design, which is the right thing when the pieces are laid out to print together in one job.
 async function exportSTL(){
   const sel=new Set(selectedIds());
-  const {n,bricks,parts}=buildTris(sel.size?sel:null);
-  if(!n){ say(sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
-                       : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  const {n,bricks,parts,nGuide}=buildTris(sel.size?sel:null);
+  if(!n){ say(nGuide ? "Nothing to export yet - every shape here is a Guide, and a guide is scaffolding to build against, never material. Build parts against it, or untick Guide to make one solid."
+                     : sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
+                                : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
                             sel.size?"sangala-part.stl":"sangala-model.stl","STL model",".stl");
@@ -2269,7 +2285,7 @@ async function exportSTL(){
 $("bStl").onclick=exportSTL;
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
-let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null;
+let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
 // One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
 // different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
 // one triangle soup, so two shapes that merely overlap look exactly like two that are fused - which is how a
@@ -2277,7 +2293,7 @@ let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvB
 // Piece 1 keeps the original brick red, so a single-piece model looks exactly as it always did.
 const PIECE_COLORS=[[214,74,48],[62,116,178],[86,150,90],[196,150,54],[142,96,166],[70,150,150]];
 function pvSetTris(b){   // parts are concatenated in order by buildTris, so a per-triangle color array lines up
-  pvTris=b.tris; pvCol=[];
+  pvTris=b.tris; pvCol=[]; pvGuide=b.guides&&b.guides.length?b.guides:null;
   (b.parts||[]).forEach((tris,i)=>{ const c=(b.cols&&b.cols[i])||PIECE_COLORS[i%PIECE_COLORS.length];   // a mosaic mass wears its tile color; everything else keeps the piece cycle (which is how a Fuse stays visible)
     for(let k=0;k<tris.length;k++) pvCol.push(c); });
 }
@@ -2285,7 +2301,8 @@ const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
   let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
-  pvTris.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
+  const framed = pvGuide ? pvTris.concat(pvGuide) : pvTris;   // frame the guide too, or a design that is only a guide has nothing to fit to
+  framed.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
   let bx0=mn[0],bx1=mx[0],by0=mn[1],by1=mx[1],bz0=mn[2],bz1=mx[2];
   if(pvPlate){ const b=pvBed(mn,mx); bx0=Math.min(bx0,b.x0);bx1=Math.max(bx1,b.x1);by0=Math.min(by0,b.y0);by1=Math.max(by1,b.y1);bz0=Math.min(0,bz0); }   // include the whole bed when it's shown
   pvCenter=[(bx0+bx1)/2,(by0+by1)/2,(bz0+bz1)/2];
@@ -2294,7 +2311,7 @@ function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, s
 function pvRefresh(){   // live update: rebuild tris, keep the camera fixed so Base/Depth read against the stationary plate
   scheduleCommit();   // Undo: 3D-only edits (Depth/Base/Fit) may not redraw the 2D canvas, so snapshot here too
   if(!pvOn) return;
-  const b=buildTris(); if(!b.n){ closePreview(); return; }   // last 3D object removed -> leave preview
+  const b=buildTris(); if(!b.n && !b.nGuide){ closePreview(); return; }   // last 3D object removed -> leave preview (a lone guide is still worth showing: it is what you build against)
   pvSetTris(b); renderPreview();
 }
 function renderPreview(){
@@ -2350,6 +2367,40 @@ function renderPreview(){
         pvZbuf[i]=z; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
       } }
   }
+  // ---- guides: the massing you are building against. Rasterized into their OWN depth buffer and then
+  // painted only where no real part covers, so a guide never hides the bricks placed inside it - it shows
+  // as the pale silhouette still waiting to be filled, and recedes as the build takes its place. ----
+  if(pvGuide && pvGuide.length){
+    const gz=new Float32Array(W*H); gz.fill(Infinity);
+    const gc=new Uint8Array(W*H);                      // shade per pixel, 0 = untouched
+    for(const t of pvGuide){
+      const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],
+            vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
+      let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
+      if((nx*sa+ny*ca)*ce - nz*se >= 0) continue;
+      const a=proj(t[0]),b=proj(t[1]),c=proj(t[2]);
+      const s=0.55+0.45*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+      let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
+      let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
+      if(x0>x1||y0>y1) continue;
+      const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]); if(Math.abs(den)<1e-9) continue;
+      const inv=1/den;
+      for(let y=y0;y<=y1;y++){ const fy=y+0.5;
+        for(let x=x0;x<=x1;x++){ const fx=x+0.5;
+          const w0=((b[1]-c[1])*(fx-c[0])+(c[0]-b[0])*(fy-c[1]))*inv; if(w0<-1e-6) continue;
+          const w1=((c[1]-a[1])*(fx-c[0])+(a[0]-c[0])*(fy-c[1]))*inv; if(w1<-1e-6) continue;
+          const w2=1-w0-w1; if(w2<-1e-6) continue;
+          const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
+          if(z>=gz[i]) continue;
+          gz[i]=z; gc[i]=Math.max(1,Math.min(255,(s*255)|0));
+        } }
+    }
+    for(let i=0;i<W*H;i++){
+      if(!gc[i] || pvZbuf[i]!==Infinity) continue;    // a real part here wins outright
+      const s=gc[i]/255, p=i<<2;                     // clearly darker than the sky behind it, or a ghost
+      px[p]=(104+62*s)|0; px[p+1]=(120+62*s)|0; px[p+2]=(142+58*s)|0; px[p+3]=255;   // reads as no ghost at all
+    }
+  }
   // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim) or against the
   // background (the silhouette). The threshold tracks the view, so a flat face's own gradient never trips it. ----
   const ceA=Math.abs(ce)||1e-6, seA=Math.abs(se)||1e-6;
@@ -2373,7 +2424,7 @@ function renderPreview(){
 }
 function openPreview(){
   const b=buildTris();
-  if(!b.n){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
+  if(!b.n && !b.nGuide){ say("No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }   // a design that is only guides still opens: the massing is exactly what you want in view before the first real part goes in
   pvSetTris(b); pvOn=true;
   $("pv").style.display="block"; sizePvToCv();          // overlay #pv exactly on the (dynamically-sized) design canvas
   $("pvhint").style.display="block"; $("bPreview").classList.add("on");
@@ -3348,7 +3399,7 @@ function ensurePolygon(o){
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
+    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role","data-mosaic","data-name","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -3357,7 +3408,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-role","data-mosaic","data-name","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
@@ -3727,9 +3778,10 @@ function dimText(o){
     }
     html+='</div>';
   }
-  if(mode3D && is3DSolid(o)){   // Solid vs Hole: a hole carves a void out of the solids it is grouped with (unchecked = a normal solid shape)
+  if(mode3D && is3DSolid(o)){   // Solid vs Hole vs Guide: what this shape IS in the 3D build
     html+='<div style="margin-top:.5rem;border-top:1px solid #e7dcc9;padding-top:.4rem">'
-      +flag("hole","Hole",isHole(o),"Make this a hole: grouped with solid shapes, it carves a void out of them instead of adding material. Unchecked = a solid shape. Its outline shows dotted.")+'</div>';
+      +flag("hole","Hole",isHole(o),"Make this a hole: grouped with solid shapes, it carves a void out of them instead of adding material. Unchecked = a solid shape. Its outline shows dotted.")
+      +flag("guide","Guide",isGuide(o),"Make this a guide: scaffolding to build against, never material. It shows pale in the 3D view behind whatever you place, and is never exported to STL or sent to the die cutter. Use it to hold a massed shape in view while you build the real parts inside it.")+'</div>';
   }
   return html;
 }
@@ -3853,7 +3905,8 @@ function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEG
     else { ["data-bore-axis","data-bore-d","data-bore-h"].forEach(a=>o.el.removeAttribute(a)); }
     showDims(o); pvRefresh(); return; }
   if(flag==="borex"){ o.el.setAttribute("data-bore-axis", on?"x":"y"); showDims(o); pvRefresh(); return; }   // axis: across the width (x) vs along the length (y)
-  if(flag==="hole"){ if(on) o.el.setAttribute("data-role","hole"); else o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Hole; draw() redraws the dotted hole outline, pvRefresh re-evaluates any group it is in
+  if(flag==="hole"){ if(on) o.el.setAttribute("data-role","hole"); else if(isHole(o)) o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Hole; draw() redraws the dotted hole outline, pvRefresh re-evaluates any group it is in
+  if(flag==="guide"){ if(on) o.el.setAttribute("data-role","guide"); else if(isGuide(o)) o.el.removeAttribute("data-role"); showDims(o); draw(); pvRefresh(); return; }   // Solid <-> Guide. One data-role, so ticking Guide clears Hole and the other way about - a shape cannot both carve and be scaffolding
   if(flag==="slopeinv"){ o.el.setAttribute("data-slope-inv", on?"1":"0"); pvRefresh(); return; }   // invert a sloped shape / cone: the top stays full, the underside falls away
   if(flag==="bar"){   // turn a line into a 3D bar: seed a round 4 mm rod at a visible height, off strips every bar attribute
     if(on){ o.el.setAttribute("data-bar","1"); if(!o.el.getAttribute("data-bar-shape")) o.el.setAttribute("data-bar-shape","round");
