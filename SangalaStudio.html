@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.134 -->
+<!-- SANGALA_VERSION: 2026-07-27.135 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -326,6 +326,7 @@
       <span class="zsep" aria-hidden="true"></span>
       <button id="bOrient" title="Rotate the mat between portrait and landscape. The mat and the cut are the same 8 x 12 either way - landscape just turns the workspace for designs that sit better wide."><svg width="17" height="17" viewBox="0 0 24 24" style="display:block"><rect x="9" y="1" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="2" y="10" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 1.5A6 6 0 0 0 2 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M0.3 3.2L2 6l3-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="bSnapTog" class="on" title="Snap to Fit: dragging near another shape pulls the corners together. Click to turn it off. (While on, hold Alt to drag free.)">🧲</button>
+      <button id="bStudSnap" class="on" style="display:none" title="Snap to Studs: dragging a 3D part lands it on the 8 mm stud grid, so parts line up with each other and with an imported mosaic. Click to turn it off. (While on, hold Alt to drag free.)">⊞</button>
     </div>
   </div>
 </div>
@@ -2494,6 +2495,7 @@ function setMode3D(on){   // single source of truth for 2D<->3D; driven by the h
   $("bStl").style.display=on?"":"none";
   $("bPreview").style.display=on?"":"none"; if(!on) closePreview();   // 3D preview is a 3D-only tool (closePreview also hides the build-plate toggle)
   $("tBrick").style.display=on?"":"none";                         // Brick is a 3D/LEGO feature: hide it until 3D is enabled
+  $("bStudSnap").style.display=on?"":"none";                      // and so is the stud lattice - a die-cutter design has no studs to snap to
   $("tSnap").style.display=on?"none":"";                          // Snap! draws with a turtle - a 2D drawing tool, so hide it in 3D
   $("conn").style.display=on?"none":"";                           // 3D mode outputs an STL (3D printer), not an SVG cut - hide the die-cutter connection status
   ["fabHead","make","matHead","material","bar"].forEach(id=>$(id).style.display=on?"none":"");   // Fabricate/Make It + Material picker + its progress bar are die-cutter (2D) controls; 3D exports an STL instead
@@ -3166,6 +3168,21 @@ function snapSample(p){         // the dragged shape's own snap points: its node
   if(nodes.length<=40) return nodes.map(q=>[q[0],q[1]]);
   const bb=bbox([p]); return [[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]];
 }
+/* ---- Snap to Studs: the 8 mm lattice every LEGO part actually lives on ----
+   Distinct from Snap to Fit, which pulls a shape onto a NEIGHBOUR's corner or edge. This one is
+   absolute: a part lands on the stud grid whether or not anything is near it, which is what makes a
+   brick placed against an imported mosaic line up with the mosaic - the massing is on that lattice
+   already, because a tile is a stud. 3D only; a die-cutter design has no studs to snap to.
+   Snapping the FOOTPRINT's minimum corner is what puts a brick's studs over a tile's studs: both
+   grids are anchored to their own bbox, so aligning the corners aligns every stud after it. */
+const STUD_MM=8;
+let studSnapOn=true;
+function studSnapDelta(poly, ddx, ddy){   // extra offset that lands the moved footprint on the lattice
+  if(!studSnapOn || !mode3D || !poly || !poly.length) return null;
+  const bb=bbox([poly]), nx=bb[0]+ddx, ny=bb[1]+ddy;
+  const ox=Math.round(nx/STUD_MM)*STUD_MM-nx, oy=Math.round(ny/STUD_MM)*STUD_MM-ny;
+  return (ox||oy) ? {ox:ox, oy:oy} : {ox:0, oy:0};
+}
 function snapTargets(excl){     // everything else on the mat, gathered once when the drag starts
   const pts=[], segs=[];
   objects.forEach(o=>{
@@ -3420,7 +3437,9 @@ function rebuildBrick(o){   // regenerate a brick's body size + stud grid from i
 // Brick tool: click the canvas to place the brick's top-left there, then auto-release to select
 function placeBrick(e){
   const {mx,my}=evtMM(e), pp=placeParams();
-  makeBrick((mx-pp.ox)/pp.s, (my-pp.oy)/pp.s);
+  let bx=(mx-pp.ox)/pp.s, by=(my-pp.oy)/pp.s;
+  if(studSnapOn && !e.altKey){ bx=Math.round(bx/STUD_MM)*STUD_MM; by=Math.round(by/STUD_MM)*STUD_MM; }   // a brick dropped on the lattice needs no nudging afterwards
+  makeBrick(bx, by);
   suppressClick=true; setTool("select");
 }
 // Node tool: make a shape editable point-by-point the first time a node is moved. A parametric rect becomes a
@@ -4322,6 +4341,9 @@ $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
   draw(); updateZoomUI();
   say(matLandscape ? "Mat turned to landscape - the workspace is wider now. The mat and the cut are unchanged."
                    : "Mat back to portrait."); };
+$("bStudSnap").onclick=()=>{ studSnapOn=!studSnapOn; $("bStudSnap").classList.toggle("on",studSnapOn);
+  say(studSnapOn ? "<i>Snap to Studs</i> is on - a part you drag lands on the 8 mm stud grid, so it lines up with the other parts and with an imported mosaic (hold Alt to drag free)."
+                 : "<i>Snap to Studs</i> is off - parts drag to any position. Click the grid button to turn it back on."); };
 $("bSnapTog").onclick=()=>{ snapOn=!snapOn; $("bSnapTog").classList.toggle("on",snapOn);
   say(snapOn ? "<i>Snap to Fit</i> is on - dragging near another shape pulls the corners together (hold Alt to drag free)."
              : "<i>Snap to Fit</i> is off - shapes drag freely. Click the magnet to turn it back on."); };
@@ -4627,7 +4649,9 @@ window.addEventListener("mousemove",(e)=>{
   }
   if(drag.mode==="groupmove"){ const {mx,my,k}=evtMM(e), pp=placeParams(); let ddx=(mx-pp.ox)/pp.s-drag.start[0], ddy=(my-pp.oy)/pp.s-drag.start[1];
     snapHint=null;
-    if(!e.altKey && drag.snap && drag.self.length){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
+    const gs=e.altKey?null:studSnapDelta(drag.self, ddx, ddy);   // the stud lattice wins over Snap to Fit in 3D: one snap at a time, so a drag never fights itself
+    if(gs){ ddx+=gs.ox; ddy+=gs.oy; }
+    else if(!e.altKey && drag.snap && drag.self.length){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     drag.orig.forEach(g=>{ const o=g.o; o.poly=g.poly.map(p=>[p[0]+ddx,p[1]+ddy]);
       if(g.holes) o.holes=g.holes.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
@@ -4698,7 +4722,9 @@ window.addEventListener("mousemove",(e)=>{
     drag.moved=true; draw(); return; }
   if(drag.mode==="polymove"){ const o=drag.obj; let ddx=dx-drag.start[0], ddy=dy-drag.start[1];   // translate the whole shape
     snapHint=null;
-    if(!e.altKey && drag.snap){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
+    const ps=e.altKey?null:studSnapDelta(drag.self, ddx, ddy);
+    if(ps){ ddx+=ps.ox; ddy+=ps.oy; }
+    else if(!e.altKey && drag.snap){ const s=snapDelta(drag.self.map(q=>[q[0]+ddx,q[1]+ddy]), drag.snap, snapTolMm(pp,k));
       if(s){ ddx+=s.ox; ddy+=s.oy; snapHint=[s.hx,s.hy]; } }
     o.poly=drag.orig.map(p=>[p[0]+ddx,p[1]+ddy]);
     if(drag.origHoles) o.holes=drag.origHoles.map(h=>h.map(p=>[p[0]+ddx,p[1]+ddy]));   // a frame's holes travel with its outline
@@ -4728,7 +4754,9 @@ window.addEventListener("mousemove",(e)=>{
       x=Math.min(ax,dx); y=Math.min(ay,dy); w=Math.max(0.5,Math.abs(dx-ax)); h=Math.max(0.5,Math.abs(dy-ay)); }
     else { w=+el.getAttribute("width")||0; h=+el.getAttribute("height")||0; x=dx-drag.grab[0]; y=dy-drag.grab[1];
       snapHint=null;
-      if(!e.altKey && drag.snap){ const s=snapDelta([[x,y],[x+w,y],[x+w,y+h],[x,y+h]], drag.snap, snapTolMm(pp,k));   // a corner pulls onto a neighbor's corner or edge (Alt = free)
+      const rs=e.altKey?null:studSnapDelta([[x,y],[x+w,y+h]], 0, 0);
+      if(rs){ x+=rs.ox; y+=rs.oy; }
+      else if(!e.altKey && drag.snap){ const s=snapDelta([[x,y],[x+w,y],[x+w,y+h],[x,y+h]], drag.snap, snapTolMm(pp,k));   // a corner pulls onto a neighbor's corner or edge (Alt = free)
         if(s){ x+=s.ox; y+=s.oy; snapHint=[s.hx,s.hy]; } } }
     el.setAttribute("x",fmtn(x)); el.setAttribute("y",fmtn(y)); el.setAttribute("width",fmtn(w)); el.setAttribute("height",fmtn(h));
     drag.obj.poly=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
@@ -4736,7 +4764,9 @@ window.addEventListener("mousemove",(e)=>{
     if(drag.mode==="resize"){ cx=drag.center[0]; cy=drag.center[1]; r=Math.max(0.25,Math.hypot(dx-cx,dy-cy)); }
     else { r=+el.getAttribute("r")||0; cx=dx-drag.grab[0]; cy=dy-drag.grab[1];
       snapHint=null;
-      if(!e.altKey && drag.snap){ const s=snapDelta([[cx,cy],[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]], drag.snap, snapTolMm(pp,k));
+      const cs=e.altKey?null:studSnapDelta([[cx-r,cy-r],[cx+r,cy+r]], 0, 0);
+      if(cs){ cx+=cs.ox; cy+=cs.oy; }
+      else if(!e.altKey && drag.snap){ const s=snapDelta([[cx,cy],[cx,cy-r],[cx+r,cy],[cx,cy+r],[cx-r,cy]], drag.snap, snapTolMm(pp,k));
         if(s){ cx+=s.ox; cy+=s.oy; snapHint=[s.hx,s.hy]; } } }
     el.setAttribute("cx",fmtn(cx)); el.setAttribute("cy",fmtn(cy)); el.setAttribute("r",fmtn(r));
     drag.obj.poly=circlePoly(cx,cy,r);
