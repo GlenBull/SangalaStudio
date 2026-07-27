@@ -117,6 +117,58 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
+def cone(x, y, z, w, d, h, color, top=0.55, studs=False):
+    """A round piece standing on the grid: a LEGO cone, or a round brick when top=1.
+
+    `top` is the top radius as a fraction of the base -- 1.0 a straight cylinder (a 1 x 1 round
+    brick), around 0.55 the familiar cone, 0 a full point. Sangala Studio makes the same shape from
+    a circle with its Cone taper field, which is where a model like this one should start."""
+    c0 = col(color)
+    cx, cy = x + w/2.0, y + d/2.0
+    rb = min(w, d) * 0.5 * 0.94              # a round brick is a hair narrower than its stud pitch
+    rt = max(0.0, rb * top)
+    N = 28
+    import math
+    def ring(r, zz):
+        return [(cx + r*math.cos(2*math.pi*i/N), cy + r*math.sin(2*math.pi*i/N), zz) for i in range(N)]
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        base, tip = ring(rb, z), ring(rt, z+h)
+        s, band = [], []
+        for i in range(N):
+            j = (i+1) % N
+            quad = [base[i], base[j], tip[j], tip[i]]
+            p = [iso(*q) for q in quad]
+            area = sum(p[k][0]*p[(k+1) % 4][1] - p[(k+1) % 4][0]*p[k][1] for k in range(4))
+            if area <= 0:                    # facing away from the camera
+                continue
+            th = 2*math.pi*(i+0.5)/N
+            lit = 0.5 + 0.5*(math.cos(th)*0.80 + math.sin(th)*0.30)
+            f = shade(c, 0.52 + 0.36*max(0.0, min(1.0, lit)))
+            # stroked in its OWN color: a dark line per facet turns a smooth cone into a beach
+            # umbrella. The silhouette below supplies the one outline the piece actually needs.
+            s.append(_poly(quad, f, f, sw=0.6))
+            band.append((base[i], base[j], tip[i], tip[j]))
+        if band:
+            ring_pts = [q[0] for q in band] + [band[-1][1]] + [band[-1][3]] \
+                       + [q[2] for q in reversed(band)]
+            s.append('<polygon points="%s" fill="none" stroke="%s" stroke-width="0.9" stroke-linejoin="round"/>'
+                     % (" ".join("%.2f,%.2f" % iso(*q) for q in ring_pts), edge))
+        if rt > 1e-6:                        # the flat top, as an ellipse
+            tx, ty = iso(cx, cy, z+h)
+            s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.9"/>'
+                     % (tx, ty, rt*U*1.4142, rt*U*0.7071, c, edge))
+        if studs and rt > 0.18:
+            r = 0.30; sh = 0.22*V
+            sx_, sy_ = iso(cx, cy, z+h)
+            s.append('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>'
+                     % (sx_-r*U*1.4142, sy_, 2*r*U*1.4142, sh, shade(c, 0.70)))
+            s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                     % (sx_, sy_, r*U*1.4142, r*U*0.7071, c, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
 def _slope_inv(x, y, z, w, d, h, dirn, c0):
     """The inverted slope. Its top is a whole rectangle (so it takes a full set of studs) and the
     material tapers away underneath toward `dirn`. The undersides face downward and are almost
