@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.136 -->
+<!-- SANGALA_VERSION: 2026-07-27.137 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -424,7 +424,7 @@ function fmtn(v){ v=Math.round(v*100)/100; return isFinite(v)?v:0; }   // never 
 // Object dimensions honor the Units setting (the same one that drives Position). Only 2D lengths convert; the
 // 3D/LEGO params (Depth/Base/Fit/bore) stay mm - they're metric by nature (LEGO's 8 mm grid, a sub-mm clutch).
 const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
-const PLATE_MM=3.2, PLATE_UNIT={f:v=>Math.round(v/PLATE_MM*100)/100, step:"1", lab:"plates"};   // mosaic parts count Depth/Base in LEGO plates; 3 plates = 1 brick (9.6 mm) - the tile-to-brick unit shift Chapter 5 teaches
+const PLATE_MM=3.2, PLATE_UNIT={f:v=>Math.round(v/PLATE_MM*100)/100, step:"1", lab:"plates"};   // EVERY 3D height - shape, baked part or brick - is counted in LEGO plates: 3 plates = 1 brick = 9.6 mm. Millimetres are the printer's unit; plates are the builder's, and working in 9.6s to stack bricks is awkward (Glen, 2026-07-27). Geometry is still stored in mm; only the fields convert.
 function unit2D(){ return units==="in" ? {f:v=>Math.round(v/25.4*100)/100, step:"0.01", lab:"in"} : MM_UNIT; }
 function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:PAGE_H;   // the MATERIAL page, in its DISPLAYED orientation
   if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
@@ -3797,8 +3797,8 @@ function dimText(o){
     let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
     const b=isFinite(lo)?lo:0, d=isFinite(hi)?hi-b:0;
     const fld=(lab,key,val)=>'<td style="text-align:left">'+lab+':</td>'
-      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+MM_UNIT.step+'" data-dim="'+key+'" value="'+MM_UNIT.f(val)+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">'+MM_UNIT.lab+'</td>';
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+PLATE_UNIT.step+'" data-dim="'+key+'" value="'+PLATE_UNIT.f(val)+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350">'+PLATE_UNIT.lab+'</td>';
     return '<table style="border-collapse:collapse"><tr>'
       +fld("Depth","meshdepth",d)+'<td style="width:1.2rem"></td>'+fld("Base","meshbase",b)+'</tr></table>';
   }
@@ -3818,20 +3818,18 @@ function dimText(o){
       const bb=bbox([o.poly]);
       rows=[[["Width",bb[2]-bb[0],"width"],["Height",bb[3]-bb[1],"height"]]]; lockableWH=true;
     }
-    if(mode3D && objClosed(o)) rows.push(isMosaicPart(o)   // a mosaic mass counts its z in plates (see PLATE_UNIT); other shapes stay mm
-      ? [["Depth",R("data-z"),"zp"],["Base",R("data-z0"),"z0p"]]
-      : [["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
+    if(mode3D && objClosed(o)) rows.push([["Depth",R("data-z"),"z"],["Base",R("data-z0"),"z0"]]);   // an OPEN path can't extrude (same rule Break-apart uses) - Depth/Base would be a dead field
   }
   else return "";
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
-    const u=(p[2]==="zp"||p[2]==="z0p")?PLATE_UNIT:(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // 3D is always mm (LEGO/print parts are metric) except mosaic-part z in plates; only 2D follows the Units toggle - no mixed units in either view
+    const u=/^(z|z0|zp|z0p|meshdepth|meshbase)$/.test(p[2])?PLATE_UNIT:(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // every 3D HEIGHT is plates; 2D lengths follow the Units toggle; everything else stays mm
     return '<td style="text-align:left">'+p[0]+':</td>'
       +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
       +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
   let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
-  if(mode3D && isMosaicPart(o) && objClosed(o))
-    html+='<div class="hint" style="margin-top:.25rem">3 plates = 1 brick (9.6 mm).</div>';
+  if(mode3D && (objClosed(o) || o.mesh))
+    html+='<div class="hint" style="margin-top:.25rem">Heights are in plates &mdash; 3 plates = 1 brick (9.6 mm).</div>';
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape.
     // Sits directly under the Width/Height/Depth/Base table, which is what it governs (in 3D it couples Depth too).
     // Below the Slope box instead, it has no rule of its own and reads as one of the slope controls next to Invert.
@@ -3924,6 +3922,8 @@ function scaleFootprint(o,s){
 // apply one edited dimension to the selected shape, keeping the other (exact) values
 function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
   const o=selObj(); if(!o||!o.el) return;
+  if(dim==="zp"||dim==="z0p") dim=(dim==="zp")?"z":"z0";     // older key spellings, kept so nothing breaks
+  if(/^(z|z0|meshdepth|meshbase)$/.test(dim)) v=v*PLATE_MM;  // HEIGHTS ARE TYPED IN PLATES, geometry is stored in mm. This has to happen before any branch reads v - the baked-part branches sit above the old conversion and were silently taking plates as millimetres.
   if(dim==="cone"){ o.el.setAttribute("data-cone",fmtn(Math.max(0,Math.min(80,v)))); if(!live)showDims(o); pvRefresh(); return; }   // circle rim taper -> cone
   if(/^slope\d+$/.test(dim)){   // per-side roof: set one edge's slope angle (deg from vertical, 0 = flat) in data-slopes (aligned to the footprint edges)
     const idx=+dim.slice(5), ang=rfEdgeAngles(o, rfOpen(o.poly)); ang[idx]=Math.max(0,Math.min(80,v));
@@ -3939,7 +3939,6 @@ function applyDim(dim,v,live){   // live=true (spinner step / typing): update ge
       const cur=hi-lo, s=cur>1e-6 ? Math.max(0.1,v)/cur : 1;
       if(s!==1){ o.mesh=o.mesh.map(t=>t.map(p=>[p[0],p[1],lo+(p[2]-lo)*s])); if(!live) syncMeshToEl(o); } }
     if(!live)showDims(o); pvRefresh(); return; }
-  if(dim==="zp"||dim==="z0p"){ dim=(dim==="zp")?"z":"z0"; v=v*PLATE_MM; }   // mosaic-part fields are typed in plates; geometry stays mm
   if(dim==="z"||dim==="z0"){
     if(dim==="z" && mode3D && o.el.getAttribute("data-lockratio")==="1"){   // Lock ratio (symmetric): a Depth edit scales Width/Height to match
       const oldZ=+o.el.getAttribute("data-z")||0; if(oldZ>1e-6 && v>0.1) scaleFootprint(o, v/oldZ); }
@@ -4070,8 +4069,8 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
   const flag=(f,label,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
   return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
     +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
-    +'<tr>'+cell("Depth","z",depth,0.1,3.2,"mm")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr>'
-    +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td style="width:1rem"></td>'+cell("Base","z0",base,0.1,0,"mm")+'</tr></table>'
+    +'<tr>'+cell("Depth","z",Math.round(depth/PLATE_MM*100)/100,1,1,"plates")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr>'
+    +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td style="width:1rem"></td>'+cell("Base","z0",Math.round(base/PLATE_MM*100)/100,1,0,"plates")+'</tr></table>'
     +'<div class="hint" style="margin-top:.2rem">Slope 0 = a flat top. Slope 1 makes the front row fall away to the base - a roof brick.</div>'
     +'<div class="hint" style="margin-top:.2rem">Fit 0 = standard LEGO. Minus tightens the clutch (fatter studs), plus loosens it.</div>'
     +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>'
@@ -4082,6 +4081,7 @@ function showBrickCtl(o){ const el=$("brickctl");
   el.innerHTML=brickCtlHTML(o); el.style.display="block";
 }
 function applyBrickDim(dim,v,live){ const o=selectedBrick(); if(!o) return;
+  if(dim==="z"||dim==="z0") v=v*PLATE_MM;   // the panel counts a brick's height in plates too - 3 to a brick - so a stack is arithmetic a builder can do
   if(dim==="cols"||dim==="rows"){ o.el.setAttribute(dim==="cols"?"data-cols":"data-rows", Math.max(1,Math.min(12,Math.round(v))));
     const rws=Math.max(1,Math.round(+o.el.getAttribute("data-rows")||2));
     if((+o.el.getAttribute("data-slope")||0) > rws-1) o.el.setAttribute("data-slope", rws-1);   // fewer rows than the slope covers: pull it back so a flat row survives
