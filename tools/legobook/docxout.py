@@ -112,7 +112,7 @@ _RELS = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
          "</Relationships>")
 
-def write(book, images, out_path, *, table=None, image_width_in=2.35):
+def write(book, images, out_path, *, table=None, image_width_in=2.15):
     """book: a Book. images: one PNG path per step. table: (title, heads, rows, widths) or None."""
     body = [_para(book.title, sz=34, bold=True, before=0, after=60, align="center", keep_next=True),
             _para(book.subtitle, sz=22, italic=True, before=0, after=200, align="center", keep_next=True)]
@@ -128,11 +128,11 @@ def write(book, images, out_path, *, table=None, image_width_in=2.35):
         px, py = _png_size(images[i])
         rels.append((rid, "media/step%02d.png" % (i+1), images[i]))
         body.append(_para("Step %d.  %s" % (i+1, s["title"]), sz=26, bold=True,
-                          before=180, after=60, keep_next=True))
+                          before=120, after=50, keep_next=True))
         body.append(_picture(rid, 100+i, image_width_in, px, py))
         body.append(_para(_plain(s["text"]), before=40, after=60))
         body.append(_para("Add these pieces:  " + ";  ".join(lab for lab, _ in s["parts"]),
-                          sz=20, italic=True, before=0, after=120))
+                          sz=20, italic=True, before=0, after=80))
     if book.closing:
         body.append(_para(book.closing[0], sz=26, bold=True, before=200, after=60, keep_next=True))
         body.append(_para(_plain(book.closing[1]), before=0, after=100))
