@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-26.126 -->
+<!-- SANGALA_VERSION: 2026-07-26.127 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2213,11 +2213,13 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
     all=all.filter(o=> onlyIds.has(o.id) || (gpathOf(o).length && grp.has(gpathOf(o)[0])) );   // whole outermost group (bundle), never a fragment
   }
   const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
-  const parts=[];
+  const parts=[], pcols=[];   // pcols[i] = fixed display color for parts[i] (a mosaic mass wears its tile color); null -> the piece-color cycle
+  const partCol=o=>{ if(!isMosaicPart(o)) return null; const f=fillOf(o), m=f&&/^#([0-9a-f]{6})$/i.exec(f);
+    if(!m) return null; const n=parseInt(m[1],16); return [n>>16&255,n>>8&255,n&255]; };
   const bper={}; brickBodies.forEach(o=>{ if(o.group!=null)bper[o.group]=(bper[o.group]||0)+1; });   // bricks keep the old weld-by-group; their hollow meshes do not go through the boolean
   const bmap=new Map();
   brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
-  bmap.forEach(t=>parts.push(t));
+  bmap.forEach(t=>{ parts.push(t); pcols.push(null); });
   // Non-brick bodies group by their OUTERMOST bundle. A bundle with NO hole stays a plain bundle (each solid
   // its own piece - non-touching shapes are fine, they just coexist). A bundle that HOLDS a hole previews the
   // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
@@ -2228,20 +2230,21 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   nonBrick.forEach(o=>{ const g=gpathOf(o), key=g.length?g[0]:("solo"+o.id); if(!buckets.has(key))buckets.set(key,[]); buckets.get(key).push(o); });
   buckets.forEach((members,key)=>{
     const holes=members.filter(isHole), solids=members.filter(o=>!isHole(o));
-    if(!holes.length){ solids.forEach(o=>{ const t=bodyTris(o,false); if(t.length) parts.push(t); }); return; }   // bundle with no hole -> plain bundle
+    if(!holes.length){ solids.forEach(o=>{ const t=bodyTris(o,false); if(t.length){ parts.push(t); pcols.push(partCol(o)); } }); return; }   // bundle with no hole -> plain bundle
     const stamp=grpStamp(members); let c=useCache?_grpPrev.get(key):null;
     if(!c || c.stamp!==stamp){
       const holeMeshes=holes.map(operandMesh).filter(m=>m&&m.length);
-      const outs=[];
+      const outs=[], ocols=[];
       solids.forEach(o=>{ let m=operandMesh(o); if(!m||!m.length) return;
         for(const hm of holeMeshes){ m=cleanMesh(mesh3D("subtract",m,hm),1e-4,true); if(!m.length) break; }   // carve each hole; a full cover empties the solid (it vanishes), a miss leaves it unchanged
-        if(m.length) outs.push(m); });
-      c={stamp, outs}; if(useCache) _grpPrev.set(key,c);
+        if(m.length){ outs.push(m); ocols.push(partCol(o)); } });
+      c={stamp, outs, ocols}; if(useCache) _grpPrev.set(key,c);
     }
-    c.outs.forEach(m=>{ if(m.length) parts.push(m); });
+    c.outs.forEach((m,i)=>{ if(m.length){ parts.push(m); pcols.push((c.ocols||[])[i]||null); } });
   });
-  const list=parts.filter(p=>p.length);
-  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list};
+  const list=[], lcols=[];
+  parts.forEach((p,i)=>{ if(p.length){ list.push(p); lcols.push(pcols[i]); } });
+  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list, cols:lcols};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -2274,7 +2277,7 @@ let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvB
 const PIECE_COLORS=[[214,74,48],[62,116,178],[86,150,90],[196,150,54],[142,96,166],[70,150,150]];
 function pvSetTris(b){   // parts are concatenated in order by buildTris, so a per-triangle color array lines up
   pvTris=b.tris; pvCol=[];
-  (b.parts||[]).forEach((tris,i)=>{ const c=PIECE_COLORS[i%PIECE_COLORS.length];
+  (b.parts||[]).forEach((tris,i)=>{ const c=(b.cols&&b.cols[i])||PIECE_COLORS[i%PIECE_COLORS.length];   // a mosaic mass wears its tile color; everything else keeps the piece cycle (which is how a Fuse stays visible)
     for(let k=0;k<tris.length;k++) pvCol.push(c); });
 }
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
