@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.131 -->
+<!-- SANGALA_VERSION: 2026-07-27.132 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1415,6 +1415,8 @@ async function saveSVG(){
       types:[{description:"SVG image",accept:{"image/svg+xml":[".svg"]}}]}); }
     catch(e){ if(e&&e.name==="AbortError") return; say("Could not open Save dialog: "+e.message); return; }
     try{ const ws=await handle.createWritable(); await ws.write(blob); await ws.close();
+      const bad=await writeShortfall(handle, blob.size);
+      if(bad){ say(bad); return; }
       say("Saved "+handle.name+size); }
     catch(e){ say("Save failed: "+e.message); }
     return;
@@ -1499,12 +1501,28 @@ function restoreRefImage(ri){
   img.onerror=()=>say("The project opened, but its reference photo could not be restored.");
   img.src=ri.src;
 }
+/* Read the file back and confirm the bytes landed. Choosing a name in the Save dialog CREATES the
+   file immediately, at zero bytes; the contents only arrive when close() completes. If anything
+   interrupts the write in between, the result is a real, findable, EMPTY file - and the app used to
+   announce "Saved" regardless, because close() resolving was taken as proof. It is not. Glen lost an
+   evening's work to exactly that on 2026-07-27: a 0-byte "Crane 8.model" that Explorer could still
+   find in its index after the file itself had gone. Returns a complaint, or "" when the file is good. */
+async function writeShortfall(handle, expected){
+  try{
+    const back = await handle.getFile();
+    if(back.size >= expected) return "";
+    return "SAVE DID NOT COMPLETE - " + handle.name + " holds " + back.size + " of " + expected
+         + " bytes. Nothing here is lost: your design is still open. Try Save again, and to somewhere local if that folder is on a network or a synced drive.";
+  }catch(e){ return ""; }        // cannot read it back: say nothing rather than cry wolf
+}
 // native Save As (choose folder + name) with plain-download fallback; returns saved name or null
 async function saveBlob(blob,suggestedName,desc,ext){
   if(window.showSaveFilePicker){
     let h; try{ h=await window.showSaveFilePicker({suggestedName:suggestedName,types:[{description:desc,accept:{"application/octet-stream":[ext]}}]}); }
     catch(e){ if(e&&e.name==="AbortError")return null; say("Could not open Save dialog: "+e.message); return null; }
-    try{ const ws=await h.createWritable(); await ws.write(blob); await ws.close(); return h.name; }
+    try{ const ws=await h.createWritable(); await ws.write(blob); await ws.close();
+      const bad=await writeShortfall(h, blob.size); if(bad){ say(bad); return null; }
+      return h.name; }
     catch(e){ say("Save failed: "+e.message); return null; }
   }
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=suggestedName; a.click();
