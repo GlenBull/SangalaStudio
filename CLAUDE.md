@@ -118,7 +118,12 @@ USB only, user-mode.** This constraint is absolute.
     a fresh page that then holds nothing else, that reads as broken. Glen's fix, and mine: reclaim room on the
     PRIOR page (tighten the spacing there — usually the autospacing gaps are the culprit) so the stray lines
     pull back up. `docxcheck.ps1` flags these as UNDERFILLED pages; treat each as a judgment call, not an
-    auto-fix — sometimes the short page is a legitimate section end.
+    auto-fix — sometimes the short page is a legitimate section end. **The script now separates that case
+    itself (2026-07-27):** a short page whose SUCCESSOR is started by a deliberate break — `PageBreakBefore`,
+    or a manual `<w:br w:type="page"/>` inside the paragraph, which is how the User Guide opens Part 1,
+    Part 2 and each appendix — is reported as BY DESIGN and does not withhold `PAGINATION CLEAN`. Before
+    this, User Guide 8.2 withheld CLEAN forever over page 21, a break Glen put there on purpose and that no
+    edit to page 20 could have reclaimed. Anything still listed under UNDERFILLED is a real spill.
   - **PAGINATION CLEAN does not mean the pages look right — know the underfilled test's two blind spots**
     (learned on the Mosaic guide 1.6, 2026-07-26, when Glen saw "many half-empty pages" the check passed).
     It flags a page only when MORE than 216 pt (3 in) is blank at the bottom, and it skips the LAST page
