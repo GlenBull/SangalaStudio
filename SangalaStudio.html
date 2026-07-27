@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.132 -->
+<!-- SANGALA_VERSION: 2026-07-27.133 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1255,6 +1255,7 @@ function importMosaic(text,fname){
 // (a REFERENCE layer for tracing - it never cuts, prints, or saves; the traced vector is the design).
 function openFile(f){ if(!f) return;
   const nm=(f.name||"").toLowerCase(), ty=f.type||"";
+  if(!/\.(png|jpe?g|gif|webp|bmp)$/.test(nm) && ty.indexOf("image/")!==0) setDocName(f.name);   // every design arrives through here, so this is the one place to learn its name. A traced PHOTO is not the design, so it does not name it.
   if(nm.endsWith(".model")||nm.endsWith(".studio")||nm.endsWith(".project")){ f.text().then(openProject); return; }   // a Sangala Studio model -> restore the exact state. .model matches the Educational CAD Model Library the designs are published to; .studio and .project were earlier names and still open, so nothing already saved is stranded
   if(nm.endsWith(".mosaic")){ f.text().then(t=>importMosaic(t,f.name)); return; }   // a Sangala Mosaic -> each named mass becomes an extrudable 3D part (the Chapter 4 -> Chapter 5 handoff)
   if(nm.endsWith(".svg")||ty==="image/svg+xml"){ f.text().then(loadSVG); return; }
@@ -1411,7 +1412,7 @@ async function saveSVG(){
   const size=" ("+w+" x "+h+" mm).";
   if(window.showSaveFilePicker){
     let handle;
-    try{ handle=await window.showSaveFilePicker({suggestedName:"sangala-design.svg",
+    try{ handle=await window.showSaveFilePicker({suggestedName:docFileName(".svg"),
       types:[{description:"SVG image",accept:{"image/svg+xml":[".svg"]}}]}); }
     catch(e){ if(e&&e.name==="AbortError") return; say("Could not open Save dialog: "+e.message); return; }
     try{ const ws=await handle.createWritable(); await ws.write(blob); await ws.close();
@@ -1422,9 +1423,9 @@ async function saveSVG(){
     return;
   }
   const url=URL.createObjectURL(blob);   // fallback: download to the default folder
-  const a=document.createElement("a"); a.href=url; a.download="sangala-design.svg"; a.click();
+  const a=document.createElement("a"); a.href=url; a.download=docFileName(".svg"); a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  say("Saved sangala-design.svg"+size);
+  say("Saved "+docFileName(".svg")+size);
 }
 // ---- Model file (.model): the EXACT app state, so a design reopens as it was saved. Unlike Export SVG (an
 // interchange file that re-samples geometry and classifies by stroke on reopen), this stores the verbatim object
@@ -1448,7 +1449,7 @@ function collectProject(){
 async function saveProject(){
   ensureDoc();
   if(!objects.length){ say("Add a shape first, then Save."); return; }
-  const name=await saveBlob(new Blob([JSON.stringify(collectProject())],{type:"application/json"}), "sangala-design.model", "Sangala Studio model", ".model");
+  const name=await saveBlob(new Blob([JSON.stringify(collectProject())],{type:"application/json"}), docFileName(".model"), "Sangala Studio model", ".model");
   if(name) say("Saved "+name+" - reopens exactly as it is now. (Save as SVG is for TinkerCAD / the die cutter; Export STL is for a 3D print.)");
 }
 // Save is a menu (mirrors Mosaic): Save as SVG (interchange for TinkerCAD / the die cutter) or Save project (.model, exact reopen).
@@ -1501,6 +1502,15 @@ function restoreRefImage(ri){
   img.onerror=()=>say("The project opened, but its reference photo could not be restored.");
   img.src=ri.src;
 }
+/* The name the Save dialog should offer. A design almost always comes FROM a file - an imported
+   mosaic, a reopened model, an SVG - and the next thing it becomes belongs beside it: open
+   "Crane 7.mosaic" and Save should offer "Crane 7.model", not a generic name the user has to
+   retype every time (Glen, 2026-07-27). Saving under a new name adopts it, so a second Save
+   suggests what you last chose. */
+let docName="";
+function setDocName(n){ docName = n ? String(n).replace(/\.[A-Za-z0-9]+$/,"").trim() : ""; }
+function docFileName(ext){ return (docName || "sangala-design") + ext; }
+
 /* Read the file back and confirm the bytes landed. Choosing a name in the Save dialog CREATES the
    file immediately, at zero bytes; the contents only arrive when close() completes. If anything
    interrupts the write in between, the result is a real, findable, EMPTY file - and the app used to
@@ -1518,10 +1528,15 @@ async function writeShortfall(handle, expected){
 // native Save As (choose folder + name) with plain-download fallback; returns saved name or null
 async function saveBlob(blob,suggestedName,desc,ext){
   if(window.showSaveFilePicker){
-    let h; try{ h=await window.showSaveFilePicker({suggestedName:suggestedName,types:[{description:desc,accept:{"application/octet-stream":[ext]}}]}); }
+    // A type of "application/octet-stream" makes the dialog offer every extension that MIME owns, so
+    // the filter read "*.model;*.com;*.exe;*.bin" - a save dialog inviting you to write an executable.
+    // A type of our own owns nothing but our extension, so only that is offered.
+    const mime="application/x-sangala"+ext.replace(/\./g,"-");
+    let h; try{ h=await window.showSaveFilePicker({suggestedName:suggestedName,types:[{description:desc,accept:{[mime]:[ext]}}]}); }
     catch(e){ if(e&&e.name==="AbortError")return null; say("Could not open Save dialog: "+e.message); return null; }
     try{ const ws=await h.createWritable(); await ws.write(blob); await ws.close();
       const bad=await writeShortfall(h, blob.size); if(bad){ say(bad); return null; }
+      setDocName(h.name);           // saving under a new name adopts it for next time
       return h.name; }
     catch(e){ say("Save failed: "+e.message); return null; }
   }
@@ -2293,7 +2308,7 @@ async function exportSTL(){
                                 : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
-                            sel.size?"sangala-part.stl":"sangala-model.stl","STL model",".stl");
+                            sel.size?docFileName("-part.stl"):docFileName(".stl"),"STL model",".stl");
   if(!name){ say("Export canceled - nothing written."); return; }
   const what = sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
                         : (parts.length>1 ? "all "+parts.length+" pieces together" : "the model");
