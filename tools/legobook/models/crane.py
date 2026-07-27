@@ -61,7 +61,7 @@ def leg(x):
 def wing(y0):
     """One wing, occupying y0..y0+2. Called twice; the far wing is this one mirrored, and every
     piece here is symmetric across the bird's centreline, so mirroring is only a change of y."""
-    return [wedge(5, y0, Z_CORE2, 3, 2, BH, "white", dirn="-x", low=BH*0.3, inset=0.3),
+    return [wedge(4, y0, Z_CORE2, 4, 2, BH, "white", dirn="-x", low=0.0, inset=0.62),
             blade(8, y0, Z_CORE2, 1, 2, BH, "light gray"),
             blade(9, y0, Z_CORE2, 2, 2, BH, "white")]
 
@@ -88,9 +88,9 @@ STEPS = [
            "on &mdash; it is the thing everything else mounts to. <i>Inferred: the wings hide these "
            "bricks in every photograph, but a strip of the body's top edge is visible above the "
            "wing, so their size is read from the outline rather than guessed.</i>",
-      parts=[("1 white 2 × 8 brick", ("brick", 2, 3, BH, "white")),
+      parts=[("1 white 2 × 9 brick", ("brick", 2, 3, BH, "white")),
              ("1 white 2 × 7 brick", ("brick", 2, 3, BH, "white"))],
-      pieces=[brick(3, 3, Z_CORE1, 8, 2, BH, "white"),
+      pieces=[brick(2, 3, Z_CORE1, 9, 2, BH, "white"),
               brick(4, 3, Z_CORE2, 7, 2, BH, "white")]),
 
  dict(title="Mount the wings on the core",
@@ -109,8 +109,8 @@ STEPS = [
            "not design: it is what the bin had.",
       parts=[("1 black 2 × 1 slope", ("slope", 1, 2, BH, "black")),
              ("1 light gray 2 × 1 slope", ("slope", 1, 2, BH, "light gray"))],
-      pieces=[slope(3, 3, Z_CORE2, 1, 2, BH, "-x", "black"),
-              slope(3, 3, Z_TOP, 1, 2, BH, "-x", "light gray")]),
+      pieces=[slope(2, 3, Z_CORE2, 2, 2, BH, "-x", "black"),
+              slope(2, 3, Z_TOP, 2, 2, BH, "-x", "light gray")]),
 
  dict(title="Close the top of the body",
       text="A white brick behind and a gray one in front of it. Neither is shaped: they are the "
@@ -179,7 +179,7 @@ TABLE = ("Table 1. Every piece used, gathered by the part it builds.",
          ["Part", "Color", "Pieces"],
          [("Baseplate", "Green", "1 baseplate, 16 × 8"),
           ("Legs", "Black", "2 plates 1 × 1; 2 columns 1 × 1 × 2;\n2 plates 1 × 1"),
-          ("Body core", "White", "1 brick 2 × 8; 1 brick 2 × 7"),
+          ("Body core", "White", "1 brick 2 × 9; 1 brick 2 × 7"),
           ("Wings", "White, Light Gray", "2 wedges; 2 blades 1 × 2;\n2 blades 2 × 2"),
           ("Tail", "Black, Light Gray", "2 slopes, 2 × 1"),
           ("Body top", "White, Light Gray", "1 brick 2 × 2; 1 brick 2 × 3;\n"

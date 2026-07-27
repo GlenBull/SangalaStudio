@@ -427,10 +427,25 @@ class Book:
         return [p for s in self.steps for p in s["pieces"]]
 
     def _frame(self, pad=14):
-        xs, ys = [], []
+        """Width is taken from the WHOLE model, so the figure never shifts or resizes sideways from
+        one step to the next. Height is taken per step, from the pieces placed SO FAR -- otherwise
+        every early step reserves empty sky for a crown it has not reached yet, and the drawing that
+        matters is squeezed small to make room for nothing."""
+        xs = []
         for p in self._all():
-            b = _screen_box(p); xs += [b[0], b[2]]; ys += [b[1], b[3]]
-        self.vb = (min(xs)-pad, min(ys)-pad, (max(xs)-min(xs))+2*pad, (max(ys)-min(ys))+2*pad)
+            b = _screen_box(p); xs += [b[0], b[2]]
+        self.fx0, self.fw = min(xs)-pad, (max(xs)-min(xs))+2*pad
+        self.fy, lo, hi = [], 1e18, -1e18
+        for s in self.steps:
+            for p in s["pieces"]:
+                b = _screen_box(p); lo = min(lo, b[1]); hi = max(hi, b[3])
+            self.fy.append((lo-pad, hi-lo+2*pad))
+        self.vb = (self.fx0, self.fy[-1][0], self.fw, self.fy[-1][1])
+
+    def frame(self, upto):
+        """The viewBox for one step: constant width, height cropped to what has been built."""
+        y0, h = self.fy[max(0, min(upto, len(self.fy)-1))]
+        return (self.fx0, y0, self.fw, h)
 
     def svg(self, upto, width=None):
         """The assembly through step `upto` (0-based), that step's pieces in full color."""
@@ -440,9 +455,10 @@ class Book:
                 items.append((p, i == upto))
         order = draw_order([p for p, _ in items])
         body = "".join(items[k][0].draw(items[k][1]) for k in order)
-        w = 'width="%d"' % width if width else 'width="100%%" style="max-width:%dpx;height:auto"' % int(self.vb[2]*1.05)
+        vb = self.frame(upto)
+        w = 'width="%d"' % width if width else 'width="100%%" style="max-width:%dpx;height:auto"' % int(vb[2]*1.05)
         return ('<svg viewBox="%.1f %.1f %.1f %.1f" %s xmlns="http://www.w3.org/2000/svg">%s</svg>'
-                % (self.vb[0], self.vb[1], self.vb[2], self.vb[3], w, body))
+                % (vb[0], vb[1], vb[2], vb[3], w, body))
 
     def icon(self, spec, height=34):
         """A small standalone drawing of one piece, for the parts callout beside a step."""
@@ -493,10 +509,11 @@ class Book:
                                "The HTML booklet does not need it.")
         outdir = os.path.abspath(outdir)   # Edge resolves --screenshot against ITS cwd, not ours
         os.makedirs(outdir, exist_ok=True)
-        w, hgt = int(self.vb[2]*scale), int(self.vb[3]*scale)
-        paths = []
+        w = int(self.fw*scale)             # one width for every step, so placing them all at the
+        paths = []                         # same printed width keeps the figure at one size
         with tempfile.TemporaryDirectory() as tmp:
             for i in range(len(self.steps)):
+                hgt = int(self.frame(i)[3]*scale)
                 page = os.path.join(tmp, "s%02d.html" % (i+1))
                 with open(page, "w", encoding="utf-8") as f:
                     f.write("<body style='margin:0;background:#fff'>%s</body>"
