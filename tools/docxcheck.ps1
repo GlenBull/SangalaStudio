@@ -12,6 +12,7 @@ $doc = $w.Documents.Open($full, $false, $true)   # ConfirmConversions=false, Rea
 $orphans = @(); $noKeep = @(); $auto = 0
 $blankRuns = @(); $blankRun = 0; $blankPage = 0
 $deepest = @{}                                   # page -> lowest content top seen (points), for underfilled-page detection
+$forced = @{}                                    # page -> $true when a deliberate break STARTS that page
 foreach ($p in $doc.Paragraphs) {
   try { if ($p.SpaceBeforeAuto -or $p.SpaceAfterAuto) { $auto++ } } catch {}
   $pg = $p.Range.Information($wdActiveEndPageNumber)
@@ -34,6 +35,23 @@ foreach ($p in $doc.Paragraphs) {
     }
     $blankRun = 0
   }
+
+  # A page that ends short because the AUTHOR ended it there is not a defect. Two ways to say so in Word:
+  # PageBreakBefore on the paragraph, or a manual break (Chr 12) inside it - the User Guide's Appendix A
+  # heading uses the second, carrying <w:br w:type="page"/> as its first run so the appendix opens on a
+  # fresh page. Without this, page 21 of Ver 8.2 reported ~6.6 in blank and withheld PAGINATION CLEAN
+  # forever, for a break Glen put there on purpose. Record which page each deliberate break STARTS.
+  #   PageBreakBefore -> the paragraph itself begins the new page, so ask where it STARTS.
+  #   manual break    -> the break sits mid-paragraph and the text after it begins the new page, so the
+  #                      page the paragraph ENDS on is the new one.
+  try {
+    if ($p.PageBreakBefore) {
+      $fs = $p.Range.Duplicate; $fs.End = $fs.Start
+      $forced[$fs.Information($wdActiveEndPageNumber)] = $true
+    } elseif ($p.Range.Text.Contains([char]12)) {
+      $forced[$pg] = $true
+    }
+  } catch {}
 
   $st = $p.Style.NameLocal
   if ($st -like 'Heading*') {
@@ -91,11 +109,20 @@ $usableBottom = $doc.PageSetup.PageHeight - $doc.PageSetup.BottomMargin
 # title page, which is how the cover suppresses its own page number.
 $firstContentPage = 1
 if ($hasCover) { $firstContentPage = 2 }
-$underfilled = @()
+$underfilled = @(); $byDesign = @()
 for ($pg = $firstContentPage; $pg -lt $pages; $pg++) {   # every page BUT the cover and the last
   if ($deepest.ContainsKey($pg)) {
     $slack = $usableBottom - $deepest[$pg]
-    if ($slack -gt 216) { $underfilled += ("page $pg : ~$([math]::Round($slack/72,1)) in blank at the bottom - a few lines overflowed onto it; tighten page $($pg-1) to pull them back") }
+    if ($slack -gt 216) {
+      $inches = [math]::Round($slack/72,1)
+      if ($forced.ContainsKey($pg + 1)) {
+        # The next page is started by a deliberate break, so nothing "overflowed" - the section ends here.
+        # Reported for the record, but it does NOT withhold CLEAN: no edit to page $pg-1 could reclaim it.
+        $byDesign += ("page $pg : ~$inches in blank, but page $($pg+1) is started by a deliberate page break - section ends here, nothing to fix")
+      } else {
+        $underfilled += ("page $pg : ~$inches in blank at the bottom - a few lines overflowed onto it; tighten page $($pg-1) to pull them back")
+      }
+    }
   }
 }
 $doc.Close($false); $w.Quit()
@@ -106,6 +133,10 @@ Write-Output ("ORPHANED headings right now: " + $orphans.Count)
 $orphans | ForEach-Object { Write-Output ("  ! " + $_) }
 Write-Output ("UNDERFILLED pages (content spills, leaving a near-empty page) - review each: " + $underfilled.Count)
 $underfilled | ForEach-Object { Write-Output ("  ? " + $_) }
+if ($byDesign.Count -gt 0) {
+  Write-Output ("short pages BY DESIGN (deliberate page break follows - not counted against CLEAN): " + $byDesign.Count)
+  $byDesign | ForEach-Object { Write-Output ("  = " + $_) }
+}
 # a cover page is padded with blanks on purpose, so ignore runs there
 $blanks = @($blankRuns | Where-Object { $_[0] -ge $firstContentPage } | ForEach-Object { $_[1] })
 Write-Output ("RUNS of blank paragraphs (invisible vertical gaps): " + $blanks.Count)
