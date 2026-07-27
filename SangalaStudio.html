@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.135 -->
+<!-- SANGALA_VERSION: 2026-07-27.136 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -179,6 +179,15 @@
   <button id="mFlipH" title="Flip left-right, about the selection's own center">↔ Flip Horizontal</button>
   <button id="mFlipV" title="Flip top-bottom, about the selection's own center">↕ Flip Vertical</button>
 </div>
+<div id="partmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <button data-part="brick">🧱 Brick</button>
+  <button data-part="plate">▬ Plate</button>
+  <button data-part="slope">◺ Slope</button>
+  <button data-part="invslope">◹ Inverted Slope</button>
+  <button data-part="round">⬤ Round Brick</button>
+  <button data-part="cone">🔺 Cone</button>
+  <button data-part="wedge">◣ Wedge Plate</button>
+</div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test Square</button>
   <button id="mScan">🎯 Scan Test</button>
@@ -245,7 +254,7 @@
     <button class="ltbtn" id="tCombine" title="Combine two shapes: Union / Difference / Intersect">⧉<small>Combine</small></button>
     <button class="ltbtn" id="tAlign" title="Align shapes: Vertical / Horizontal / Center"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><rect x="4.5" y="5" width="15" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/><rect x="7.5" y="14.4" width="9" height="4.6" rx="1" fill="none" stroke="#7a3b12" stroke-width="1.7"/></svg><small>Align</small></button>
     <button class="ltbtn" id="tMirror" title="Mirror: flip the selection left-right or top-bottom, so a team can build one symmetric half and mirror the other"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><line x1="12" y1="2.5" x2="12" y2="21.5" stroke="#7a3b12" stroke-width="1.3" stroke-dasharray="2 2"/><path d="M9.5 6 L4 9.5 L9.5 13" fill="none" stroke="#7a3b12" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M14.5 6 L20 9.5 L14.5 13" fill="none" stroke="#7a3b12" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg><small>Mirror</small></button>
-    <button class="ltbtn" id="tBrick" title="2 x 3 LEGO brick" style="display:none">🧱<small>Brick</small></button>
+    <button class="ltbtn" id="tBrick" title="Pick a LEGO part to place - brick, plate, slope, inverted slope, round brick, cone or wedge plate" style="display:none">🧱<small>Part</small></button>
     <button class="ltbtn" id="tSnap" title="Open Snap! - draw with its turtle and the drawing comes straight back to this mat"><svg width="21" height="21" viewBox="0 0 24 24" style="display:block" aria-hidden="true"><polygon points="12,1.8 20.2,22.2 12,17.6 3.8,22.2" fill="#2f7bd6" stroke="#16365f" stroke-width="1.2" stroke-linejoin="round"/></svg><small>Snap!</small></button>
     <button class="ltbtn" id="bRemoveBg" style="display:none" title="Remove the background from the selected photo to make a silhouette">🪄<small>Remove BG</small></button>
   </div>
@@ -2641,7 +2650,18 @@ $("mRect").onclick=()=>{ setTool(activeTool==="rect"?"select":"rect"); closeShap
 $("mCircle").onclick=()=>{ setTool(activeTool==="circle"?"select":"circle"); closeShapes(); };
 $("mLine").onclick=()=>{ setTool(activeTool==="line"?"select":"line"); closeShapes(); if(activeTool==="line") say("Line: drag from one end to the other. Then set it to Fold for a crease, or leave it Cut to slit."); };
 $("mTab").onclick=()=>{ setTool(activeTool==="tab"?"select":"tab"); closeShapes(); if(activeTool==="tab") say("Tab: press on the edge of a shape and drag ALONG it - the stretch you cover becomes the fold hinge, and the tab sticks out from it."); };
-$("tBrick").onclick=()=>setTool(activeTool==="brick"?"select":"brick");
+// The Part tool opens a picker (same pattern as Test and Save); choosing a part arms the tool, and the
+// next click on the mat places THAT part. Pressing the tool again while armed puts it away.
+function closePartMenu(){ $("partmenu").style.display="none"; }
+$("tBrick").onclick=(e)=>{ e.stopPropagation();
+  if(activeTool==="brick"){ setTool("select"); closePartMenu(); return; }
+  const t=$("partmenu"), r=$("tBrick").getBoundingClientRect();
+  t.style.left=(r.right+8)+"px"; t.style.top=r.top+"px"; t.style.display="flex"; t.style.flexDirection="column"; };
+$("partmenu").querySelectorAll("button[data-part]").forEach(b=>{
+  b.onclick=(e)=>{ e.stopPropagation(); partKind=b.dataset.part; closePartMenu(); setTool("brick");
+    say("Click the mat to place a "+((PARTS[partKind]||{}).label || (partKind==="round"?"round brick":partKind==="cone"?"cone":"wedge plate"))+"."); }; });
+document.addEventListener("click",(e)=>{ const t=$("partmenu");
+  if(t.style.display!=="none" && !t.contains(e.target) && !$("tBrick").contains(e.target)) closePartMenu(); });
 $("tNode").onclick=()=>setTool(activeTool==="node"?"select":"node");
 /* ---------- Pen tool: click to place points -> an editable cut polygon ---------- */
 $("tPen").onclick=()=>{ const on=activeTool!=="pen"; setTool(on?"pen":"select");
@@ -3407,17 +3427,60 @@ function startDraw(e){
 }
 // 2x3 LEGO brick placed with its top-left at (x0,y0): 24x16x9.6 mm body + six 4.8 mm
 // studs (1.8 tall) on the 8 mm grid at base 9.6. data-brick -> hollow parametric export.
-function makeBrick(x0,y0){
+/* ---- The part picker ----
+   A student wanting a slope should ask for a slope, not derive one: before this, every part began as
+   a 2 x 3 brick that you then retyped into shape through the cols / rows / slope fields. Three layers
+   of indirection over "I want a slope" (Glen, 2026-07-27).
+
+   Four of the seven are the SAME parametric brick with different presets, so they arrive with real
+   clutch - studs on top, anti-stud tubes underneath, at the print-validated Fit. The round ones are
+   circles with a rim taper (Cone taper 0 = a cylinder = a round brick), and the wedge plate is a
+   trapezoid, because a piece that narrows in PLAN cannot be a rectangle however it is sloped. */
+const PARTS={
+  brick:    {label:"brick",           z:9.6, cols:3, rows:2, slope:0, inv:0},
+  plate:    {label:"plate",           z:3.2, cols:3, rows:2, slope:0, inv:0},
+  slope:    {label:"slope brick",     z:9.6, cols:3, rows:2, slope:1, inv:0},
+  invslope: {label:"inverted slope",  z:9.6, cols:3, rows:2, slope:1, inv:1},
+};
+let partKind="brick";
+function makeBrick(x0,y0,kind){
   ensureDoc();
-  const U=8, W=3*U, H=2*U, bodyZ=9.6, studZ=1.8, r=2.4, ins=U/2;
-  const gid=++groupSeq, ids=[];   // the brick's body + studs are auto-grouped so it moves as one
-  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,"data-cols":3,"data-rows":2,"data-studs":"1","data-dock":"1","data-slope":0,"data-inv":"0"});
+  kind = kind || partKind || "brick";
+  if(kind==="round" || kind==="cone") return makeRoundPart(x0,y0,kind);
+  if(kind==="wedge") return makeWedgePlate(x0,y0);
+  const P=PARTS[kind]||PARTS.brick;
+  const U=8, W=P.cols*U, H=P.rows*U, bodyZ=P.z, studZ=1.8, r=2.4, ins=U/2;
+  const gid=++groupSeq, ids=[];   // the part's body + studs are auto-grouped so it moves as one
+  const body=svgNode("rect",{x:x0,y:y0,width:W,height:H,"data-z":bodyZ,"data-z0":0,"data-brick":"1","data-fit":0,
+    "data-cols":P.cols,"data-rows":P.rows,"data-studs":"1","data-dock":"1","data-slope":P.slope,"data-inv":String(P.inv)});
   objects.push({id:++objSeq,el:body,kind:"cut",orig:"cut",poly:[[x0,y0],[x0+W,y0],[x0+W,y0+H],[x0,y0+H],[x0,y0]],group:gid}); ids.push(objSeq);
-  for(let ry=0;ry<2;ry++)for(let cx=0;cx<3;cx++){ const px=x0+ins+cx*U, py=y0+ins+ry*U;
+  const slopeRows=P.slope, studRows=P.inv?P.rows:(P.rows-slopeRows);   // a sloped row has no flat top to carry a stud - unless it is INVERTED, which keeps its top whole
+  for(let ry=0;ry<P.rows;ry++)for(let cx=0;cx<P.cols;cx++){
+    if(!P.inv && ry>=studRows) continue;
+    const px=x0+ins+cx*U, py=y0+ins+ry*U;
     const c=svgNode("circle",{cx:px,cy:py,r:r,"data-z":studZ,"data-z0":bodyZ,"data-brickpart":"1"});
     objects.push({id:++objSeq,el:c,kind:"cut",orig:"cut",poly:circlePoly(px,py,r),group:gid}); ids.push(objSeq); }
   selMulti=ids; selId=null; selId2=null; bgImg=null; draw(); refreshEditPanel();
-  say("Added a grouped 2 x 3 LEGO brick (24 x 16 x 9.6 mm body + six studs) - drag to move it as one, or Ungroup to edit a part.");
+  say("Added a "+P.cols+" x "+P.rows+" "+P.label+" ("+fmtn(W)+" x "+fmtn(H)+" x "+fmtn(bodyZ)+" mm) - drag to move it as one, "
+     +"and use Brick size to change its columns, rows or slope.");
+}
+function makeRoundPart(x0,y0,kind){   // a 1 x 1 round brick, or the same circle with its rim tapered into a cone
+  const U=8, r=U*0.47, cx=x0+U/2, cy=y0+U/2, z=9.6;
+  const el=svgNode("circle",{cx:cx,cy:cy,r:fmtn(r),"data-z":z,"data-z0":0,
+    "data-cone": kind==="cone"?28:0, "data-studs": kind==="cone"?"0":"1"});
+  objects.push({id:++objSeq,el:el,kind:"cut",orig:"cut",poly:circlePoly(cx,cy,r)});
+  selId=objSeq; selMulti=[]; selId2=null; bgImg=null; draw(); refreshEditPanel();
+  say(kind==="cone" ? "Added a cone (1 stud across, 9.6 mm tall). Cone taper sets how sharply the rim draws in - 0 would make it a plain round brick."
+                    : "Added a round brick (1 stud across, 9.6 mm tall). Give it a Cone taper to draw the rim in and it becomes a cone.");
+}
+function makeWedgePlate(x0,y0){   // narrows in PLAN over 4 studs, from 2 wide to 1 - the shape a wing's back needs
+  const U=8, w=4*U, d=2*U, tip=(d-U)/2;
+  const pts=[[x0,y0+tip],[x0+w,y0],[x0+w,y0+d],[x0,y0+d-tip]];
+  const el=svgNode("polygon",{points:pts.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" "),
+    "data-z":3.2,"data-z0":0,"data-studs":"1"});
+  objects.push({id:++objSeq,el:el,kind:"cut",orig:"cut",poly:pts.concat([pts[0]])});
+  selId=objSeq; selMulti=[]; selId2=null; bgImg=null; draw(); refreshEditPanel();
+  say("Added a wedge plate - 4 studs long, narrowing from 2 wide to 1. It tapers in PLAN, seen from above, which is what a slope cannot do. Drag its nodes with the Node tool to reshape it.");
 }
 function rebuildBrick(o){   // regenerate a brick's body size + stud grid from its data-cols/data-rows (studs are 2D-visual; the 3D geometry is brickTris)
   const U=8, cols=Math.max(1,Math.round(+o.el.getAttribute("data-cols")||3)), rows=Math.max(1,Math.round(+o.el.getAttribute("data-rows")||2));
@@ -3439,7 +3502,7 @@ function placeBrick(e){
   const {mx,my}=evtMM(e), pp=placeParams();
   let bx=(mx-pp.ox)/pp.s, by=(my-pp.oy)/pp.s;
   if(studSnapOn && !e.altKey){ bx=Math.round(bx/STUD_MM)*STUD_MM; by=Math.round(by/STUD_MM)*STUD_MM; }   // a brick dropped on the lattice needs no nudging afterwards
-  makeBrick(bx, by);
+  makeBrick(bx, by, partKind);
   suppressClick=true; setTool("select");
 }
 // Node tool: make a shape editable point-by-point the first time a node is moved. A parametric rect becomes a
