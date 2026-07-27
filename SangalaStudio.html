@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-26.127 -->
+<!-- SANGALA_VERSION: 2026-07-26.128 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -872,8 +872,8 @@ function draw(){
       const ring=(c,r,col)=>{ const gone=sk.has(c.i+","+c.j);
         ctx.setLineDash(gone?[2,3]:[]); ctx.strokeStyle=gone?"#c3ab8c":col;
         ctx.beginPath(); ctx.arc((c.x*pp.s+pp.ox)*k,(c.y*pp.s+pp.oy)*k,r,0,6.2832); ctx.stroke(); };
-      if(so){ const r=socketRadius(fit)*pp.s*k; socketCells(o.poly,fit).forEach(c=>ring(c,r,"#6f8aa6")); }
-      if(st){ const r=studRadius(fit)*pp.s*k;   studCells(o.poly,fit).forEach(c=>ring(c,r,"#8a5a2b")); }
+      if(so){ const r=socketRadius(fit)*pp.s*k; socketCells(o.poly,fit,o.holes).forEach(c=>ring(c,r,"#6f8aa6")); }
+      if(st){ const r=studRadius(fit)*pp.s*k;   studCells(o.poly,fit,o.holes).forEach(c=>ring(c,r,"#8a5a2b")); }
     });
     ctx.setLineDash([]); ctx.restore();
   }
@@ -1220,7 +1220,7 @@ function importMosaic(text,fname){
       const counts={}; let bestC=0, bestN=-1;   // the piece's color = its most common tile color
       for(const cell of comp){ const v=idx[(cell/gw)|0][cell%gw]; counts[v]=(counts[v]||0)+1; if(counts[v]>bestN){ bestN=counts[v]; bestC=v; } }
       const attrs={ points:outer.ring.map(q=>fmtn(q[0]*T)+","+fmtn(q[1]*T)).join(" "),
-        "data-mosaic":"1","data-z":9.6,"data-z0":0,"data-fill":MOSAIC_COLORS[bestC]||"#a0a5a9" };
+        "data-mosaic":"1","data-z":9.6,"data-z0":0,"data-studs":"1","data-fill":MOSAIC_COLORS[bestC]||"#a0a5a9" };   // studs on by default: studs on the 8 mm grid are what make the figure read as LEGO. The Studs checkbox turns them off per piece (a wing wants a smooth top), and clicking a stud on the mat removes just that one
       if(nm) attrs["data-name"]=nm;
       const el=svgNode("polygon",attrs);
       const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:toMM(outer.ring)};
@@ -1231,8 +1231,8 @@ function importMosaic(text,fname){
   if(!pieces){ clearDoc(); say("No pieces could be read from that mosaic."); return; }
   normalize();
   objects.forEach(placeEl);   // normalize() shifts o.poly but rewrites element geometry only for rect/circle - re-sync the polygon points
+  if(!mode3D) setMode3D(true);   // extruding the tiles is a 3D act - arrive in 3D mode, ready to set Depths. BEFORE draw(): the stud overlay paints only in 3D mode, and setMode3D does not redraw
   draw(); refreshEditPanel();
-  if(!mode3D) setMode3D(true);   // extruding the tiles is a 3D act - arrive in 3D mode, ready to set Depths
   if(pvOn){ const t3=buildTris(); if(!t3.n) closePreview(); else { pvSetTris(t3); pvBounds(); renderPreview(); } }
   commit();
   const nMass=massIds.filter(m=>m>0).length;
@@ -2010,7 +2010,7 @@ function studSkips(el){   // cells the user has switched off, as "i,j" keys. A c
   if(v) v.split(/\s+/).forEach(t=>{ if(t) s.add(t); });
   return s;
 }
-function gridCells(ring,clear){   // the 8 mm cells whose center sits at least `clear` inside the outline. Anchored to the shape's bbox (as on a brick), so cells travel WITH the shape and i,j stay stable
+function gridCells(ring,clear,holes){   // the 8 mm cells whose center sits at least `clear` inside the outline. Anchored to the shape's bbox (as on a brick), so cells travel WITH the shape and i,j stay stable. `holes` (optional): interior loops - no connector over an opening
   const U=8, out=[];
   let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   ring.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mny)mny=p[1]; if(p[1]>mxy)mxy=p[1]; });
@@ -2019,15 +2019,16 @@ function gridCells(ring,clear){   // the 8 mm cells whose center sits at least `
       const cx=mnx+U/2+i*U, cy=mny+U/2+j*U;                             // connectors sit at cell centers
       if(!ptInPoly(cx,cy,ring)) continue;
       if(edgeDist(cx,cy,ring) < clear) continue;                        // skip any that would hang off (or break through) the edge
+      if(holes&&holes.some(h=>ptInPoly(cx,cy,h))) continue;             // skip any that would float over an interior hole
       out.push({i:i,j:j,x:cx,y:cy});
     }
   return out;
 }
-function studCells(ring,fit){   return gridCells(ring, studRadius(fit)+0.2); }
-function socketCells(ring,fit){ return gridCells(ring, socketRadius(fit)+SOCK_WALL); }   // a socket needs more room: it must not break out through the side
-function studsFor(ring,z1,fit,skips){   // the stud solids, sunk into the top face so the slicer fuses them
+function studCells(ring,fit,holes){   return gridCells(ring, studRadius(fit)+0.2, holes); }
+function socketCells(ring,fit,holes){ return gridCells(ring, socketRadius(fit)+SOCK_WALL, holes); }   // a socket needs more room: it must not break out through the side
+function studsFor(ring,z1,fit,skips,holes){   // the stud solids, sunk into the top face so the slicer fuses them
   const studR=studRadius(fit), studH=1.8, WELD=0.2, t=[];
-  studCells(ring,fit).forEach(c=>{ if(skips&&skips.has(c.i+","+c.j)) return;   // a stud the user removed
+  studCells(ring,fit,holes).forEach(c=>{ if(skips&&skips.has(c.i+","+c.j)) return;   // a stud the user removed
     t.push(...cylTris(c.x,c.y,studR,z1-WELD,z1+studH)); });
   return t;
 }
@@ -2185,7 +2186,7 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
     : t==="circle" ? cylTris(g("cx"),g("cy"),g("r")+G,z0,z1)
     : (o.holes&&o.holes.length) ? prismThruTris(solid,o.holes,z0,z1)          // a frame (Difference) -> extruded HOLLOW, its inner loops cut through
     : prismTris(solid,z0,z1);                                                 // freeform polygon (Pen / Node) -> extruded prism
-  if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips));   // studs stay on the original outline's 8 mm grid, never on the grown one
+  if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips,o.holes));   // studs stay on the original outline's 8 mm grid, never on the grown one - and never over an interior hole
   return tris;
 }
 // ---- Grouping = BUNDLE (TinkerCAD-style): a group's members move and select together but each keeps its own
