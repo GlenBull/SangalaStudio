@@ -18,7 +18,7 @@ Two rules this file follows, both learned the hard way:
 Coordinates are (x, y, z) in studs, z up. The bird faces +x. Heights use BH (a brick) and PH (a
 plate), so every dimension is a real stack.
 """
-from engine import brick, slope, decal, cone, ridge, wedge, blade, BH, PH
+from engine import brick, slope, decal, cone, ridge, wedge, wedgeplate, blade, BH, PH
 
 # ---- the layers, named so a change ripples instead of being retyped ----
 Z_LEG_A = 0.0                   # the short piece each leg stands on
@@ -61,7 +61,7 @@ def leg(x):
 def wing(y0):
     """One wing, occupying y0..y0+2. Called twice; the far wing is this one mirrored, and every
     piece here is symmetric across the bird's centreline, so mirroring is only a change of y."""
-    return [wedge(4, y0, Z_CORE2, 4, 2, BH, "white", dirn="-x", low=0.0, inset=0.62),
+    return [wedgeplate(4, y0, Z_CORE2, 4, 2, BH, "white", dirn="-x", tip=0.12),
             blade(8, y0, Z_CORE2, 1, 2, BH, "light gray"),
             blade(9, y0, Z_CORE2, 2, 2, BH, "white")]
 
@@ -104,13 +104,15 @@ STEPS = [
       pieces=wing(5) + wing(1)),
 
  dict(title="Taper the tail",
-      text="Two slopes stacked at the very back, so the tail draws down across two courses and comes "
-           "to a fine point rather than a chopped corner. The lower one is black &mdash; expedience, "
-           "not design: it is what the bin had.",
-      parts=[("1 black 2 × 1 slope", ("slope", 1, 2, BH, "black")),
-             ("1 light gray 2 × 1 slope", ("slope", 1, 2, BH, "light gray"))],
-      pieces=[slope(2, 3, Z_CORE2, 2, 2, BH, "-x", "black"),
-              slope(2, 3, Z_TOP, 2, 2, BH, "-x", "light gray")]),
+      text="Two slopes make the tail a POINT: the gray one on top falls away toward the back, and "
+           "the black one beneath is inverted, so its underside rises to meet it. Between them the "
+           "body closes to a thin edge instead of a chopped corner, and the gray face becomes the "
+           "long straight line of the bird's back. The black is expedience &mdash; it is what the "
+           "bin had.",
+      parts=[("1 black 3 × 2 inverted slope", ("slope", 2, 2, BH, "black")),
+             ("1 light gray 3 × 2 slope", ("slope", 2, 2, BH, "light gray"))],
+      pieces=[slope(2, 3, Z_CORE2, 3, 2, BH, "-x", "black", inv=True),
+              slope(2, 3, Z_TOP, 3, 2, BH, "-x", "light gray")]),
 
  dict(title="Close the top of the body",
       text="A white brick behind and a gray one in front of it. Neither is shaped: they are the "
@@ -129,12 +131,13 @@ STEPS = [
       pieces=[ridge(4, 3, Z_SHAPE, 2, 2, PH*1.6, "light gray", peak=0.66)]),
 
  dict(title="Raise the shoulder toward the neck",
-      text="Two slopes resting on the gray brick, stepping the body's line up to meet the neck. One "
-           "gray, one white &mdash; again what the bin allowed, and it does the bird no harm.",
-      parts=[("1 light gray 2 × 2 slope", ("slope", 2, 2, BH, "light gray")),
-             ("1 white 2 × 2 slope", ("slope", 2, 2, BH, "white"))],
-      pieces=[slope(6, 3, Z_SHAPE, 2, 2, BH, "-x", "light gray"),
-              slope(8, 3, Z_SHAPE, 2, 2, BH, "-x", "white")]),
+      text="A gray plate levels the shoulder and a white slope eases it down toward the neck. Keep "
+           "the run flat: the back is one long straight line from the tail, and a second rise here "
+           "would break it into a row of spines.",
+      parts=[("1 light gray 2 × 3 plate", ("brick", 3, 2, PH, "light gray")),
+             ("1 white 2 × 2 slope", ("slope", 2, 2, PH*2, "white"))],
+      pieces=[brick(6, 3, Z_SHAPE, 3, 2, PH, "light gray"),
+              slope(9, 3, Z_SHAPE, 2, 2, PH*2, "+x", "white")]),
 
  dict(title="Cantilever a seat, then raise the neck",
       text="A brick reaching forward past the breast makes a landing for the neck, so the throat "

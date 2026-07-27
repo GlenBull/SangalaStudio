@@ -132,6 +132,48 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False, low=0.0):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
+def wedgeplate(x, y, z, w, d, h, color, dirn="-x", tip=0.2, studs=True):
+    """A piece whose FOOTPRINT tapers: full depth at one end, narrowing to `tip` of it at the other.
+    LEGO's wedge plate. Height is constant -- the narrowing happens in plan, seen from above.
+
+    Not the same thing as wedge(), which keeps a rectangular footprint and tapers in HEIGHT. A wing
+    that comes to a point does it in plan, and no amount of height taper will read as that."""
+    c0 = col(color)
+    if dirn not in ("+x", "-x"):
+        raise ValueError("wedgeplate dirn must be '+x' or '-x' (got %r)" % dirn)
+    tip = max(0.0, min(1.0, float(tip)))
+    m = d*(1.0-tip)/2.0
+    yaf, ybf = y + m, y + d - m          # the narrowed end
+    (xn, xf) = (x+w, x) if dirn == "-x" else (x, x+w)   # near (full) end, far (narrow) end
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        top, rgt, flank = c, shade(c, 0.78), shade(c, 0.60)
+        s = [_poly([(xf, yaf, z+h), (xn, y, z+h), (xn, y+d, z+h), (xf, ybf, z+h)], top, edge)]
+        s.append(_poly([(xf, ybf, z), (xn, y+d, z), (xn, y+d, z+h), (xf, ybf, z+h)], flank, edge))
+        if dirn == "-x":                 # the full end faces +x, toward the camera
+            s.append(_poly([(xn, y, z), (xn, y+d, z), (xn, y+d, z+h), (xn, y, z+h)], rgt, edge))
+        elif tip > 0:                    # narrowing toward +x: the small end faces the camera
+            s.append(_poly([(xf, yaf, z), (xf, ybf, z), (xf, ybf, z+h), (xf, yaf, z+h)], rgt, edge))
+        if studs:
+            r = 0.30; rx = r*U*1.4142; ry = r*U*0.7071; sh = 0.22*V
+            for i in range(max(1, int(round(w)))):
+                for j in range(max(1, int(round(d)))):
+                    cx_, cy_ = x + i + 0.5, y + j + 0.5
+                    f = (cx_ - xf) / (xn - xf) if xn != xf else 1.0      # 0 at the point, 1 at the base
+                    half = (d*tip + (d - d*tip)*max(0.0, min(1.0, f))) / 2.0
+                    if abs(cy_ - (y + d/2.0)) > half - 0.34:             # no stud where there is no plate
+                        continue
+                    px_, py_ = iso(cx_, cy_, z+h)
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (px_, py_+sh, rx, ry, shade(c, 0.70), edge))
+                    s.append('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>'
+                             % (px_-rx, py_, 2*rx, sh, shade(c, 0.70)))
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (px_, py_, rx, ry, top, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
 def blade(x, y, z, w, d, h, color, dirn="+x", drop=None, rise=None, studs=True):
     """A piece that thins toward one end because BOTH its top and its underside slope away.
 
