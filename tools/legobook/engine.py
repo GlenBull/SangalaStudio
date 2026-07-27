@@ -82,9 +82,15 @@ def brick(x, y, z, w, d, h, color, studs=True):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
-def slope(x, y, z, w, d, h, dirn, color, inv=False):
-    """A slope brick: full height at one edge, ramping to nothing at the opposite one.
+def slope(x, y, z, w, d, h, dirn, color, inv=False, low=0.0):
+    """A slope brick: full height at one edge, ramping down toward the opposite one.
     dirn is the direction the ramp FALLS: '+x', '-x', '+y' or '-y'.
+
+    `low` is how much height REMAINS at the foot of the ramp. The default 0 tapers to a point; give
+    it a value and the ramp stops short, leaving an upright wall beneath it -- which is what most
+    real slope pieces do, and what the crane's beak is. Sangala Studio does the same thing with
+    ROOF_LIP, though there it is a fixed 0.6 mm to keep a printed edge off a knife edge, rather than
+    a shape you choose.
 
     inv=True gives the INVERTED slope (LEGO's 'slope, inverted 45'): the top stays full and flat and
     the UNDERSIDE falls away instead, so the piece fills the underside of an overhang. It carries a
@@ -95,25 +101,34 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False):
         raise ValueError("slope dirn must be one of '+x', '-x', '+y', '-y' (got %r)" % dirn)
     if inv:
         return _slope_inv(x, y, z, w, d, h, dirn, c0)
+    low = max(0.0, min(float(low), h))
+    zl = z + low                    # the height the ramp comes down to
     def draw(on):
         c = c0 if on else pale(c0)
         edge = shade(c, 0.45 if on else 0.72)
         ramp, rgt, lft = shade(c, 0.90), shade(c, 0.80), shade(c, 0.62)
         s = []
-        if dirn == "-x":            # high at x+w
-            s.append(_poly([(x, y, z), (x+w, y, z+h), (x+w, y+d, z+h), (x, y+d, z)], ramp, edge))
+        # Each case: the ramp first, then the two flanks the camera can see. With low = 0 the
+        # quads collapse to the triangles a pointed slope has always drawn, so the old shape is
+        # exactly the low = 0 case of this one.
+        if dirn == "-x":            # tall at x+w, ramp falling toward x
+            s.append(_poly([(x, y, zl), (x+w, y, z+h), (x+w, y+d, z+h), (x, y+d, zl)], ramp, edge))
             s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, z+h), (x+w, y, z+h)], rgt, edge))
-            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, z+h)], lft, edge))
-        elif dirn == "+x":          # high at x
-            s.append(_poly([(x, y, z+h), (x+w, y, z), (x+w, y+d, z), (x, y+d, z+h)], ramp, edge))
-            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x, y+d, z+h)], lft, edge))
-        elif dirn == "-y":          # high at y+d (the face toward the viewer stays tall)
-            s.append(_poly([(x, y, z), (x+w, y, z), (x+w, y+d, z+h), (x, y+d, z+h)], ramp, edge))
+            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, z+h), (x, y+d, zl)], lft, edge))
+        elif dirn == "+x":          # tall at x, ramp falling toward x+w
+            s.append(_poly([(x, y, z+h), (x+w, y, zl), (x+w, y+d, zl), (x, y+d, z+h)], ramp, edge))
+            if low > 0:
+                s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, zl), (x+w, y, zl)], rgt, edge))
+            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, zl), (x, y+d, z+h)], lft, edge))
+        elif dirn == "-y":          # tall at y+d, the face toward the viewer stays tall
+            s.append(_poly([(x, y, zl), (x+w, y, zl), (x+w, y+d, z+h), (x, y+d, z+h)], ramp, edge))
             s.append(_poly([(x, y+d, z+h), (x+w, y+d, z+h), (x+w, y+d, z), (x, y+d, z)], lft, edge))
-            s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, z+h)], rgt, edge))
-        else:                       # '+y': high at y, ramping down toward the viewer
-            s.append(_poly([(x, y, z+h), (x+w, y, z+h), (x+w, y+d, z), (x, y+d, z)], ramp, edge))
-            s.append(_poly([(x+w, y, z+h), (x+w, y, z), (x+w, y+d, z)], rgt, edge))
+            s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, z+h), (x+w, y, zl)], rgt, edge))
+        else:                       # '+y': tall at y, ramp falling toward the viewer
+            s.append(_poly([(x, y, z+h), (x+w, y, z+h), (x+w, y+d, zl), (x, y+d, zl)], ramp, edge))
+            s.append(_poly([(x+w, y, z+h), (x+w, y, z), (x+w, y+d, z), (x+w, y+d, zl)], rgt, edge))
+            if low > 0:
+                s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, zl), (x, y+d, zl)], lft, edge))
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
