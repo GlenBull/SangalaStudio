@@ -132,6 +132,46 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False, low=0.0):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
+def wedge(x, y, z, w, d, h, color, dirn="+x", low=0.0, inset=0.3, studs=True):
+    """A wedge: the top is flat but TILTED, and the sides draw in beneath it as well.
+
+    Two shapings at once, which is what makes the piece read as an aerofoil rather than a step. The
+    top falls from `h` at the high edge to `low` at the far one (as a truncated slope does), and is
+    narrowed by `inset` on each side, so the flanks lean inward as they rise. `dirn` is the direction
+    the top falls. Studs sit on the tilted top, which is where they sit on the real piece."""
+    c0 = col(color)
+    if dirn not in ("+x", "-x"):
+        raise ValueError("wedge dirn must be '+x' or '-x' (got %r)" % dirn)
+    low = max(0.0, min(float(low), h))
+    inset = max(0.0, min(float(inset), d/2.0 - 0.05))
+    y0, y1 = y + inset, y + d - inset            # the narrowed top
+    zh, zl = z + h, z + low
+    za, zb = (zh, zl) if dirn == "+x" else (zl, zh)   # heights at x and x+w
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        top, rgt, flank = c, shade(c, 0.78), shade(c, 0.60)
+        s = [_poly([(x, y0, za), (x+w, y0, zb), (x+w, y1, zb), (x, y1, za)], top, edge)]
+        s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y1, zb), (x, y1, za)], flank, edge))
+        if zb > z + 1e-9:      # a top that falls all the way to the base leaves no end face at all;
+            s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y1, zb), (x+w, y0, zb)], rgt, edge))
+        if studs:
+            r = 0.30; rx = r*U*1.4142; ry = r*U*0.7071; sh = 0.22*V
+            nx, ny = max(1, int(round(w))), max(1, int(round(y1-y0)))
+            for i in range(nx):
+                for j in range(ny):
+                    fx = (i+0.5)/nx
+                    zc = za + (zb-za)*fx                       # ride the tilt
+                    cx, cy = iso(x + (i+0.5)*w/nx, y0 + (j+0.5)*(y1-y0)/ny, zc)
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (cx, cy+sh, rx, ry, shade(c, 0.70), edge))
+                    s.append('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>'
+                             % (cx-rx, cy, 2*rx, sh, shade(c, 0.70)))
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (cx, cy, rx, ry, top, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
 def ridge(x, y, z, w, d, h, color, peak=0.5, eaves=0.0, axis="x"):
     """A piece sloped on BOTH sides, meeting along a ridge line -- the roof of a house.
 
