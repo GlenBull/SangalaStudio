@@ -1,6 +1,6 @@
 """Not a figure - a bench test that draws every piece the engine can make, so a change to
 engine.py can be eyeballed in one picture. Underscore-prefixed, so it stays out of --list."""
-from engine import brick, slope, decal, cone, BH, PH
+from engine import brick, slope, decal, cone, ridge, BH, PH
 
 TITLE = "Shape check"
 SUBTITLE = "every primitive, once"
@@ -31,6 +31,12 @@ STEPS = [
       pieces=[slope(1, 6, 0, 2, 2, BH*1.5, "+x", "red", low=BH*0.55),
               slope(4, 6, 0, 2, 2, BH*1.5, "-x", "orange", low=BH*0.55),
               slope(12, 4, 0, 2, 2, BH*1.5, "+y", "blue", low=BH*0.55)]),
+ dict(title="Ridges", text="Sloped both sides: symmetric, asymmetric, and with eaves left standing.",
+      parts=[("ridges", ("brick", 2, 2, BH, "gray"))],
+      pieces=[ridge(1, 9, 0, 3, 2, BH*1.4, "light gray"),
+              ridge(5, 9, 0, 3, 2, BH*1.4, "tan", peak=0.72),
+              ridge(9, 9, 0, 3, 2, BH*1.4, "blue", peak=0.35, eaves=BH*0.4),
+              ridge(13, 6, 0, 2, 3, BH*1.4, "lime", peak=0.65, axis="y")]),
  dict(title="Round pieces", text="A cone, a steeper cone, a round brick, and a cone with a stud.",
       parts=[("cones", ("brick", 1, 1, BH, "yellow"))],
       pieces=[cone(1, 6, 0, 1, 1, BH, "yellow"),

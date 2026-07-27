@@ -132,6 +132,46 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False, low=0.0):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
+def ridge(x, y, z, w, d, h, color, peak=0.5, eaves=0.0, axis="x"):
+    """A piece sloped on BOTH sides, meeting along a ridge line -- the roof of a house.
+
+    `peak` is where the ridge sits across the sloping axis, 0..1. At 0.5 the two faces match; move it
+    and they go asymmetric, one long face and one short, which is what the crane carries above its
+    tail. `eaves` is the height left standing at each low edge (as `low` is for a single slope).
+    `axis` is which way the ridge line runs: "x" tilts the faces toward +/-x, "y" toward +/-y.
+
+    Sangala Studio builds the same family from a rectangle with per-edge slope angles: unequal angles
+    on opposite edges collapse the top to an offset ridge (SangalaStudio.html:1514)."""
+    c0 = col(color)
+    if axis not in ("x", "y"):
+        raise ValueError("ridge axis must be 'x' or 'y' (got %r)" % axis)
+    peak = max(0.0, min(1.0, float(peak)))
+    eaves = max(0.0, min(float(eaves), h))
+    ze = z + eaves
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        near, far, side, gable = shade(c, 0.88), shade(c, 0.58), shade(c, 0.80), shade(c, 0.62)
+        s = []
+        if axis == "x":
+            xp = x + peak*w
+            s.append(_poly([(x, y, ze), (xp, y, z+h), (xp, y+d, z+h), (x, y+d, ze)], far, edge))
+            s.append(_poly([(xp, y, z+h), (x+w, y, ze), (x+w, y+d, ze), (xp, y+d, z+h)], near, edge))
+            if eaves > 0:
+                s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, ze), (x+w, y, ze)], side, edge))
+            s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, ze), (xp, y+d, z+h), (x, y+d, ze)],
+                           gable, edge))
+        else:
+            yp = y + peak*d
+            s.append(_poly([(x, y, ze), (x, yp, z+h), (x+w, yp, z+h), (x+w, y, ze)], far, edge))
+            s.append(_poly([(x, yp, z+h), (x, y+d, ze), (x+w, y+d, ze), (x+w, yp, z+h)], near, edge))
+            if eaves > 0:
+                s.append(_poly([(x, y+d, z), (x+w, y+d, z), (x+w, y+d, ze), (x, y+d, ze)], gable, edge))
+            s.append(_poly([(x+w, y, z), (x+w, y+d, z), (x+w, y+d, ze), (x+w, yp, z+h), (x+w, y, ze)],
+                           side, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
 def cone(x, y, z, w, d, h, color, top=0.55, studs=False):
     """A round piece standing on the grid: a LEGO cone, or a round brick when top=1.
 
