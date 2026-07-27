@@ -132,6 +132,53 @@ def slope(x, y, z, w, d, h, dirn, color, inv=False, low=0.0):
         return "".join(s)
     return Piece((x, y, z), (x+w, y+d, z+h), draw)
 
+def blade(x, y, z, w, d, h, color, dirn="+x", drop=None, rise=None, studs=True):
+    """A piece that thins toward one end because BOTH its top and its underside slope away.
+
+    Full thickness at the near end; at the far end the top has come down by `drop` and the underside
+    has risen by `rise`, so what is left is a tapering blade. This is the shape that lets a wing thin
+    toward its leading edge instead of ending in a step.
+
+    Sangala Studio cannot express this in a single part: its Invert flag chooses whether the top or
+    the underside falls away, not both, so the equivalent there is a Combine that cuts each face."""
+    c0 = col(color)
+    if dirn not in ("+x", "-x"):
+        raise ValueError("blade dirn must be '+x' or '-x' (got %r)" % dirn)
+    drop = h*0.3 if drop is None else max(0.0, float(drop))
+    rise = h*0.3 if rise is None else max(0.0, float(rise))
+    if drop + rise > h - 0.05:                    # always leave a sliver of material at the tip
+        k = (h - 0.05) / (drop + rise)
+        drop, rise = drop*k, rise*k
+    # heights at the piece's two ends, near end first
+    n_lo, n_hi = z, z + h
+    f_lo, f_hi = z + rise, z + h - drop
+    (xa, alo, ahi), (xb, blo, bhi) = ((x, n_lo, n_hi), (x+w, f_lo, f_hi)) if dirn == "+x" \
+                                     else ((x, f_lo, f_hi), (x+w, n_lo, n_hi))
+    def draw(on):
+        c = c0 if on else pale(c0)
+        edge = shade(c, 0.45 if on else 0.72)
+        top, rgt, flank = c, shade(c, 0.78), shade(c, 0.60)
+        s = [_poly([(xa, y, ahi), (xb, y, bhi), (xb, y+d, bhi), (xa, y+d, ahi)], top, edge)]
+        s.append(_poly([(xa, y+d, alo), (xb, y+d, blo), (xb, y+d, bhi), (xa, y+d, ahi)], flank, edge))
+        if bhi - blo > 1e-9:
+            s.append(_poly([(xb, y, blo), (xb, y+d, blo), (xb, y+d, bhi), (xb, y, bhi)], rgt, edge))
+        if studs:
+            r = 0.30; rx = r*U*1.4142; ry = r*U*0.7071; sh = 0.22*V
+            nx, ny = max(1, int(round(w))), max(1, int(round(d)))
+            for i in range(nx):
+                for j in range(ny):
+                    f = (i+0.5)/nx
+                    zc = ahi + (bhi-ahi)*f                    # ride the sloping top
+                    cx, cy = iso(x + (i+0.5)*w/nx, y + (j+0.5)*d/ny, zc)
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (cx, cy+sh, rx, ry, shade(c, 0.70), edge))
+                    s.append('<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s"/>'
+                             % (cx-rx, cy, 2*rx, sh, shade(c, 0.70)))
+                    s.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" fill="%s" stroke="%s" stroke-width="0.7"/>'
+                             % (cx, cy, rx, ry, top, edge))
+        return "".join(s)
+    return Piece((x, y, z), (x+w, y+d, z+h), draw)
+
 def wedge(x, y, z, w, d, h, color, dirn="+x", low=0.0, inset=0.3, studs=True):
     """A wedge: the top is flat but TILTED, and the sides draw in beneath it as well.
 

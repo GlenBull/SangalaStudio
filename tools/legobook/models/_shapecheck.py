@@ -1,6 +1,6 @@
 """Not a figure - a bench test that draws every piece the engine can make, so a change to
 engine.py can be eyeballed in one picture. Underscore-prefixed, so it stays out of --list."""
-from engine import brick, slope, decal, cone, ridge, wedge, BH, PH
+from engine import brick, slope, decal, cone, ridge, wedge, blade, BH, PH
 
 TITLE = "Shape check"
 SUBTITLE = "every primitive, once"
@@ -31,6 +31,12 @@ STEPS = [
       pieces=[slope(1, 6, 0, 2, 2, BH*1.5, "+x", "red", low=BH*0.55),
               slope(4, 6, 0, 2, 2, BH*1.5, "-x", "orange", low=BH*0.55),
               slope(12, 4, 0, 2, 2, BH*1.5, "+y", "blue", low=BH*0.55)]),
+ dict(title="Blades", text="Thinning toward one end: top AND underside slope away. 2 studs, then 4.",
+      parts=[("blades", ("brick", 2, 1, BH, "white"))],
+      pieces=[blade(1, 16, 0, 2, 1, BH*1.6, "white"),
+              blade(4, 16, 0, 2, 2, BH*1.6, "light gray"),
+              blade(8, 16, 0, 2, 2, BH*1.6, "tan", dirn="-x"),
+              blade(12, 16, 0, 3, 2, BH*1.6, "blue", drop=BH*0.9, rise=0.0)]),
  dict(title="Wedges", text="Tilted top and tapering sides at once - the wing shape.",
       parts=[("wedges", ("brick", 2, 2, BH, "white"))],
       pieces=[wedge(1, 12, 0, 4, 3, BH*1.6, "white", low=BH*0.5),
