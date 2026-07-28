@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.140 -->
+<!-- SANGALA_VERSION: 2026-07-28.141 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3258,7 +3258,10 @@ function alignItems(){
   const centerArea=pl=>{ let a=1e9,b=1e9,c=-1e9,d=-1e9; pl.forEach(p=>{a=Math.min(a,p[0]);b=Math.min(b,p[1]);c=Math.max(c,p[0]);d=Math.max(d,p[1]);}); return {cx:(a+c)/2,cy:(b+d)/2,area:(c-a)*(d-b)}; };
   const addShape=o=>{ if(!o||!o.poly) return; const m=centerArea(placePoly(o.poly));
     items.push({cx:m.cx,cy:m.cy,area:m.area, move:(dpx,dpy)=>translateObj(o,dpx/pp.s,dpy/pp.s)}); };
-  if(selMulti.length>=2) selMulti.forEach(id=>addShape(objects.find(o=>o.id===id)));
+  // Any non-empty marquee selection counts, not just 2+: a sweep that caught ONE shape leaves selMulti=[id]
+  // and selId null, and the old >=2 test then fell through to selId/selId2 and found nothing - so that shape
+  // plus the armed photo came to one item and Align stayed dead (Glen, 2026-07-28).
+  if(selMulti.length) selMulti.forEach(id=>addShape(objects.find(o=>o.id===id)));
   else { addShape(selId!=null?objects.find(o=>o.id===selId):null); addShape(selId2!=null?objects.find(o=>o.id===selId2):null); }
   if(refImg && refImg.img && selImg2){   // photo armed as an operand (Shift+click) is an align target too
     // Through the SAME placement transform every shape gets - placePoly applies the Scale % and the Position
@@ -3283,7 +3286,10 @@ function alignSelection(mode){   // "v"=same center X (vertical axis), "h"=same 
   say({v:"Aligned vertically.",h:"Aligned horizontally.",both:"Centered."}[mode]);
 }
 function updateAlign(){ const ok=alignItems().length>=2;
-  ["aVert","aHorz","aBoth"].forEach(id=>{ const b=$(id); if(b) b.disabled=!ok; });
+  // NEVER disable these. A disabled button swallows the click and says nothing, which is how three
+  // separate align failures in a row each looked like "nothing happened" (Glen, 2026-07-28). Dim them
+  // as a cue, but let the click land so alignSelection can say what is actually missing.
+  ["aVert","aHorz","aBoth"].forEach(id=>{ const b=$(id); if(b){ b.disabled=false; b.style.opacity=ok?"":".55"; } });
   const h=$("alignhint"); if(h) h.style.display=ok?"none":"block"; }
 function closeAlign(){ $("alignmenu").style.display="none"; }
 $("tAlign").onclick=(e)=>{ e.stopPropagation(); const t=$("alignmenu"), r=$("tAlign").getBoundingClientRect();
@@ -4241,6 +4247,8 @@ $("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"
 $("fillPick").addEventListener("input",(e)=>setFill(e.target.value));   // live: the shape fills as the picker is dragged
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
+  updateAlign();     // ...and Align, which used to be computed ONLY when its menu opened, so arming the
+                     // photo while the menu was showing left the buttons dead (Glen, 2026-07-28)
   updateImageTools();
   markSwatches();    // show which paper color the selection already carries
   const panel=$("editpanel");
@@ -4471,7 +4479,10 @@ cv.addEventListener("click",(e)=>{
           say("Selected "+selMulti.length+" objects. Group to bundle them."); }
         else { selId2=hit.id; selImg2=false; say("2nd shape selected (orange). Choose Union / Diff / Intersect, or Group to bundle them."); } }   // two loose single shapes: the Combine 2nd operand, still Group-able as a pair
     }
-    else if(onImg && refImg && refImg.img && selId!=null){ selImg2=true; selId2=null; say("Photo picked (orange). Choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
+    // A marquee sweep populates selMulti and clears selId, so gating this on selId alone meant Shift+click
+    // on the photo did NOTHING after a sweep - silently, which read as "align is broken" (Glen, 2026-07-28).
+    // The photo cannot join selMulti (it lives in refImg, outside objects), so arming it is the only route.
+    else if(onImg && refImg && refImg.img && (selId!=null || selMulti.length)){ selImg2=true; selId2=null; say("Photo picked (orange). Align is ready; or choose Intersect in Combine to crop it to the shape."); }   // photo as the 2nd operand
   } else if(hit && hit.group!=null && activeTool!=="node"){   // a grouped object -> select the whole group (moves/deletes as one).
     selMulti=objects.filter(o=>o.group===hit.group).map(o=>o.id); selId=null; selId2=null; selImg2=false; if(refImg)refImg.sel=false;   // EXCEPT the Node tool, which edits ONE shape - it falls through below and picks the individual object out of the group (e.g. the frame of a tabbed shadowbox)
     say("Selected a group of "+selMulti.length+" objects - drag to move together, or Ungroup."); }
