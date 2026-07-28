@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.149 -->
+<!-- SANGALA_VERSION: 2026-07-28.150 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4286,17 +4286,31 @@ function refreshPartsTable(){
       +'" style="color:#8a7350;text-decoration:none;border-bottom:1px dotted #8a7350" title="'
       +(allOn?'Hide the studs on every part - the massing reads more clearly without them':'Show the studs on every part')
       +'">Studs</a></th></tr>';
-  parts.forEach(o=>{
-    const nm=(o.el.getAttribute("data-name")||"Part").replace(/[<>]/g,"");   // student data: strip angle brackets, say() and this both take HTML
-    const col=fillOf(o)||"#a0a5a9";
+  // ONE ROW PER NAME, not per object. A named mass splits into a separate object per connected component at
+  // import, so a crane's body arrived as three "Body" objects - three rows for one part, each needing the
+  // same edit. They ARE one part; the split is an artifact of the trace. Every cell acts on all members, and
+  // a value that disagrees across them shows blank rather than imposing one member's number on the rest.
+  const byName=new Map();
+  parts.forEach(o=>{ const k=o.el.getAttribute("data-name"); if(!byName.has(k)) byName.set(k,[]); byName.get(k).push(o); });
+  partGroups=[...byName.values()];   // index = data-gid on every control in the table
+  // undefined = the members DISAGREE (show blank); null = they agree the attribute is unset (show its default).
+  // Returning null for both made an unset Plane read as "mixed" when every member simply had no plane yet.
+  const same=(mem,a)=>{ const v=[...new Set(mem.map(o=>o.el.getAttribute(a)))]; return v.length===1?v[0]:undefined; };
+  [...byName.entries()].forEach(([k,mem],gi)=>{
+    const nm=k.replace(/[<>]/g,"");   // student data: strip angle brackets, say() and this both take HTML
+    const col=fillOf(mem[0])||"#a0a5a9";
+    const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
+    const num=(cls,val,ph,w)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
+      +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:'+w+';text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
     h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
-      +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm+'</td>'
-      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-pid="'+o.id
-      +'" value="'+planeOf(o)+'" style="width:2.4rem;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
-      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z",R(o,"data-z"))+'</td>'
-      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z0",R(o,"data-z0"))+'</td>'
-      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-pid="'+o.id+'"'
-      +(o.el.getAttribute("data-studs")==="1"?" checked":"")+' style="width:auto;margin:0"></td></tr>';
+      +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm
+      +(mem.length>1?' <span style="color:#8a7350">('+mem.length+')</span>':'')+'</td>'
+      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
+      +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:2.4rem;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz", gz===undefined?null:PLATE_UNIT.f(+gz||0), "mixed", "3.1rem")+'</td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed", "3.1rem")+'</td>'
+      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-gid="'+gi+'"'
+      +(gst==="1"?" checked":"")+(gst===undefined?' data-mixed="1"':'')+' style="width:auto;margin:0"></td></tr>';
   });
   host.innerHTML=h+'</table>';
   refreshPlanesTable(parts);
@@ -4337,17 +4351,25 @@ $("planestable").addEventListener("change",(e)=>{
   mem.forEach(o=>{ if(s.checked) o.el.removeAttribute("data-hidden"); else o.el.setAttribute("data-hidden","1"); });
   scheduleCommit(); draw(); pvRefresh();
   say(s.checked ? "Plane "+s.dataset.plane+" shown." : "Plane "+s.dataset.plane+" hidden - it is out of the 3D view and the STL until you show it again."); });
-// live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected
-$("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
-  const o=objects.find(x=>x.id===+i.dataset.pid); if(o) applyDim(i.dataset.dim, +i.value||0, true, o); });
-$("partstable").addEventListener("change",(e)=>{ const p=e.target.closest(".partplane"); if(!p) return;
-  const o=objects.find(x=>x.id===+p.dataset.pid); if(!o) return;
-  o.el.setAttribute("data-plane", String(Math.max(1, Math.round(+p.value||1))));
-  if(isHidden(o)) o.el.removeAttribute("data-hidden");   // moving into a plane brings the part back into view; the new plane's Show governs from now on
-  scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); });
-$("partstable").addEventListener("change",(e)=>{ const c=e.target.closest(".partstud"); if(!c) return;
-  const o=objects.find(x=>x.id===+c.dataset.pid); if(!o) return;
-  applyDimFlag("studs", c.checked, o); scheduleCommit(); });
+// Every control carries data-gid - the index of a NAME's members - so one edit reaches all of them.
+// live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected.
+let partGroups=[];
+const gidMembers=el=>partGroups[+el.dataset.gid]||[];
+const setDepthLike=(el,dim)=>{ if(el.value==="") return; gidMembers(el).forEach(o=>applyDim(dim, +el.value||0, true, o)); };
+$("partstable").addEventListener("input",(e)=>{
+  const z=e.target.closest(".partz");  if(z){  setDepthLike(z,"z");  return; }
+  const b=e.target.closest(".partz0"); if(b){  setDepthLike(b,"z0"); return; } });
+$("partstable").addEventListener("change",(e)=>{
+  const z=e.target.closest(".partz");  if(z){  setDepthLike(z,"z");  scheduleCommit(); return; }
+  const b=e.target.closest(".partz0"); if(b){  setDepthLike(b,"z0"); scheduleCommit(); return; }
+  const p=e.target.closest(".partplane");
+  if(p){ if(p.value==="") return;
+    const v=String(Math.max(1, Math.round(+p.value||1)));
+    gidMembers(p).forEach(o=>{ o.el.setAttribute("data-plane", v);
+      if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
+    scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
+  const c=e.target.closest(".partstud");
+  if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; } });
 $("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
@@ -4355,8 +4377,6 @@ $("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studs
          .forEach(o=>applyDimFlag("studs", on, o));
   scheduleCommit(); refreshPartsTable();
   say(on ? "Studs shown on every part." : "Studs hidden - the massing reads as plain masses now."); });
-$("partstable").addEventListener("change",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
-  const o=objects.find(x=>x.id===+i.dataset.pid); if(o){ applyDim(i.dataset.dim, +i.value||0, true, o); scheduleCommit(); } });
 
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
