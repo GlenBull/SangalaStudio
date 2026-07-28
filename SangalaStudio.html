@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.138 -->
+<!-- SANGALA_VERSION: 2026-07-28.139 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1413,6 +1413,13 @@ async function saveSVG(){
   objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
     const gp=gpathOf(o); if(gp.length){ o.el.setAttribute("data-group", gp[0]); o.el.setAttribute("data-gpath", gp.join(" ")); }   // full nesting path (outermost..innermost) so stepwise ungroup survives reopen
     else if(o.el.removeAttribute){ o.el.removeAttribute("data-group"); o.el.removeAttribute("data-gpath"); }
+    // Re-derive the element's geometry from o.poly in the LIVE document's units before cloning, so the
+    // export never inherits coordinates from a different unit space. A .model stores each element's
+    // attributes VERBATIM (serializeState), and restoreState rebuilds them inside ensureDoc's millimetre
+    // document - so a project made from a pixel-based file reopens with o.poly in mm and the DOM still in
+    // pixels. The canvas draws from o.poly and looks right, while saveSVG cloned the DOM and wrote an mm
+    // viewBox over pixel geometry (Moses, 2026-07-28: .model -> Export SVG -> reopen, 3.78x too large).
+    placeEl(o);
     syncHolesToEl(o); syncMeshToEl(o); });
   const clone=svgEl.cloneNode(true);
   // The viewBox must be written in the DOCUMENT'S OWN user units, because that is what the child elements'
