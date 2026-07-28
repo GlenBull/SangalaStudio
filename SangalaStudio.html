@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.139 -->
+<!-- SANGALA_VERSION: 2026-07-28.140 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3260,8 +3260,16 @@ function alignItems(){
     items.push({cx:m.cx,cy:m.cy,area:m.area, move:(dpx,dpy)=>translateObj(o,dpx/pp.s,dpy/pp.s)}); };
   if(selMulti.length>=2) selMulti.forEach(id=>addShape(objects.find(o=>o.id===id)));
   else { addShape(selId!=null?objects.find(o=>o.id===selId):null); addShape(selId2!=null?objects.find(o=>o.id===selId2):null); }
-  if(refImg && refImg.img && selImg2)   // photo armed as an operand (Shift+click) is an align target too
-    items.push({cx:refImg.x+refImg.w/2, cy:refImg.y+refImg.h/2, area:refImg.w*refImg.h, move:(dpx,dpy)=>{refImg.x+=dpx; refImg.y+=dpy;}});
+  if(refImg && refImg.img && selImg2){   // photo armed as an operand (Shift+click) is an align target too
+    // Through the SAME placement transform every shape gets - placePoly applies the Scale % and the Position
+    // offset - and the move divided by pp.s to land back in raw mm. Taking refImg.x/y/w/h raw compared an
+    // UNplaced centre against placed ones: the photo's centre read short by the position offset, so the delta
+    // handed to it was inflated by that much and walked it down and to the right, partly off the mat, and its
+    // unplaced area could lose the "biggest stays put" test it should have won (Glen, 2026-07-28).
+    const m=centerArea(placePoly([[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],
+                                  [refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]]));
+    items.push({cx:m.cx, cy:m.cy, area:m.area, move:(dpx,dpy)=>{ refImg.x+=dpx/pp.s; refImg.y+=dpy/pp.s; }});
+  }
   return items;
 }
 function alignSelection(mode){   // "v"=same center X (vertical axis), "h"=same center Y, "both"=center
