@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.148 -->
+<!-- SANGALA_VERSION: 2026-07-28.149 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -332,6 +332,9 @@
     <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Parts</h2>
       <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
+      <!-- Planes: parts that share a depth. Set the depth once and every part in the plane follows; hide a
+           plane to take it out of the 3D view while you judge the rest. -->
+      <div id="planestable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
       <div id="partstable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
     </div>
     <div id="zoomctl">
@@ -416,6 +419,11 @@ const isMosaicPart=o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-mosaic")=
 // the massing an extruded mosaic gives you - but it is never exported, never cut, and never carves or
 // merges with anything. Where a Hole says "take material away", a Guide says "this was never material".
 const isGuide   =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="guide";
+// A PLANE groups parts that share a depth, so a relief is set one plane at a time rather than one part at a
+// time. Called a plane and not a layer because Studio already says layer for z-order ("raised one layer").
+// Stored on the element, so it rides along in the .model with every other attribute and needs no new save code.
+const planeOf   =o=>(o.el&&o.el.getAttribute&&+o.el.getAttribute("data-plane"))||1;
+const isHidden  =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-hidden")==="1";   // hidden with its plane: absent from the 3D preview, still in the file
 const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o)||isGuide(o)||isMosaicPart(o);   // a 3D bar, a baked mesh, a hole, a guide, or a mosaic mass: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
 const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
@@ -2291,6 +2299,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   }
   // Guides leave the solid build entirely: they never join a bundle, never carve, never export. They are
   // gathered separately so the preview can show them BEHIND the real parts as something to build against.
+  all=all.filter(o=>!isHidden(o));   // a hidden plane leaves the preview AND the STL - buildTris is the single source for both, so what you see is what prints
   const guideObjs=all.filter(isGuide);
   all=all.filter(o=>!isGuide(o));
   const guideTris=[].concat.apply([], guideObjs.map(o=>{ try{ return bodyTris(o,false); }catch(e){ return []; } }));
@@ -4270,6 +4279,7 @@ function refreshPartsTable(){
   const allOn=parts.every(o=>o.el.getAttribute("data-studs")==="1");
   let h='<table style="border-collapse:collapse;width:100%"><tr style="color:#8a7350;font-size:.85rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Part</th>'
+      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Base</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem"><a href="#" id="studsAll" data-on="'+(allOn?1:0)
@@ -4281,16 +4291,60 @@ function refreshPartsTable(){
     const col=fillOf(o)||"#a0a5a9";
     h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
       +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm+'</td>'
+      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-pid="'+o.id
+      +'" value="'+planeOf(o)+'" style="width:2.4rem;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z",R(o,"data-z"))+'</td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z0",R(o,"data-z0"))+'</td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-pid="'+o.id+'"'
       +(o.el.getAttribute("data-studs")==="1"?" checked":"")+' style="width:auto;margin:0"></td></tr>';
   });
   host.innerHTML=h+'</table>';
+  refreshPlanesTable(parts);
 }
+// One row per plane in use: its Depth (applied to every member) and whether it is shown. A plane's Depth
+// reads back as its members' depth when they agree, and blank when they do not - so an inherited mixture is
+// visible rather than silently overwritten the moment the field is touched.
+function refreshPlanesTable(parts){
+  const host=$("planestable");
+  const ids=[...new Set(parts.map(planeOf))].sort((a,b)=>a-b);
+  if(ids.length<1){ host.innerHTML=""; return; }
+  let h='<table style="border-collapse:collapse;width:100%;margin-bottom:.35rem"><tr style="color:#8a7350;font-size:.85rem">'
+      +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Plane</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
+      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem">Show</th></tr>';
+  ids.forEach(pid=>{
+    const mem=parts.filter(o=>planeOf(o)===pid);
+    const ds=[...new Set(mem.map(o=>+o.el.getAttribute("data-z")||0))];
+    const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";              // blank = the members disagree
+    const shown=mem.some(o=>!isHidden(o));
+    h+='<tr><td style="padding:.12rem .2rem">Plane '+pid+' <span style="color:#8a7350">('+mem.length+')</span></td>'
+      +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
+      +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" style="width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      +'<td style="text-align:center;padding:.12rem .2rem"><input class="planeshow" type="checkbox" data-plane="'+pid+'"'
+      +(shown?" checked":"")+' style="width:auto;margin:0"></td></tr>';
+  });
+  host.innerHTML=h+'</table>';
+}
+const planeMembers=pid=>objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o)&&planeOf(o)===pid);
+$("planestable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
+  planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
+$("planestable").addEventListener("change",(e)=>{
+  const d=e.target.closest(".planedepth");
+  if(d && d.value!==""){ planeMembers(+d.dataset.plane).forEach(o=>applyDim("z", +d.value||0, true, o));
+    scheduleCommit(); refreshPartsTable(); return; }
+  const s=e.target.closest(".planeshow"); if(!s) return;
+  const mem=planeMembers(+s.dataset.plane);
+  mem.forEach(o=>{ if(s.checked) o.el.removeAttribute("data-hidden"); else o.el.setAttribute("data-hidden","1"); });
+  scheduleCommit(); draw(); pvRefresh();
+  say(s.checked ? "Plane "+s.dataset.plane+" shown." : "Plane "+s.dataset.plane+" hidden - it is out of the 3D view and the STL until you show it again."); });
 // live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected
 $("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
   const o=objects.find(x=>x.id===+i.dataset.pid); if(o) applyDim(i.dataset.dim, +i.value||0, true, o); });
+$("partstable").addEventListener("change",(e)=>{ const p=e.target.closest(".partplane"); if(!p) return;
+  const o=objects.find(x=>x.id===+p.dataset.pid); if(!o) return;
+  o.el.setAttribute("data-plane", String(Math.max(1, Math.round(+p.value||1))));
+  if(isHidden(o)) o.el.removeAttribute("data-hidden");   // moving into a plane brings the part back into view; the new plane's Show governs from now on
+  scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); });
 $("partstable").addEventListener("change",(e)=>{ const c=e.target.closest(".partstud"); if(!c) return;
   const o=objects.find(x=>x.id===+c.dataset.pid); if(!o) return;
   applyDimFlag("studs", c.checked, o); scheduleCommit(); });
