@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.145 -->
+<!-- SANGALA_VERSION: 2026-07-28.146 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4401,7 +4401,10 @@ window.addEventListener("keydown",(e)=>{
   else if(e.key==="ArrowUp") ddy=-step; else ddy=step;
   const dx = matLandscape ? -ddy : ddx, dy = matLandscape ? ddx : ddy;   // un-turn landscape back to stored coords
   if(refImg && refImg.sel){ refImg.x+=dx; refImg.y+=dy; }
-  else ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(o) translateObj(o,dx,dy); });
+  else { ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(o) translateObj(o,dx,dy); });
+    // A photo armed by the sweep nudges with the shapes, for the same reason it drags with them. Scaled by
+    // pp.s because translateObj works in design mm while the photo is drawn raw, in screen mm.
+    if(selImg2 && refImg){ const pp=placeParams(); refImg.x+=dx*pp.s; refImg.y+=dy*pp.s; } }
   draw(); refreshEditPanel();
 });
 // pointer -> display mm (same math the selection uses), plus k = px per mm
@@ -4652,6 +4655,10 @@ cv.addEventListener("mousedown",(e)=>{
       if(!(selMulti.length===g.length && g.every(id=>selMulti.includes(id)))){ selMulti=g; selId=null; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; } }
     if(selMulti.length && selMulti.some(id=>{const o=objects.find(x=>x.id===id);return o&&onObjId(o);})){   // drag any member -> move the group
       drag={mode:"groupmove",start:[(mx-pp.ox)/pp.s,(my-pp.oy)/pp.s],moved:false,
+        // A photo armed by the sweep travels with the group. Remember where it started: it is NOT in
+        // objects, so drag.orig cannot carry it, and without this only the shapes moved and an alignment
+        // just made came straight apart again (Glen, 2026-07-28).
+        img0:(selImg2 && refImg) ? [refImg.x, refImg.y] : null,
         snap:snapTargets(new Set(selMulti)),
         self:(()=>{ const pts=[]; selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id);
           if(o&&o.poly&&pts.length<40) snapSample(o.poly).forEach(q=>{ if(pts.length<40) pts.push(q); }); }); return pts; })(),
@@ -4766,6 +4773,10 @@ window.addEventListener("mousemove",(e)=>{
       if(g.t==="rect"){ o.el.setAttribute("x",fmtn(g.x+ddx)); o.el.setAttribute("y",fmtn(g.y+ddy)); }
       else if(g.t==="circle"){ o.el.setAttribute("cx",fmtn(g.cx+ddx)); o.el.setAttribute("cy",fmtn(g.cy+ddy)); }
       else { o.el.setAttribute("data-shx",fmtn(g.sh[0]+ddx)); o.el.setAttribute("data-shy",fmtn(g.sh[1]+ddy)); placeEl(o); } });
+    // ddx/ddy are a DESIGN-space delta - shapes are drawn through placePoly, which scales them by pp.s.
+    // The photo is drawn raw, so it must move by the same delta in SCREEN terms: ddx*pp.s. Adding ddx
+    // undivided would drift it against the shapes at any Scale other than 100%.
+    if(drag.img0 && refImg){ refImg.x=drag.img0[0]+ddx*pp.s; refImg.y=drag.img0[1]+ddy*pp.s; }
     drag.moved=true; draw(); return; }
   if(drag.mode==="imgmove"||drag.mode==="imgresize"){ if(!refImg) return; const {mx,my}=evtMM(e);
     if(drag.mode==="imgmove"){ refImg.x=mx-drag.gx; refImg.y=my-drag.gy; }
