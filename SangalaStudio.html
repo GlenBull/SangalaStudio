@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.147 -->
+<!-- SANGALA_VERSION: 2026-07-28.148 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4049,7 +4049,7 @@ function applyDim(dim,v,live,target){   // live=true (spinner step / typing): up
   }
   draw(); if(!live)showDims(o); pvRefresh();
 }
-function applyDimFlag(flag,on){ const o=selObj(); if(!o||!o.el) return;   // LEGO connectors on an extruded shape: studs on top, sockets underneath
+function applyDimFlag(flag,on,target){ const o=target||selObj(); if(!o||!o.el) return;   // LEGO connectors on an extruded shape: studs on top, sockets underneath. target: the Parts table sets a part that is not the selection
   if(flag==="lockratio"){ o.el.setAttribute("data-lockratio", on?"1":"0"); return; }   // just remembered for the next Width/Height edit - no geometry changes yet
   if(flag==="bore"){   // the axle hole: turning it on seeds a default axle, off strips every bore attribute
     if(on){ o.el.setAttribute("data-bore-axis", o.el.getAttribute("data-bore-axis")||"y"); if(!(+o.el.getAttribute("data-bore-d")>0)) o.el.setAttribute("data-bore-d","3.2"); }
@@ -4265,23 +4265,42 @@ function refreshPartsTable(){
   const R=(o,a)=>+o.el.getAttribute(a)||0;
   const inp=(o,dim,val)=>'<input class="partin" type="number" step="'+PLATE_UNIT.step+'" data-pid="'+o.id+'" data-dim="'+dim
     +'" value="'+PLATE_UNIT.f(val)+'" style="width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
+  // Studs read more strongly than a one-plate step, so a shallow relief is easier to judge with them off.
+  // The header cell toggles every part at once - the usual want is "show me the massing", not one part.
+  const allOn=parts.every(o=>o.el.getAttribute("data-studs")==="1");
   let h='<table style="border-collapse:collapse;width:100%"><tr style="color:#8a7350;font-size:.85rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Part</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Base</th></tr>';
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Base</th>'
+      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem"><a href="#" id="studsAll" data-on="'+(allOn?1:0)
+      +'" style="color:#8a7350;text-decoration:none;border-bottom:1px dotted #8a7350" title="'
+      +(allOn?'Hide the studs on every part - the massing reads more clearly without them':'Show the studs on every part')
+      +'">Studs</a></th></tr>';
   parts.forEach(o=>{
     const nm=(o.el.getAttribute("data-name")||"Part").replace(/[<>]/g,"");   // student data: strip angle brackets, say() and this both take HTML
     const col=fillOf(o)||"#a0a5a9";
     h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
       +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm+'</td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z",R(o,"data-z"))+'</td>'
-      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z0",R(o,"data-z0"))+'</td></tr>';
+      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z0",R(o,"data-z0"))+'</td>'
+      +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-pid="'+o.id+'"'
+      +(o.el.getAttribute("data-studs")==="1"?" checked":"")+' style="width:auto;margin:0"></td></tr>';
   });
   host.innerHTML=h+'</table>';
 }
 // live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected
 $("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
   const o=objects.find(x=>x.id===+i.dataset.pid); if(o) applyDim(i.dataset.dim, +i.value||0, true, o); });
+$("partstable").addEventListener("change",(e)=>{ const c=e.target.closest(".partstud"); if(!c) return;
+  const o=objects.find(x=>x.id===+c.dataset.pid); if(!o) return;
+  applyDimFlag("studs", c.checked, o); scheduleCommit(); });
+$("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studsAll"); if(!a) return;
+  e.preventDefault();
+  const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
+  objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o))
+         .forEach(o=>applyDimFlag("studs", on, o));
+  scheduleCommit(); refreshPartsTable();
+  say(on ? "Studs shown on every part." : "Studs hidden - the massing reads as plain masses now."); });
 $("partstable").addEventListener("change",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
   const o=objects.find(x=>x.id===+i.dataset.pid); if(o){ applyDim(i.dataset.dim, +i.value||0, true, o); scheduleCommit(); } });
 
