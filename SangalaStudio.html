@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-27.137 -->
+<!-- SANGALA_VERSION: 2026-07-28.138 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1409,13 +1409,23 @@ $("pomRange").oninput=(e)=>{ tracePathomit=+e.target.value; $("pomVal").textCont
 async function saveSVG(){
   if(!svgEl||!objects.length){say("Add a shape first, then Save SVG.");return;}
   const bb=bbox(objects.map(o=>o.poly));   // [minX,minY,maxX,maxY] in mm
-  const x=fmtn(bb[0]),y=fmtn(bb[1]),w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
+  const w=fmtn(bb[2]-bb[0]),h=fmtn(bb[3]-bb[1]);
   objects.forEach(o=>{ if(!o.el||!o.el.setAttribute) return;   // persist grouping + inner loops so they survive Save -> reopen
     const gp=gpathOf(o); if(gp.length){ o.el.setAttribute("data-group", gp[0]); o.el.setAttribute("data-gpath", gp.join(" ")); }   // full nesting path (outermost..innermost) so stepwise ungroup survives reopen
     else if(o.el.removeAttribute){ o.el.removeAttribute("data-group"); o.el.removeAttribute("data-gpath"); }
     syncHolesToEl(o); syncMeshToEl(o); });
   const clone=svgEl.cloneNode(true);
-  clone.setAttribute("viewBox",x+" "+y+" "+w+" "+h);
+  // The viewBox must be written in the DOCUMENT'S OWN user units, because that is what the child elements'
+  // coordinates are in - elPoints writes each shape through its live CTM, not in mm. width/height carry the
+  // real size in mm, so the two together declare the file honestly whatever its unit scale is.
+  // For a design authored here the two coincide (ensureDoc builds an mm document, uscale 1) and this is the
+  // same string as before. For a design OPENED from a pixel-based file - an Inkscape trace, which is the usual
+  // shape of an imported SVG - they differ by 96/25.4, and declaring mm over pixel geometry made the design
+  // reload 3.78x too large and off the page (Moses, bushman hunt.svg, 2026-07-28): it came back at
+  // mm x 3.7795 + the viewBox origin, tripping "Design runs off the page". The .model file was unaffected
+  // because it stores o.poly in mm and never touches the DOM.
+  const uscale=svgScaleMm(svgEl)||1;   // mm per user unit of the live document
+  clone.setAttribute("viewBox",fmtn(bb[0]/uscale)+" "+fmtn(bb[1]/uscale)+" "+fmtn((bb[2]-bb[0])/uscale)+" "+fmtn((bb[3]-bb[1])/uscale));
   clone.setAttribute("width",w+"mm"); clone.setAttribute("height",h+"mm");
   const xml='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(clone);
   const blob=new Blob([xml],{type:"image/svg+xml"});
