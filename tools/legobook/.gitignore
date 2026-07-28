@@ -1,6 +1,0 @@
-# Generated booklets and their images - rebuild with build.py, publish into Documents\ by hand.
-*.html
-*.docx
-*.pdf
-_images_*/
-__pycache__/
