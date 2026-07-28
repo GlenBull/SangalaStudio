@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.144 -->
+<!-- SANGALA_VERSION: 2026-07-28.145 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4490,12 +4490,13 @@ cv.addEventListener("click",(e)=>{
     say(mnm ? ('Selected "'+mnm.replace(/[<>]/g,"")+'". Set its Depth and Base to place it in the relief.')
             : ("Selected a "+KIND_LABEL[hit.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine.")); }
   else if(onImg){ selId=null; selId2=null; selImg2=false; selMulti=[]; refImg.sel=true; say("Reference image selected - drag to move, corner to resize, Delete to remove."); }   // shapes win; the image is only picked on empty overlap
-  // Clicking empty space with something selected is a DELIBERATE deselect, not a mistake, so say nothing.
-  // The hint is only useful to someone who was aiming at a shape and missed - i.e. nothing was selected to
-  // begin with. Scolding on every deselect is nagging (Glen, 2026-07-28).
-  else { const hadSel = selId!=null || selId2!=null || selMulti.length>0 || selImg2 || !!(refImg && refImg.sel);
-    selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false;
-    if(!hadSel) say("Nothing there - click closer to an object."); }
+  // A click on empty space is NOT presumed to be a failed attempt at selecting. It may be dismissing a
+  // panel, or nothing in particular. And if the user WAS aiming at a shape and missed, the absence of a
+  // selection box is already the feedback - a message adds nothing to it and misreads everyone else
+  // (Glen, 2026-07-28: "the presumption that every click is designed to select an object is the wrong
+  // mind set"). So no hint at all. Clear the line rather than leave it: the previous message described a
+  // selection that no longer exists, which is the same staleness in the other direction.
+  else { selId=null; selId2=null; selImg2=false; selMulti=[]; if(refImg)refImg.sel=false; say(""); }
   selNode=null;   // selecting/deselecting an object clears any node selection
   draw(); refreshEditPanel();
 });
@@ -4674,8 +4675,8 @@ cv.addEventListener("mousedown",(e)=>{
     else { if(pick.id!==selId){ selId=pick.id; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; draw(); refreshEditPanel();
         const mnm=isMosaicPart(pick)&&pick.el.getAttribute("data-name");   // a mosaic piece announces its mass by name (this grab path eats the click, so the click handler's line never runs)
         // ALWAYS announce, not just for a named mosaic piece. This path eats the click, so whatever the
-        // status line last said stayed there - typically "Nothing there - click closer to an object" from a
-        // previous press on empty space, left sitting beside a plainly selected shape (Glen, 2026-07-28).
+        // status line last said stayed there - a stale message left sitting beside a plainly selected
+        // shape (Glen, 2026-07-28).
         say(mnm ? ('Selected "'+mnm.replace(/[<>]/g,"")+'". Set its Depth and Base to place it in the relief.')
                 : ("Selected a "+KIND_LABEL[pick.kind]+" object. Shift+click a 2nd shape (or the photo) to Combine.")); } suppressClick=true; }   // suppressClick: a body press selects AND holds the shape, so a click that doesn't drag won't deselect it
   } else if(selId==null) return;   // Shift held with nothing selected: no move to start; let the click handler do the Shift+click
