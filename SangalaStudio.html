@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.146 -->
+<!-- SANGALA_VERSION: 2026-07-28.147 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -326,6 +326,13 @@
       </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
       <div id="brickctl" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
+    </div>
+    <!-- Every named part with its Depth and Base in one table, so a relief is set up in one pass instead of
+         clicking each part in turn. Independent of the selection, so it stays put while parts are edited. -->
+    <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
+      <h2 class="marker" style="margin-top:0">Parts</h2>
+      <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
+      <div id="partstable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
     </div>
     <div id="zoomctl">
       <button id="zoomOut" title="Zoom out">&minus;</button>
@@ -3950,8 +3957,8 @@ function scaleFootprint(o,s){
     o.poly=o.poly.map(sp); if(o.holes)o.holes=o.holes.map(h=>h.map(sp)); placeEl(o); }
 }
 // apply one edited dimension to the selected shape, keeping the other (exact) values
-function applyDim(dim,v,live){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
-  const o=selObj(); if(!o||!o.el) return;
+function applyDim(dim,v,live,target){   // live=true (spinner step / typing): update geometry + preview but DON'T rebuild the readout - that would kill the field's focus mid-edit
+  const o=target||selObj(); if(!o||!o.el) return;   // target: the Parts table edits a part that is NOT the selection, and must not go through a second code path of its own
   if(dim==="zp"||dim==="z0p") dim=(dim==="zp")?"z":"z0";     // older key spellings, kept so nothing breaks
   if(/^(z|z0|meshdepth|meshbase)$/.test(dim)) v=v*PLATE_MM;  // HEIGHTS ARE TYPED IN PLATES, geometry is stored in mm. This has to happen before any branch reads v - the baked-part branches sit above the old conversion and were silently taking plates as millimetres.
   if(dim==="cone"){ o.el.setAttribute("data-cone",fmtn(Math.max(0,Math.min(80,v)))); if(!live)showDims(o); pvRefresh(); return; }   // circle rim taper -> cone
@@ -4244,10 +4251,45 @@ buildSwatches();
 $("swatches").addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(!b) return;
   if(b.dataset.pick) $("fillPick").click(); else setFill(b.dataset.fill); });   // the wheel opens the OS color picker
 $("fillPick").addEventListener("input",(e)=>setFill(e.target.value));   // live: the shape fills as the picker is dragged
+// Every named part with its Depth and Base in one table. Setting up a relief means giving each part a depth,
+// and doing that through the Selected Object fields costs a click on every part; the whole point is to see
+// the parts against each other while assigning them. Edits go through applyDim - the SAME path the Selected
+// Object fields use - so the plates-to-mm conversion, the live preview and Undo behave identically here.
+function refreshPartsTable(){
+  const panel=$("partspanel"), host=$("partstable");
+  // A NAMED part is the unit here - it is what Mosaic groups, what the paper calls a part, and what the
+  // Selected Object panel announces ("Part: Crown"). A mosaic import always carries one.
+  const parts=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o));
+  if(!mode3D || parts.length<2){ panel.style.display="none"; return; }   // 2 or more, else the Selected Object fields are simpler
+  panel.style.display="block";
+  const R=(o,a)=>+o.el.getAttribute(a)||0;
+  const inp=(o,dim,val)=>'<input class="partin" type="number" step="'+PLATE_UNIT.step+'" data-pid="'+o.id+'" data-dim="'+dim
+    +'" value="'+PLATE_UNIT.f(val)+'" style="width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
+  let h='<table style="border-collapse:collapse;width:100%"><tr style="color:#8a7350;font-size:.85rem">'
+      +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Part</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Base</th></tr>';
+  parts.forEach(o=>{
+    const nm=(o.el.getAttribute("data-name")||"Part").replace(/[<>]/g,"");   // student data: strip angle brackets, say() and this both take HTML
+    const col=fillOf(o)||"#a0a5a9";
+    h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
+      +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm+'</td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z",R(o,"data-z"))+'</td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+inp(o,"z0",R(o,"data-z0"))+'</td></tr>';
+  });
+  host.innerHTML=h+'</table>';
+}
+// live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected
+$("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
+  const o=objects.find(x=>x.id===+i.dataset.pid); if(o) applyDim(i.dataset.dim, +i.value||0, true, o); });
+$("partstable").addEventListener("change",(e)=>{ const i=e.target.closest(".partin"); if(!i) return;
+  const o=objects.find(x=>x.id===+i.dataset.pid); if(o){ applyDim(i.dataset.dim, +i.value||0, true, o); scheduleCommit(); } });
+
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   updateAlign();     // ...and Align, which used to be computed ONLY when its menu opened, so arming the
                      // photo while the menu was showing left the buttons dead (Glen, 2026-07-28)
+  refreshPartsTable();   // BEFORE the early return below - the Parts table is independent of the selection
   updateImageTools();
   markSwatches();    // show which paper color the selection already carries
   const panel=$("editpanel");
