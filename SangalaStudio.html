@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.141 -->
+<!-- SANGALA_VERSION: 2026-07-28.142 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4878,9 +4878,21 @@ window.addEventListener("mouseup",()=>{
     const x0=Math.min(marquee.x0,marquee.x1), y0=Math.min(marquee.y0,marquee.y1), x1=Math.max(marquee.x0,marquee.x1), y1=Math.max(marquee.y0,marquee.y1);
     const isDrag=(x1-x0>1||y1-y0>1); marquee=null;
     if(isDrag){ const ids=[]; objects.forEach(o=>{ const bb=bbox([placePoly(o.poly)]); if(bb[0]>=x0&&bb[1]>=y0&&bb[2]<=x1&&bb[3]<=y1) ids.push(o.id); });
-      selMulti=ids; selId=null; selId2=null; selImg2=false; selNode=null; if(refImg)refImg.sel=false; suppressClick=true;
+      // The photo lives in refImg, OUTSIDE objects, so a sweep never caught it - which is why Align came up
+      // one item short and had to be driven by Shift+click instead (Glen, 2026-07-28: "sweep doesn't capture
+      // both objects, therefore align doesn't work"). Apply the same fully-inside rule to the photo and arm
+      // it. Safe: selImg2 is read in exactly two places - the draw code's orange box and alignItems.
+      // combineOperands does NOT consult it, so arming from a sweep cannot change what Combine does.
+      let gotPhoto=false;
+      if(refImg && refImg.img){
+        const pb=bbox([placePoly([[refImg.x,refImg.y],[refImg.x+refImg.w,refImg.y],
+                                  [refImg.x+refImg.w,refImg.y+refImg.h],[refImg.x,refImg.y+refImg.h]])]);
+        gotPhoto = pb[0]>=x0&&pb[1]>=y0&&pb[2]<=x1&&pb[3]<=y1;
+      }
+      selMulti=ids; selId=null; selId2=null; selImg2=gotPhoto; selNode=null; if(refImg)refImg.sel=false; suppressClick=true;
       draw(); refreshEditPanel();
-      say(ids.length? "Selected "+ids.length+" object"+(ids.length!==1?"s":"")+" - move, delete, or reclassify them together." : "Nothing inside the box."); }
+      const nSel=ids.length+(gotPhoto?1:0);
+      say(nSel? "Selected "+nSel+" object"+(nSel!==1?"s":"")+(gotPhoto?" (the photo included)":"")+" - move, delete, or reclassify them together." : "Nothing inside the box."); }
     else draw();   // a click (no drag) -> let the click handler do single-select/deselect
     return; }
   if(!drag) return;
