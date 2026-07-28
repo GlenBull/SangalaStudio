@@ -31,7 +31,7 @@ REM ==========================================================================
 setlocal
 cd /d "%~dp0"
 
-set "BASE=https://raw.githubusercontent.com/watts-j/SangalaStudio/main"
+set "BASE=https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
 
 set "HTML=SangalaStudio.html"
 set "CS1=DieCutter.cs"
