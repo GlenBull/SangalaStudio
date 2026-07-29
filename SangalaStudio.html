@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.156 -->
+<!-- SANGALA_VERSION: 2026-07-28.157 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -423,6 +423,10 @@ const isGuide   =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="g
 // Stored on the element, so it rides along in the .model with every other attribute and needs no new save code.
 const planeOf   =o=>(o.el&&o.el.getAttribute&&+o.el.getAttribute("data-plane"))||1;
 const isHidden  =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-hidden")==="1";   // hidden with its plane: absent from the 3D preview, still in the file
+// Which planes are folded shut in the Parts list. Deliberately NOT stored on the elements: folding is a view
+// state, and putting it in the document would push it into the .model and onto the Undo stack, so folding a
+// plane would count as an edit. It therefore does not survive a reload, which is the right trade.
+const collapsedPlanes=new Set();
 // Everything the Parts table governs. Named OR NOT: an unnamed mass used to be invisible here, so it could be
 // SEEN in the 3D view but never assigned a plane, a depth or a name - Glen found one stranded in the frame.
 // Named parts group into one row; an unnamed one gets a row of its own until it is given a name.
@@ -4335,16 +4339,25 @@ function refreshPartsTable(){
   // A plane's Depth reads back as its members' depth when they agree and BLANK when they do not, so an
   // inherited mixture is visible rather than silently overwritten the moment the field is touched.
   const ids=[...new Set(parts.map(planeOf))].sort((a,b)=>a-b);
+  [...collapsedPlanes].forEach(p=>{ if(ids.indexOf(p)<0) collapsedPlanes.delete(p); });   // a plane emptied of parts is gone; do not have it come back collapsed
   ids.forEach(pid=>{
     const pmem=parts.filter(o=>planeOf(o)===pid);
+    const shut=collapsedPlanes.has(pid);
     const ds=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z")||0))];
     const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";
     const shown=pmem.some(o=>!isHidden(o));
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
-    h+='<tr style="background:#efe3cc">'
+    // a rule above each plane, so two folded planes in a row read as two blocks and not one
+    h+='<tr style="background:#efe3cc;border-top:1px solid #dcc9a4">'
       +'<td colspan="2" style="padding:.15rem .2rem">'
       +'<div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
+      // the disclosure triangle folds the plane's parts away, as a layer folds in Illustrator. It is a VIEW
+      // control only - a folded plane is still in the 3D view and the STL. Hiding is the checkbox beside it.
+      +'<a href="#" class="planetog" data-plane="'+pid+'" title="'
+      +(shut?"Expand - show the parts in this plane":"Collapse - fold this plane's parts out of the list")
+      +'" style="flex:0 0 auto;color:#8a7350;text-decoration:none;font-size:.8rem;width:.7rem;text-align:center">'
+      +(shut?"&#9656;":"&#9662;")+'</a>'
       +'<input class="planeshow" type="checkbox" data-plane="'+pid+'"'+(shown?" checked":"")
       +' title="Show this plane in the 3D view and the STL" style="flex:0 0 auto;width:auto;margin:0">'
       +(nm?'<span style="flex:0 0 auto;color:#8a7350">'+pid+'</span>':'')
@@ -4358,7 +4371,7 @@ function refreshPartsTable(){
       +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
       +'<td colspan="2"></td></tr>';
     // a name whose members straddle planes is listed once, under the first member's plane; its Plane cell reads mixed
-    partGroups.forEach((mem,gi)=>{ if(planeOf(mem[0])===pid) h+=rowFor(mem,gi); });
+    if(!shut) partGroups.forEach((mem,gi)=>{ if(planeOf(mem[0])===pid) h+=rowFor(mem,gi); });
   });
   host.innerHTML=h+'</table>';
 }
@@ -4428,7 +4441,13 @@ $("partstable").addEventListener("change",(e)=>{
   const c=e.target.closest(".partstud");
   if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; }
   });
-$("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studsAll"); if(!a) return;
+$("partstable").addEventListener("click",(e)=>{
+  const t=e.target.closest(".planetog");
+  if(t){ e.preventDefault(); const pid=+t.dataset.plane;
+    if(collapsedPlanes.has(pid)) collapsedPlanes.delete(pid); else collapsedPlanes.add(pid);
+    refreshPartsTable();   // no scheduleCommit: folding the list is not an edit to the design
+    return; }
+  const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
   tableParts().forEach(o=>applyDimFlag("studs", on, o));
