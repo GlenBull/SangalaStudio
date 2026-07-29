@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.163 -->
+<!-- SANGALA_VERSION: 2026-07-29.164 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -295,6 +295,21 @@
       <div class="hint" style="display:flex;justify-content:space-between;margin-top:.1rem"><span>keep all</span><span id="pomVal"></span><span>drop more</span></div>
       <button id="bUseCut" class="ebtn" style="width:100%;margin-top:.7rem;display:none">✅ Confirm — remove the background</button>
     </div>
+    <!-- Every named part with its Depth and Base in one table, so a relief is set up in one pass instead of
+         clicking each part in turn. Independent of the selection, so it stays put while parts are edited.
+         It sits ABOVE Selected Object deliberately: that readout appears for a shape and vanishes for a
+         plane, and with it below the list the list stopped moving. Clicking between a part and a plane used
+         to shift this table 428px down the panel and back. -->
+    <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
+      <h2 class="marker" style="margin-top:0">Parts</h2>
+      <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
+      <!-- Planes head the list and their parts sit under them: set a depth once and every part in the plane
+           follows; clear a plane's checkbox to take it out of the 3D view while you judge the rest. -->
+      <!-- On the SAME card as the Selected Object readout below it (#editdims): a field is #fffaf0, and on a
+           #fffaf0 card only its border shows, which is the quiet look. Straight on the panel the identical
+           field reads as a white box punched into the tan. -->
+      <div id="partstable" style="margin-top:.5rem;padding:.4rem .45rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
+    </div>
     <div id="editpanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Selected Object</h2>
       <div id="editinfo" class="hint" style="margin-top:0">Click an object in the preview to select it.</div>
@@ -334,21 +349,6 @@
       </div>
       <div id="editdims" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
       <div id="brickctl" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
-    </div>
-    <!-- Every named part with its Depth and Base in one table, so a relief is set up in one pass instead of
-         clicking each part in turn. Independent of the selection, so it stays put while parts are edited.
-         It sits ABOVE Selected Object deliberately: that readout appears for a shape and vanishes for a
-         plane, and with it below the list the list stopped moving. Clicking between a part and a plane used
-         to shift this table 428px down the panel and back. -->
-    <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
-      <h2 class="marker" style="margin-top:0">Parts</h2>
-      <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
-      <!-- Planes head the list and their parts sit under them: set a depth once and every part in the plane
-           follows; clear a plane's checkbox to take it out of the 3D view while you judge the rest. -->
-      <!-- On the SAME card as the Selected Object readout above (#editdims): a field is #fffaf0, and on a
-           #fffaf0 card only its border shows, which is the quiet look. Straight on the panel the identical
-           field reads as a white box punched into the tan. -->
-      <div id="partstable" style="margin-top:.5rem;padding:.4rem .45rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
     </div>
     <div id="zoomctl">
       <button id="zoomOut" title="Zoom out">&minus;</button>
