@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.151 -->
+<!-- SANGALA_VERSION: 2026-07-28.152 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4274,12 +4274,12 @@ function refreshPartsTable(){
   if(!mode3D || parts.length<2){ panel.style.display="none"; return; }   // 2 or more, else the Selected Object fields are simpler
   panel.style.display="block";
   const R=(o,a)=>+o.el.getAttribute(a)||0;
-  const inp=(o,dim,val)=>'<input class="partin" type="number" step="'+PLATE_UNIT.step+'" data-pid="'+o.id+'" data-dim="'+dim
-    +'" value="'+PLATE_UNIT.f(val)+'" style="width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
   // Studs read more strongly than a one-plate step, so a shallow relief is easier to judge with them off.
   // The header cell toggles every part at once - the usual want is "show me the massing", not one part.
   const allOn=parts.every(o=>o.el.getAttribute("data-studs")==="1");
-  let h='<table style="border-collapse:collapse;width:100%"><tr style="color:#8a7350;font-size:.85rem">'
+  let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>'
+      +'<col style="width:40%"><col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:11%"></colgroup>'
+      +'<tr style="color:#8a7350;font-size:.85rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Part</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
@@ -4304,18 +4304,18 @@ function refreshPartsTable(){
     const nm=(mem[0].el.getAttribute("data-name")||"");
     const col=fillOf(mem[0])||"#a0a5a9";
     const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
-    const num=(cls,val,ph,w)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
-      +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:'+w+';text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
-    h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
-      +col+';vertical-align:-1px;margin-right:.35rem"></span>'
+    const num=(cls,val,ph)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
+      +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
+    h+='<tr><td style="padding:.12rem .2rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
+      +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
       +'<input class="partname" type="text" data-gid="'+gi+'" value="'+nm.replace(/"/g,"&quot;")+'" placeholder="unnamed"'
       +' title="Type a name to group this part. Give it the SAME name as another part and the two become one row."'
-      +' style="width:7.2rem;font-size:.9rem;padding:.1rem .25rem">'
-      +(mem.length>1?' <span style="color:#8a7350">('+mem.length+')</span>':'')+'</td>'
+      +' style="flex:1 1 auto;min-width:0;font-size:.9rem;padding:.1rem .25rem">'
+      +(mem.length>1?'<span style="flex:0 0 auto;color:#8a7350">('+mem.length+')</span>':'')+'</div></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
-      +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:2.4rem;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
-      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz", gz===undefined?null:PLATE_UNIT.f(+gz||0), "mixed", "3.1rem")+'</td>'
-      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed", "3.1rem")+'</td>'
+      +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz", gz===undefined?null:PLATE_UNIT.f(+gz||0), "mixed")+'</td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed")+'</td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-gid="'+gi+'"'
       +(gst==="1"?" checked":"")+(gst===undefined?' data-mixed="1"':'')+' style="width:auto;margin:0"></td></tr>';
   });
@@ -4329,7 +4329,9 @@ function refreshPlanesTable(parts){
   const host=$("planestable");
   const ids=[...new Set(parts.map(planeOf))].sort((a,b)=>a-b);
   if(ids.length<1){ host.innerHTML=""; return; }
-  let h='<table style="border-collapse:collapse;width:100%;margin-bottom:.35rem"><tr style="color:#8a7350;font-size:.85rem">'
+  let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:.35rem"><colgroup>'
+      +'<col style="width:55%"><col style="width:28%"><col style="width:17%"></colgroup>'
+      +'<tr style="color:#8a7350;font-size:.85rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Plane</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem">Show</th></tr>';
@@ -4340,7 +4342,7 @@ function refreshPlanesTable(parts){
     const shown=mem.some(o=>!isHidden(o));
     h+='<tr><td style="padding:.12rem .2rem">Plane '+pid+' <span style="color:#8a7350">('+mem.length+')</span></td>'
       +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
-      +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" style="width:3.1rem;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="planeshow" type="checkbox" data-plane="'+pid+'"'
       +(shown?" checked":"")+' style="width:auto;margin:0"></td></tr>';
   });
