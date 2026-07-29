@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.154 -->
+<!-- SANGALA_VERSION: 2026-07-28.155 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -332,9 +332,8 @@
     <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Parts</h2>
       <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
-      <!-- Planes: parts that share a depth. Set the depth once and every part in the plane follows; hide a
-           plane to take it out of the 3D view while you judge the rest. -->
-      <div id="planestable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
+      <!-- Planes head the list and their parts sit under them: set a depth once and every part in the plane
+           follows; clear a plane's checkbox to take it out of the 3D view while you judge the rest. -->
       <div id="partstable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
     </div>
     <div id="zoomctl">
@@ -4307,13 +4306,13 @@ function refreshPartsTable(){
   // undefined = the members DISAGREE (show blank); null = they agree the attribute is unset (show its default).
   // Returning null for both made an unset Plane read as "mixed" when every member simply had no plane yet.
   const same=(mem,a)=>{ const v=[...new Set(mem.map(o=>o.el.getAttribute(a)))]; return v.length===1?v[0]:undefined; };
-  [...byName.entries()].forEach(([k,mem],gi)=>{
+  const rowFor=(mem,gi)=>{
     const nm=(mem[0].el.getAttribute("data-name")||"");
     const col=fillOf(mem[0])||"#a0a5a9";
     const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
     const num=(cls,val,ph)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
-    h+='<tr><td style="padding:.12rem .2rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
+    return '<tr><td style="padding:.12rem .2rem .12rem .9rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
       +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
       +'<input class="partname" type="text" data-gid="'+gi+'" value="'+nm.replace(/"/g,"&quot;")+'" placeholder="unnamed"'
       +' title="Type a name to group this part. Give it the SAME name as another part and the two become one row."'
@@ -4325,40 +4324,36 @@ function refreshPartsTable(){
       +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed")+'</td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-gid="'+gi+'"'
       +(gst==="1"?" checked":"")+(gst===undefined?' data-mixed="1"':'')+' style="width:auto;margin:0"></td></tr>';
-  });
-  host.innerHTML=h+'</table>';
-  refreshPlanesTable(parts);
-}
-// One row per plane in use: its Depth (applied to every member) and whether it is shown. A plane's Depth
-// reads back as its members' depth when they agree, and blank when they do not - so an inherited mixture is
-// visible rather than silently overwritten the moment the field is touched.
-function refreshPlanesTable(parts){
-  const host=$("planestable");
+  };
+  // Parts sit UNDER their plane. A plane heads its own block - Show, its name (double-click to rename), and
+  // the Depth every member takes - and its parts follow, indented. Which parts share a plane was previously
+  // read by scanning a column of numbers against a separate table above; now it is the shape of the list.
+  // A plane's Depth reads back as its members' depth when they agree and BLANK when they do not, so an
+  // inherited mixture is visible rather than silently overwritten the moment the field is touched.
   const ids=[...new Set(parts.map(planeOf))].sort((a,b)=>a-b);
-  if(ids.length<1){ host.innerHTML=""; return; }
-  let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:.35rem"><colgroup>'
-      +'<col style="width:55%"><col style="width:28%"><col style="width:17%"></colgroup>'
-      +'<tr style="color:#8a7350;font-size:.85rem">'
-      +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Plane</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
-      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem">Show</th></tr>';
   ids.forEach(pid=>{
-    const mem=parts.filter(o=>planeOf(o)===pid);
-    const ds=[...new Set(mem.map(o=>+o.el.getAttribute("data-z")||0))];
-    const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";              // blank = the members disagree
-    const shown=mem.some(o=>!isHidden(o));
-    const nm=nameOfMembers(mem);
-    // Double-click the name to rename, the same gesture Mosaic uses on a part. The plane NUMBER stays
-    // visible in front of a name, because the Plane column in the parts table below assigns by number.
-    h+='<tr><td style="padding:.12rem .2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
-      +(nm?'<span style="color:#8a7350">'+pid+'</span> ':'')
+    const pmem=parts.filter(o=>planeOf(o)===pid);
+    const ds=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z")||0))];
+    const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";
+    const shown=pmem.some(o=>!isHidden(o));
+    const nm=nameOfMembers(pmem);
+    // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
+    h+='<tr style="background:#efe3cc">'
+      +'<td colspan="2" style="padding:.15rem .2rem">'
+      +'<div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
+      +'<input class="planeshow" type="checkbox" data-plane="'+pid+'"'+(shown?" checked":"")
+      +' title="Show this plane in the 3D view and the STL" style="flex:0 0 auto;width:auto;margin:0">'
+      +(nm?'<span style="flex:0 0 auto;color:#8a7350">'+pid+'</span>':'')
       +'<span class="planename" data-plane="'+pid+'" title="Double-click to rename this plane"'
-      +' style="cursor:text;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
-      +' <span style="color:#8a7350">('+mem.length+')</span></td>'
+      +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
+      +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
+      +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span></div></td>'
       +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
-      +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
-      +'<td style="text-align:center;padding:.12rem .2rem"><input class="planeshow" type="checkbox" data-plane="'+pid+'"'
-      +(shown?" checked":"")+' style="width:auto;margin:0"></td></tr>';
+      +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" title="Depth for every part in this plane"'
+      +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      +'<td colspan="2"></td></tr>';
+    // a name whose members straddle planes is listed once, under the first member's plane; its Plane cell reads mixed
+    partGroups.forEach((mem,gi)=>{ if(planeOf(mem[0])===pid) h+=rowFor(mem,gi); });
   });
   host.innerHTML=h+'</table>';
 }
@@ -4370,7 +4365,7 @@ const escText     =s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").repla
 const nameOfMembers=mem=>{ for(const o of mem){ const n=o.el.getAttribute("data-plane-name"); if(n) return n; } return ""; };
 const planeNameOf =pid=>nameOfMembers(planeMembers(pid));
 const planeLabel  =pid=>planeNameOf(pid)||("Plane "+pid);
-$("planestable").addEventListener("dblclick",(e)=>{ const sp=e.target.closest(".planename"); if(!sp) return;
+$("partstable").addEventListener("dblclick",(e)=>{ const sp=e.target.closest(".planename"); if(!sp) return;
   e.preventDefault(); const pid=+sp.dataset.plane, mem=planeMembers(pid);
   const v=prompt("Name this plane (frame, background, near side …)", planeNameOf(pid));
   if(v==null) return;                                            // Cancel leaves the name alone; an empty box clears it
@@ -4378,9 +4373,9 @@ $("planestable").addEventListener("dblclick",(e)=>{ const sp=e.target.closest(".
   mem.forEach(o=>{ if(n) o.el.setAttribute("data-plane-name", n); else o.el.removeAttribute("data-plane-name"); });
   scheduleCommit(); refreshPartsTable();
   say(n ? "Plane "+pid+" is now "+n+"." : "Plane "+pid+" name cleared."); });
-$("planestable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
+$("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
   planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
-$("planestable").addEventListener("change",(e)=>{
+$("partstable").addEventListener("change",(e)=>{
   const d=e.target.closest(".planedepth");
   if(d && d.value!==""){ planeMembers(+d.dataset.plane).forEach(o=>applyDim("z", +d.value||0, true, o));
     scheduleCommit(); refreshPartsTable(); return; }
