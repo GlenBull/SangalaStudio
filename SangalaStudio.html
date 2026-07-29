@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.168 -->
+<!-- SANGALA_VERSION: 2026-07-29.169 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2247,7 +2247,20 @@ function barTris(o){
   }
   return t;
 }
-function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
+// ---- Mirror: a plane can be reflected through the backdrop plane (z=0), which turns a relief into a figure
+// in the round - the same silhouette carried through to a matching back instead of stopping flat. Held per
+// plane in data-plane-mirror, like the studs override, so a design can be part relief and part solid.
+// Reflecting the FINISHED triangle list (rather than extruding through z=0) is what makes it work for every
+// kind of body alike - a sloped roof, a cone, a brick, a baked Combine mesh - each half keeping its own
+// slope instead of one ramp stretched over the doubled height. The two halves meet exactly at z=0; slicers
+// union solids that touch, so that face is not a seam in the print.
+const isMirrored=o=>o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-mirror")==="1";
+const reflectZ=tris=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],-p[2]]));   // reversed winding, so normals still point outward
+function bodyTris(o,fuse){
+  const t=bodyTrisOne(o,fuse);
+  return isMirrored(o) ? t.concat(reflectZ(t)) : t;
+}
+function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
   if(o.mesh) return o.mesh;                                    // a baked 3D part (result of a 3D Combine) - render its mesh as-is
   if(o.el.getAttribute("data-bar")==="1") return barTris(o);   // a line extruded as a rod / stick (3D-only; combine with parts to bore or add)
@@ -2312,7 +2325,7 @@ function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[
 // recomputes and only an EDITED bundle rebuilds; the CSG runs on the fast weld-only path (see cleanMesh).
 let _grpPrev=new Map();   // outermost group id -> {stamp, outs:[mesh,...]}
 function grpStamp(members){ return members.map(o=>{ const e=o.el;
-    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-plane-studs","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
+    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-plane-studs","data-plane-mirror","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
@@ -3601,7 +3614,7 @@ function placeBrick(e){
 // hidden state (a hidden part would quietly come back into the 3D view and the STL). Same drift, same cure as
 // the parts table's tableParts(): keep the list in one place.
 const KEEP_ATTRS=["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role",
-  "data-mosaic","data-name","data-plane","data-plane-name","data-plane-studs","data-hidden","data-slopes","data-cone","data-slope-inv",
+  "data-mosaic","data-name","data-plane","data-plane-name","data-plane-studs","data-plane-mirror","data-hidden","data-slopes","data-cone","data-slope-inv",
   "data-slope-run","data-slope-dir"];   // extrude Depth/Base, per-side Slope, LEGO connectors, paper color, part name, plane
 function ensurePolygon(o){
   const t=o.el.tagName.toLowerCase();
@@ -4485,6 +4498,7 @@ function refreshPartsTable(){
     const bs=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z0")||0))];
     const bval=bs.length===1?PLATE_UNIT.f(bs[0]):"";   // blank when the members disagree, same rule as Depth
     const shown=pmem.some(o=>!isHidden(o));
+    const mir=pmem.some(isMirrored);
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
     // a rule above each plane, so two folded planes in a row read as two blocks and not one
@@ -4510,7 +4524,16 @@ function refreshPartsTable(){
       +escAttr((nm?nm+" - ":"")+"double-click to rename this plane")+'"'
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
       +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
-      +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span></div></td>'
+      +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span>'
+      // Mirror: reflect this plane through the backdrop so it reads in the round. Sits with the plane's own
+      // name rather than in a column, because there is no column free and it belongs to the whole plane.
+      +'<a href="#" class="planemirror" data-plane="'+pid+'" data-on="'+(mir?1:0)+'" title="'
+      +(mir?"Mirrored: this plane has a matching back. Click to make it a relief again."
+           :"Mirror this plane through the backdrop, so the figure has a matching back instead of stopping flat.")
+      +'" style="flex:0 0 auto;margin-left:.15rem;text-decoration:none;font-size:.8rem;line-height:1;'
+      +'padding:0 .15rem;border:1px solid '+(mir?"#1a5fb4":"transparent")+';border-radius:3px;'
+      +'background:'+(mir?"#1a5fb4":"transparent")+';color:'+(mir?"#fff":"#a8977a")+'">&#8645;</a>'
+      +'</div></td>'
       // Depth and Base for the whole plane, in the same columns the parts use. Base is what lifts a plane
       // clear of the one behind it - the relief step itself - so setting it per plane is the point.
       +'<td style="text-align:right;padding:.12rem .2rem">'+planeNum("planedepth",pid,val,"Depth for every part in this plane")+'</td>'
@@ -4606,10 +4629,11 @@ $("partstable").addEventListener("change",(e)=>{
   if(p){ if(p.value==="") return;
     const v=String(Math.max(1, Math.round(+p.value||1)));
     const tgt=planeMembers(+v);   // read BEFORE the move: a part takes on the name AND the studs override of the plane it joins, and drops the old ones
-    const pnm=nameOfMembers(tgt), pov=studOvOf(tgt);
+    const pnm=nameOfMembers(tgt), pov=studOvOf(tgt), pmir=tgt.some(isMirrored);
     gidMembers(p).forEach(o=>{ o.el.setAttribute("data-plane", v);
       if(pnm) o.el.setAttribute("data-plane-name", pnm); else o.el.removeAttribute("data-plane-name");
       if(pov) o.el.setAttribute("data-plane-studs", pov); else o.el.removeAttribute("data-plane-studs");
+      if(pmir) o.el.setAttribute("data-plane-mirror","1"); else o.el.removeAttribute("data-plane-mirror");
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
@@ -4626,6 +4650,14 @@ $("partstable").addEventListener("click",(e)=>{
   if(t){ e.preventDefault(); const pid=+t.dataset.plane;
     if(collapsedPlanes.has(pid)) collapsedPlanes.delete(pid); else collapsedPlanes.add(pid);
     refreshPartsTable();   // no scheduleCommit: folding the list is not an edit to the design
+    return; }
+  const mb=e.target.closest(".planemirror");
+  if(mb){ e.preventDefault(); const pid=+mb.dataset.plane, mem=planeMembers(pid), lbl=planeLabel(pid);
+    const on = mb.dataset.on!=="1";
+    mem.forEach(o=>{ if(on) o.el.setAttribute("data-plane-mirror","1"); else o.el.removeAttribute("data-plane-mirror"); });
+    scheduleCommit(); refreshPartsTable(); draw(); pvRefresh();
+    say(on ? lbl+" mirrored - it now has a matching back, so it reads in the round rather than as a relief."
+           : lbl+" is a relief again - front only.");
     return; }
   const sb=e.target.closest(".planestud");
   if(sb){ e.preventDefault(); const pid=+sb.dataset.plane, mem=planeMembers(pid), lbl=planeLabel(pid);
