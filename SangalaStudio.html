@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.166 -->
+<!-- SANGALA_VERSION: 2026-07-29.167 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4479,6 +4479,8 @@ function refreshPartsTable(){
     const shut=collapsedPlanes.has(pid);
     const ds=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z")||0))];
     const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";
+    const bs=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z0")||0))];
+    const bval=bs.length===1?PLATE_UNIT.f(bs[0]):"";   // blank when the members disagree, same rule as Depth
     const shown=pmem.some(o=>!isHidden(o));
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
@@ -4506,10 +4508,10 @@ function refreshPartsTable(){
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
       +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
       +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span></div></td>'
-      +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
-      +'" data-plane="'+pid+'" value="'+val+'" placeholder="'+MIXED_PH+'" title="'+(val===""?MIXED_TIP:"Depth for every part in this plane")+'"'
-      +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
-      +'<td></td>'
+      // Depth and Base for the whole plane, in the same columns the parts use. Base is what lifts a plane
+      // clear of the one behind it - the relief step itself - so setting it per plane is the point.
+      +'<td style="text-align:right;padding:.12rem .2rem">'+planeNum("planedepth",pid,val,"Depth for every part in this plane")+'</td>'
+      +'<td style="text-align:right;padding:.12rem .2rem">'+planeNum("planebase",pid,bval,"Base for every part in this plane - how far it stands off the backdrop")+'</td>'
       // Studs for the whole plane, in three states. Checked and x OVERRIDE the parts; blank hands the
       // decision back to each part, whose own setting was never touched. Drawn rather than a checkbox,
       // because a checkbox has no third face and the browser's indeterminate dash reads as "mixed".
@@ -4528,6 +4530,11 @@ const escAttr     =s=>escText(s).replace(/"/g,"&quot;");   // a name types strai
 // The plane's studs override, and the three-state box that shows it. Filled tick = every part shows studs,
 // cross = none do, empty = the parts decide for themselves. Clicking cycles blank -> on -> off -> blank.
 const studOvOf=mem=>{ for(const o of mem){ const v=o.el.getAttribute("data-plane-studs"); if(v) return v; } return null; };
+// A plane's own number field - Depth or Base. Blank means its parts disagree, and the tooltip says so
+// rather than the field pretending they share a value.
+const planeNum=(cls,pid,val,tip)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step
+  +'" data-plane="'+pid+'" value="'+val+'" placeholder="'+MIXED_PH+'" title="'+escAttr(val===""?MIXED_TIP:tip)+'"'
+  +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
 function studBox(pid,ov){
   const f = ov==="1" ? {bd:"#1a5fb4",bg:"#1a5fb4",fg:"#fff",ch:"&#10003;",
               tip:"Studs shown on every part in this plane. Click to hide them on all of them."}
@@ -4566,11 +4573,15 @@ $("partstable").addEventListener("dblclick",(e)=>{
   say(!n ? "Name cleared - the part stands on its own."
          : joined ? 'Joined "'+n.replace(/[<>]/g,"")+'" - they now take a depth together.'
                   : 'Named "'+n.replace(/[<>]/g,"")+'".'); });
-$("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
-  planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
+// Depth and Base take the same path - applyDim, the one the Selected Object fields use - so the plates
+// conversion, the live preview and Undo behave identically whether a value is set here or one part at a time.
+const planeDim=el=>{ const cls=el.className, dim = cls.indexOf("planebase")>=0 ? "z0" : "z";
+  planeMembers(+el.dataset.plane).forEach(o=>applyDim(dim, +el.value||0, true, o)); };
+$("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth,.planebase");
+  if(!i||i.value==="") return; planeDim(i); });
 $("partstable").addEventListener("change",(e)=>{
-  const d=e.target.closest(".planedepth");
-  if(d && d.value!==""){ planeMembers(+d.dataset.plane).forEach(o=>applyDim("z", +d.value||0, true, o));
+  const d=e.target.closest(".planedepth,.planebase");
+  if(d && d.value!==""){ planeDim(d);
     scheduleCommit(); refreshPartsTable(); return; }
   const s=e.target.closest(".planeshow"); if(!s) return;
   const mem=planeMembers(+s.dataset.plane), lbl=planeLabel(+s.dataset.plane);
