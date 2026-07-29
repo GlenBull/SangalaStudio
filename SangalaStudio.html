@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.169 -->
+<!-- SANGALA_VERSION: 2026-07-29.170 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2255,10 +2255,17 @@ function barTris(o){
 // slope instead of one ramp stretched over the doubled height. The two halves meet exactly at z=0; slicers
 // union solids that touch, so that face is not a seam in the print.
 const isMirrored=o=>o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-mirror")==="1";
-const reflectZ=tris=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],-p[2]]));   // reversed winding, so normals still point outward
+// Reflected about the plane z=k, with the winding reversed so normals still point outward.
+const reflectZ=(tris,k)=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],2*k-p[2]]));
 function bodyTris(o,fuse){
   const t=bodyTrisOne(o,fuse);
-  return isMirrored(o) ? t.concat(reflectZ(t)) : t;
+  if(!isMirrored(o) || !t.length) return t;
+  // Reflect about the body's OWN lowest point, not about z=0. A part standing on the backdrop is unaffected
+  // - its lowest point IS z=0 - but a RAISED part reflected through z=0 would leave its two halves hanging
+  // either side of the gap it stands off by. About its own base the halves always meet, so a mirrored part
+  // is one solid whatever its Base.
+  let lo=Infinity; for(const tr of t) for(const p of tr) if(p[2]<lo) lo=p[2];
+  return t.concat(reflectZ(t,lo));
 }
 function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
@@ -2376,8 +2383,22 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   });
   const list=[], lcols=[];
   parts.forEach((p,i)=>{ if(p.length){ list.push(p); lcols.push(pcols[i]); } });
-  return {tris:[].concat.apply([],list), n:all.length, bricks:bricks.length, parts:list, cols:lcols,
-          guides:guideTris, nGuide:guideObjs.length};
+  // Nothing may sit below the build plate: the printer has no z under 0, and a mirrored plane reaches behind
+  // the backdrop by design. So the whole build is raised to rest ON the plate - every piece by the SAME
+  // amount, or the parts would shift relative to each other. A design that already sits at or above 0 is
+  // untouched (the lift is 0), so this only ever moves what mirroring pushed under.
+  let lo=Infinity;
+  for(const p of list) for(const t of p) for(const v of t) if(v[2]<lo) lo=v[2];
+  for(const t of guideTris) for(const v of t) if(v[2]<lo) lo=v[2];
+  let out=list, gout=guideTris;
+  if(isFinite(lo) && lo<0){ const up=-lo;
+    // COPIED, never shifted in place: a grouped bundle's mesh is held in _grpPrev between renders, and
+    // raising the cached triangles themselves would lift it again on every redraw.
+    const raise=tris=>tris.map(t=>t.map(v=>[v[0],v[1],v[2]+up]));
+    out=list.map(raise); gout=raise(guideTris);
+  }
+  return {tris:[].concat.apply([],out), n:all.length, bricks:bricks.length, parts:out, cols:lcols,
+          guides:gout, nGuide:guideObjs.length};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -4466,7 +4487,7 @@ function refreshPartsTable(){
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
       +'cursor:text;border-bottom:1px dotted #c9b48c'+(nm?'':';font-style:italic;color:#8a7350')+'">'
       +escText(nm||"unnamed")+'</span>'
-      +(mem.length>1?'<span style="flex:0 0 auto;color:#8a7350">('+mem.length+')</span>':'')+'</div></td>'
++'</div></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
       // .1rem sides, not .2rem: a number input reserves room for its spinner, and at this column width the
       // wider padding left 28px of content box for a 30px digit - the box fitted, the number inside did not
@@ -4524,7 +4545,6 @@ function refreshPartsTable(){
       +escAttr((nm?nm+" - ":"")+"double-click to rename this plane")+'"'
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
       +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
-      +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span>'
       // Mirror: reflect this plane through the backdrop so it reads in the round. Sits with the plane's own
       // name rather than in a column, because there is no column free and it belongs to the whole plane.
       +'<a href="#" class="planemirror" data-plane="'+pid+'" data-on="'+(mir?1:0)+'" title="'
