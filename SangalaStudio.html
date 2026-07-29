@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.171 -->
+<!-- SANGALA_VERSION: 2026-07-29.172 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4550,16 +4550,16 @@ function refreshPartsTable(){
       +'<a href="#" class="planemirror" data-plane="'+pid+'" data-on="'+(mir?1:0)+'" title="'
       +(mir?"Mirrored: this plane has a matching back. Click to make it a relief again."
            :"Mirror this plane through the backdrop, so the figure has a matching back instead of stopping flat.")
-      // Drawn, not a glyph: the up-down arrow (U+21C5) reads as "move this plane up or down", which is a
-      // different idea entirely. A stepped relief profile above a dashed line, repeated as a ghost below it,
-      // says reflection - and the steps are what a relief actually looks like from the side.
+      // The SAME icon the Mirror tool carries in the toolbar (Glen, 2026-07-29) - two arrows away from a
+      // dashed line. One mark for one idea, wherever it appears; the tooltips say which axis each mirrors.
+      // Drawn in currentColor rather than the toolbar's fixed brown, so it can go white when lit.
       +'" style="flex:0 0 auto;margin-left:.2rem;display:inline-flex;align-items:center;text-decoration:none;'
       +'padding:.1rem .15rem;border:1px solid '+(mir?"#1a5fb4":"transparent")+';border-radius:3px;'
       +'background:'+(mir?"#1a5fb4":"transparent")+';color:'+(mir?"#fff":"#a8977a")+'">'
-      +'<svg width="15" height="13" viewBox="0 0 15 13" style="display:block" aria-hidden="true">'
-      +'<path d="M2.5 6.5 H12.5" stroke="currentColor" stroke-width="1" stroke-dasharray="2 1.5"/>'
-      +'<path d="M3 5.5 V3.5 H6.5 V1.5 H10 V5.5 Z" fill="currentColor"/>'
-      +'<path d="M3 7.5 V9.5 H6.5 V11.5 H10 V7.5 Z" fill="currentColor" opacity=".45"/></svg></a>'
+      +'<svg width="15" height="15" viewBox="0 0 24 24" style="display:block" aria-hidden="true">'
+      +'<line x1="12" y1="2.5" x2="12" y2="21.5" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/>'
+      +'<path d="M9.5 6 L4 9.5 L9.5 13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<path d="M14.5 6 L20 9.5 L14.5 13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/></svg></a>'
       +'</div></td>'
       // Depth and Base for the whole plane, in the same columns the parts use. Base is what lifts a plane
       // clear of the one behind it - the relief step itself - so setting it per plane is the point.
