@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.159 -->
+<!-- SANGALA_VERSION: 2026-07-29.160 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -39,7 +39,10 @@
   .spacer{flex:1}
   .conn{color:#5a4a34;font-size:.85rem;font-weight:700;margin:.1rem 0 .4rem}
 
-  .stage{display:grid;grid-template-columns:auto 1fr 300px;gap:.7rem;padding:.7rem}
+  /* the right column was 300px, sized before the Parts table existed. The table has five columns and a
+     nested indent to fit, and the board beside it has room to spare - so widen the column rather than
+     squeeze the table into it. The mat keeps scaling to whatever the middle column is left with. */
+  .stage{display:grid;grid-template-columns:auto 1fr 380px;gap:.7rem;padding:.7rem}
   .ltools{display:flex;flex-direction:column;gap:.4rem;align-self:start}
   .ltitle{font-size:.8rem;color:#eaf1f8;text-align:center;margin:.1rem 0 .1rem}
   .ltbtn{width:52px;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;
@@ -3860,17 +3863,28 @@ function selObj(){ return selId==null?null:objects.find(o=>o.id===selId); }
 // Returns HTML; "" hides the box.
 const flag=(key,lab,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:.7rem">'
   +'<input type="checkbox" data-dimflag="'+key+'" '+(on?"checked":"")+' style="width:auto;margin:0"> '+lab+'</label>';
+// The readout is a fixed-layout table that always fills its card. It used to be sized by its contents, so
+// "Width: 40 mm  Height: 32 mm" was a few pixels wider than the card and the second unit spilled over the
+// rounded border - worse with "plates", which is wider than "mm". Fixed columns cannot overflow: a long
+// label or unit ellipses inside its own cell instead of pushing the row past the card edge.
+const DIM_TABLE='<table style="border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>'
+  // label / field / unit, twice, with a hair of gutter between the pairs. The unit columns are wide enough
+  // for "plates" - the longest one - so it is never shortened to "plat...", and the labels for "Diameter:".
+  +'<col style="width:20%"><col style="width:15%"><col style="width:14%"><col style="width:2%">'
+  +'<col style="width:20%"><col style="width:15%"><col style="width:14%"></colgroup>';
+const DIM_CLIP=';overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+const DIM_FIELD='width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem';
 function dimText(o){
   if(!o||!o.el) return "";
   if(o.mesh){   // a baked 3D part: only its z is adjustable (thickness + elevation); footprint x/y is baked. No blurb - just the Depth/Base fields in 3D, nothing in 2D
     if(!mode3D) return "";
     let lo=Infinity, hi=-Infinity; o.mesh.forEach(t=>t.forEach(p=>{ if(p[2]<lo)lo=p[2]; if(p[2]>hi)hi=p[2]; }));
     const b=isFinite(lo)?lo:0, d=isFinite(hi)?hi-b:0;
-    const fld=(lab,key,val)=>'<td style="text-align:left">'+lab+':</td>'
-      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+PLATE_UNIT.step+'" data-dim="'+key+'" value="'+PLATE_UNIT.f(val)+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">'+PLATE_UNIT.lab+'</td>';
-    return '<table style="border-collapse:collapse"><tr>'
-      +fld("Depth","meshdepth",d)+'<td style="width:1.2rem"></td>'+fld("Base","meshbase",b)+'</tr></table>';
+    const fld=(lab,key,val)=>'<td style="text-align:left'+DIM_CLIP+'">'+lab+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+PLATE_UNIT.step+'" data-dim="'+key+'" value="'+PLATE_UNIT.f(val)+'" style="'+DIM_FIELD+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350'+DIM_CLIP+'">'+PLATE_UNIT.lab+'</td>';
+    return DIM_TABLE+'<tr>'
+      +fld("Depth","meshdepth",d)+'<td></td>'+fld("Base","meshbase",b)+'</tr></table>';
   }
   const t=o.el.tagName.toLowerCase(), R=s=>(+o.el.getAttribute(s)||0);   // raw mm; cell() renders it in the display unit
   let rows, lockableWH=false;   // Width+Height (not just one length/diameter) -> offer the ratio-lock checkbox
@@ -3894,10 +3908,10 @@ function dimText(o){
   const is2D=k=>k==="width"||k==="height"||k==="x"||k==="y"||k==="d"||k==="linelen";   // 2D lengths follow the Units setting; the rest stay mm
   const cell=p=>{ if(!p) return '<td></td><td></td><td></td>';
     const u=/^(z|z0|zp|z0p|meshdepth|meshbase)$/.test(p[2])?PLATE_UNIT:(!mode3D && is2D(p[2]))?unit2D():MM_UNIT;   // every 3D HEIGHT is plates; 2D lengths follow the Units toggle; everything else stays mm
-    return '<td style="text-align:left">'+p[0]+':</td>'
-      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'"></td>'
-      +'<td style="padding-left:.15rem;color:#8a7350">'+u.lab+'</td>'; };
-  let html='<table style="border-collapse:collapse">'+rows.map(r=>'<tr>'+cell(r[0])+'<td style="width:1.2rem"></td>'+cell(r[1])+'</tr>').join('')+'</table>';
+    return '<td style="text-align:left'+DIM_CLIP+'">'+p[0]+':</td>'
+      +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+u.step+'" data-dim="'+p[2]+'" value="'+u.f(p[1])+'" style="'+DIM_FIELD+'"></td>'
+      +'<td style="padding-left:.15rem;color:#8a7350'+DIM_CLIP+'">'+u.lab+'</td>'; };
+  let html=DIM_TABLE+rows.map(r=>'<tr>'+cell(r[0])+'<td></td>'+cell(r[1])+'</tr>').join('')+'</table>';
   if(mode3D && (objClosed(o) || o.mesh))
     html+='<div class="hint" style="margin-top:.25rem">Heights are in plates &mdash; 3 plates = 1 brick (9.6 mm).</div>';
   if(lockableWH){   // editing Width or Height alone changes the other's proportion too, so a photo/rect/tab keeps its shape.
@@ -4133,14 +4147,14 @@ function brickCtlHTML(o){ const g=s=>+o.el.getAttribute(s)||0;
         base=Math.round(g("data-z0")*10)/10,   // how far the brick sits above the build plate; 0 = resting on it
         studsOn=o.el.getAttribute("data-studs")!=="0", dockOn=o.el.getAttribute("data-dock")!=="0",
         invOn=o.el.getAttribute("data-inv")==="1";
-  const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left">'+label+':</td>'
-     +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'"></td>'
-     +'<td style="padding-left:.15rem;color:#8a7350">'+unit+'</td>';
+  const cell=(label,dim,val,step,min,unit)=>'<td style="text-align:left'+DIM_CLIP+'">'+label+':</td>'
+     +'<td style="text-align:right;padding-left:.35rem"><input class="dimin" type="number" step="'+step+'" min="'+min+'" data-brickdim="'+dim+'" value="'+val+'" style="'+DIM_FIELD+'"></td>'
+     +'<td style="padding-left:.15rem;color:#8a7350'+DIM_CLIP+'">'+unit+'</td>';
   const flag=(f,label,on,tip)=>'<label title="'+tip+'" style="display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;margin-right:1rem"><input type="checkbox" data-brickflag="'+f+'" '+(on?'checked':'')+' style="width:auto;margin:0"> '+label+'</label>';
-  return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div><table style="border-collapse:collapse">'
-    +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td style="width:1rem"></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
-    +'<tr>'+cell("Depth","z",Math.round(depth/PLATE_MM*100)/100,1,1,"plates")+'<td style="width:1rem"></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr>'
-    +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td style="width:1rem"></td>'+cell("Base","z0",Math.round(base/PLATE_MM*100)/100,1,0,"plates")+'</tr></table>'
+  return '<div style="font-weight:700;margin-bottom:.3rem">Brick size</div>'+DIM_TABLE
+    +'<tr>'+cell("Columns","cols",cols,1,1,"")+'<td></td>'+cell("Rows","rows",rows,1,1,"")+'</tr>'
+    +'<tr>'+cell("Depth","z",Math.round(depth/PLATE_MM*100)/100,1,1,"plates")+'<td></td>'+cell("Fit","fit",fit,0.1,FIT_MIN,"mm")+'</tr>'
+    +'<tr>'+cell("Slope","slope",slope,1,0,"rows")+'<td></td>'+cell("Base","z0",Math.round(base/PLATE_MM*100)/100,1,0,"plates")+'</tr></table>'
     +'<div class="hint" style="margin-top:.2rem">Slope 0 = a flat top. Slope 1 makes the front row fall away to the base - a roof brick.</div>'
     +'<div class="hint" style="margin-top:.2rem">Fit 0 = standard LEGO. Minus tightens the clutch (fatter studs), plus loosens it.</div>'
     +'<div style="margin-top:.45rem">'+flag("studs","Studs (top)",studsOn,"Studs on top. Off = smooth top (e.g. a bird wing).")+flag("dock","Sockets (bottom)",dockOn,"On = a hollow underside with anti-stud tubes, to clip onto the studs below. Off = flat closed base to glue to a surface.")+'</div>'
@@ -4298,10 +4312,11 @@ function refreshPartsTable(){
   // The header cell toggles every part at once - the usual want is "show me the massing", not one part.
   const allOn=parts.every(studsOn);   // what is actually SHOWING, plane overrides included
   let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>'
-      +'<col style="width:39%"><col style="width:14%"><col style="width:16%"><col style="width:17%"><col style="width:14%"></colgroup>'
-      // .72rem and tight padding: at a 274px panel the labels at .85rem were 8px wider than the table and
-      // ran into each other ("PlaneDepth"). The FIELDS keep their .9rem - it is only the column labels.
-      +'<tr style="color:#8a7350;font-size:.72rem">'
+      // Sized for the widened panel: over half the width to Part, so a name like "Counterweight" sits whole
+      // beside its swatch even when indented under a plane, and each numeric column comfortably over the
+      // ~38px a number field needs (a two-digit plane included).
+      +'<col style="width:52%"><col style="width:13%"><col style="width:12%"><col style="width:12%"><col style="width:11%"></colgroup>'
+      +'<tr style="color:#8a7350;font-size:.8rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .1rem">Part</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .1rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
       +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem">Depth</th>'
@@ -4329,7 +4344,8 @@ function refreshPartsTable(){
     const ovr=planeStudsOf(mem[0]);   // the plane is deciding studs for this part just now
     const num=(cls,val,ph)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
-    return '<tr><td style="padding:.12rem .2rem .12rem .9rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
+    // 1.6rem: deep enough that the nesting reads at a glance, paid for by the squeezed numeric columns
+    return '<tr><td style="padding:.12rem .2rem .12rem 1.6rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
       +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
       // the NAME leads the tooltip, because a long one is ellipsed in a column this narrow
       +'<span class="partname" data-gid="'+gi+'" title="'
