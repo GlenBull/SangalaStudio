@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.161 -->
+<!-- SANGALA_VERSION: 2026-07-29.162 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4312,6 +4312,11 @@ const PART_INDENT=(ROW_PAD_N+TOG_W_N+ROW_GAP_N+BOX_W_N+ROW_GAP_N+NUM_W_N+ROW_GAP
 // lone "m", which reads as a stray character rather than a state. A dash reads as "no single value", and
 // the tooltip says it in words.
 const MIXED_PH="&mdash;", MIXED_TIP="The parts here differ - type a value to give them all the same one";
+// A highlighted row and a selected shape are the SAME state, seen twice: the table paints its highlight from
+// the canvas selection, and clicking a row sets that selection. A PLANE is highlighted separately (selPlane),
+// because a plane is not a shape - it is the heading you pick before moving the whole plane.
+const SEL_BG="rgba(26,95,180,.12)", SEL_BG_PLANE="rgba(26,95,180,.20)";
+let selPlane=null;
 function refreshPartsTable(){
   const panel=$("partspanel"), host=$("partstable");
   const parts=tableParts();
@@ -4347,7 +4352,12 @@ function refreshPartsTable(){
   // undefined = the members DISAGREE (show blank); null = they agree the attribute is unset (show its default).
   // Returning null for both made an unset Plane read as "mixed" when every member simply had no plane yet.
   const same=(mem,a)=>{ const v=[...new Set(mem.map(o=>o.el.getAttribute(a)))]; return v.length===1?v[0]:undefined; };
+  // A row highlights when its part is the current selection - and because the canvas and the table read the
+  // same selection, clicking the shape on the mat lights its row and clicking the row selects the shape.
+  const selNow=new Set(selMulti.length?selMulti:(selId!=null?[selId]:[]));
+  if(selNow.size) selPlane=null;   // a shape is selected, so no plane is - only one thing is highlighted at a time
   const rowFor=(mem,gi)=>{
+    const on=mem.some(o=>selNow.has(o.id));
     const nm=(mem[0].el.getAttribute("data-name")||"");
     const col=fillOf(mem[0])||"#a0a5a9";
     const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
@@ -4356,7 +4366,8 @@ function refreshPartsTable(){
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'"'+(val===null?' title="'+MIXED_TIP+'"':'')
       +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
     // indented to PART_INDENT: the swatch starts exactly where its plane's name starts
-    return '<tr><td style="padding:.12rem '+ROW_PAD+' .12rem '+PART_INDENT+'"><div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
+    return '<tr class="partrow" data-gid="'+gi+'" style="cursor:pointer'+(on?';background:'+SEL_BG:'')+'">'
+      +'<td style="padding:.12rem '+ROW_PAD+' .12rem '+PART_INDENT+'"><div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
       +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
       // the NAME leads the tooltip, because a long one is ellipsed in a column this narrow
       +'<span class="partname" data-gid="'+gi+'" title="'
@@ -4388,6 +4399,7 @@ function refreshPartsTable(){
   // inherited mixture is visible rather than silently overwritten the moment the field is touched.
   const ids=[...new Set(parts.map(planeOf))].sort((a,b)=>a-b);
   [...collapsedPlanes].forEach(p=>{ if(ids.indexOf(p)<0) collapsedPlanes.delete(p); });   // a plane emptied of parts is gone; do not have it come back collapsed
+  if(selPlane!=null && ids.indexOf(selPlane)<0) selPlane=null;   // ...nor come back selected
   ids.forEach(pid=>{
     const pmem=parts.filter(o=>planeOf(o)===pid);
     const shut=collapsedPlanes.has(pid);
@@ -4397,7 +4409,8 @@ function refreshPartsTable(){
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
     // a rule above each plane, so two folded planes in a row read as two blocks and not one
-    h+='<tr style="background:#f2e7d1;border-top:1px solid #dcc9a4">'   // a light tan band on the cream card - enough to read as a heading, not enough to make the fields look white
+    h+='<tr class="planerow" data-plane="'+pid+'" style="cursor:pointer;background:'+(selPlane===pid?SEL_BG_PLANE:"#f2e7d1")   // a light tan band on the cream card - enough to read as a heading, not enough to make the fields look white
+      +';border-top:1px solid #dcc9a4">'
       +'<td colspan="2" style="padding:.15rem '+ROW_PAD+'">'
       +'<div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
       // Every slot before the name is a FIXED width, so the name always starts at the same x whatever the
@@ -4535,6 +4548,28 @@ $("partstable").addEventListener("click",(e)=>{
       : next==="0" ? "Studs hidden on every part in "+lbl+" - each part keeps its own setting underneath."
                    : lbl+": studs follow each part's own setting again.");
     return; }
+  // Clicking a ROW selects it. A part row selects that part on the mat - the same selection the canvas
+  // sets, so the highlight is simply what the table already knows. A plane row picks the PLANE, which is
+  // not a shape and so is held separately; clicking it again lets it go.
+  if(!e.target.closest("input,a,select")){
+    const pr=e.target.closest(".partrow");
+    if(pr){ const mem=gidMembers(pr); if(mem.length){
+        selPlane=null; selId2=null;
+        if(mem.length===1){ selId=mem[0].id; selMulti=[]; }
+        else { selMulti=mem.map(o=>o.id); selId=null; }   // a name that split into several objects selects as the whole part
+        draw(); refreshEditPanel();
+        const nm=mem[0].el.getAttribute("data-name");
+        say((nm?'"'+nm.replace(/[<>]/g,"")+'"':"That part")+" selected"+(mem.length>1?" - all "+mem.length+" pieces of it.":"."));
+      }
+      return; }
+    const plr=e.target.closest(".planerow");
+    if(plr){ const pid=+plr.dataset.plane;
+      selPlane = selPlane===pid ? null : pid;
+      selId=null; selId2=null; selMulti=[];
+      draw(); refreshEditPanel();
+      say(selPlane===null ? "" : planeLabel(pid)+" selected.");
+      return; }
+  }
   const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
