@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.157 -->
+<!-- SANGALA_VERSION: 2026-07-28.158 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -423,6 +423,13 @@ const isGuide   =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="g
 // Stored on the element, so it rides along in the .model with every other attribute and needs no new save code.
 const planeOf   =o=>(o.el&&o.el.getAttribute&&+o.el.getAttribute("data-plane"))||1;
 const isHidden  =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-hidden")==="1";   // hidden with its plane: absent from the 3D preview, still in the file
+// Whether a part shows studs is decided in ONE place, because a PLANE can override its parts.
+// data-plane-studs on every member: "1" every part in the plane shows studs, "0" none of them do,
+// absent (the usual) each part's own data-studs governs. The parts' own settings are never overwritten,
+// so clearing the override brings all of them straight back - which is the point of the third state.
+const planeStudsOf=o=>(o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-studs"))||null;
+const studsOn   =o=>{ const ov=planeStudsOf(o);
+  return ov==="1" ? true : ov==="0" ? false : (o.el&&o.el.getAttribute&&o.el.getAttribute("data-studs")==="1"); };
 // Which planes are folded shut in the Parts list. Deliberately NOT stored on the elements: folding is a view
 // state, and putting it in the document would push it into the .model and onto the Undo stack, so folding a
 // plane would count as an edit. It therefore does not survive a reload, which is the right trade.
@@ -907,7 +914,7 @@ function draw(){
     ctx.save(); ctx.lineWidth=1;
     objects.forEach(o=>{
       if(!o.el||!o.el.getAttribute||!o.poly) return;
-      const st=o.el.getAttribute("data-studs")==="1", so=o.el.getAttribute("data-sockets")==="1";
+      const st=studsOn(o), so=o.el.getAttribute("data-sockets")==="1";
       if((!st&&!so) || (+o.el.getAttribute("data-z")||0)<=0) return;
       const fit=+o.el.getAttribute("data-fit")||0, sk=studSkips(o.el);
       const ring=(c,r,col)=>{ const gone=sk.has(c.i+","+c.j);
@@ -2277,7 +2284,7 @@ function bodyTris(o,fuse){   // the solid for ONE body. fuse = it shares a group
     : t==="circle" ? cylTris(g("cx"),g("cy"),g("r")+G,z0,z1)
     : (o.holes&&o.holes.length) ? prismThruTris(solid,o.holes,z0,z1)          // a frame (Difference) -> extruded HOLLOW, its inner loops cut through
     : prismTris(solid,z0,z1);                                                 // freeform polygon (Pen / Node) -> extruded prism
-  if(o.el.getAttribute("data-studs")==="1") tris=tris.concat(studsFor(o.poly,z1,fit,skips,o.holes));   // studs stay on the original outline's 8 mm grid, never on the grown one - and never over an interior hole
+  if(studsOn(o)) tris=tris.concat(studsFor(o.poly,z1,fit,skips,o.holes));   // studs stay on the original outline's 8 mm grid, never on the grown one - and never over an interior hole
   return tris;
 }
 // ---- Grouping = BUNDLE (TinkerCAD-style): a group's members move and select together but each keeps its own
@@ -2291,7 +2298,7 @@ function gpathOf(o){ return (o.gpath&&o.gpath.length)?o.gpath : (o.group!=null?[
 // recomputes and only an EDITED bundle rebuilds; the CSG runs on the fast weld-only path (see cleanMesh).
 let _grpPrev=new Map();   // outermost group id -> {stamp, outs:[mesh,...]}
 function grpStamp(members){ return members.map(o=>{ const e=o.el;
-    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
+    return o.id+(isHole(o)?"H":"S")+"|"+JSON.stringify(o.poly)+"|"+(e?["data-z","data-z0","data-slopes","data-slope-run","data-slope-dir","data-cone","data-slope-inv","data-sockets","data-studs","data-plane-studs","data-bore-axis","data-bore-d","data-bar","data-bar-shape","data-bar-w","data-bar-d"].map(a=>e.getAttribute(a)).join(","):"")+(o.mesh?"|m"+o.mesh.length:""); }).join(";"); }
 function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that BOTH the STL export and the 3D preview render - one source, so what you preview is what prints
   // onlyIds (optional Set) limits the build to a selection; selecting any member of a group pulls in the WHOLE group.
   const partOf=o=>o.el&&o.el.hasAttribute&&(o.el.hasAttribute("data-brick")||o.el.hasAttribute("data-brickpart"));
@@ -3566,7 +3573,7 @@ function placeBrick(e){
 // hidden state (a hidden part would quietly come back into the 3D view and the STL). Same drift, same cure as
 // the parts table's tableParts(): keep the list in one place.
 const KEEP_ATTRS=["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role",
-  "data-mosaic","data-name","data-plane","data-plane-name","data-hidden","data-slopes","data-cone","data-slope-inv",
+  "data-mosaic","data-name","data-plane","data-plane-name","data-plane-studs","data-hidden","data-slopes","data-cone","data-slope-inv",
   "data-slope-run","data-slope-dir"];   // extrude Depth/Base, per-side Slope, LEGO connectors, paper color, part name, plane
 function ensurePolygon(o){
   const t=o.el.tagName.toLowerCase();
@@ -4286,7 +4293,7 @@ function refreshPartsTable(){
   const R=(o,a)=>+o.el.getAttribute(a)||0;
   // Studs read more strongly than a one-plate step, so a shallow relief is easier to judge with them off.
   // The header cell toggles every part at once - the usual want is "show me the massing", not one part.
-  const allOn=parts.every(o=>o.el.getAttribute("data-studs")==="1");
+  const allOn=parts.every(studsOn);   // what is actually SHOWING, plane overrides included
   let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>'
       +'<col style="width:40%"><col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:11%"></colgroup>'
       +'<tr style="color:#8a7350;font-size:.85rem">'
@@ -4314,6 +4321,7 @@ function refreshPartsTable(){
     const nm=(mem[0].el.getAttribute("data-name")||"");
     const col=fillOf(mem[0])||"#a0a5a9";
     const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
+    const ovr=planeStudsOf(mem[0]);   // the plane is deciding studs for this part just now
     const num=(cls,val,ph)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
     return '<tr><td style="padding:.12rem .2rem .12rem .9rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
@@ -4330,8 +4338,12 @@ function refreshPartsTable(){
       +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz", gz===undefined?null:PLATE_UNIT.f(+gz||0), "mixed")+'</td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed")+'</td>'
+      // dimmed, never disabled, while the plane overrides it: the box still edits the part's own setting,
+      // which comes back the moment the plane's studs box is cleared. A disabled control would just say nothing.
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partstud" type="checkbox" data-gid="'+gi+'"'
-      +(gst==="1"?" checked":"")+(gst===undefined?' data-mixed="1"':'')+' style="width:auto;margin:0"></td></tr>';
+      +(gst==="1"?" checked":"")+(gst===undefined?' data-mixed="1"':'')
+      +(ovr?' title="This part\'s own setting - the plane is overriding it just now"':'')
+      +' style="width:auto;margin:0'+(ovr?';opacity:.4':'')+'"></td></tr>';
   };
   // Parts sit UNDER their plane. A plane heads its own block - Show, its name (double-click to rename), and
   // the Depth every member takes - and its parts follow, indented. Which parts share a plane was previously
@@ -4369,7 +4381,11 @@ function refreshPartsTable(){
       +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
       +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" title="Depth for every part in this plane"'
       +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
-      +'<td colspan="2"></td></tr>';
+      +'<td></td>'
+      // Studs for the whole plane, in three states. Checked and x OVERRIDE the parts; blank hands the
+      // decision back to each part, whose own setting was never touched. Drawn rather than a checkbox,
+      // because a checkbox has no third face and the browser's indeterminate dash reads as "mixed".
+      +'<td style="text-align:center;padding:.12rem .2rem">'+studBox(pid,studOvOf(pmem))+'</td></tr>';
     // a name whose members straddle planes is listed once, under the first member's plane; its Plane cell reads mixed
     if(!shut) partGroups.forEach((mem,gi)=>{ if(planeOf(mem[0])===pid) h+=rowFor(mem,gi); });
   });
@@ -4381,6 +4397,20 @@ const planeMembers=pid=>tableParts().filter(o=>planeOf(o)===pid);
 // with no new save code, exactly as data-plane does, and a plane exists only for as long as parts sit in it.
 const escText     =s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 const escAttr     =s=>escText(s).replace(/"/g,"&quot;");   // a name types straight into a title=""
+// The plane's studs override, and the three-state box that shows it. Filled tick = every part shows studs,
+// cross = none do, empty = the parts decide for themselves. Clicking cycles blank -> on -> off -> blank.
+const studOvOf=mem=>{ for(const o of mem){ const v=o.el.getAttribute("data-plane-studs"); if(v) return v; } return null; };
+function studBox(pid,ov){
+  const f = ov==="1" ? {bd:"#1a5fb4",bg:"#1a5fb4",fg:"#fff",ch:"&#10003;",
+              tip:"Studs shown on every part in this plane. Click to hide them on all of them."}
+          : ov==="0" ? {bd:"#a33",bg:"#fff",fg:"#a33",ch:"&#10005;",
+              tip:"Studs hidden on every part in this plane. Click to give each part its own setting back."}
+          :            {bd:"#b9a179",bg:"#fff",fg:"transparent",ch:"&#10003;",
+              tip:"Each part in this plane uses its own Studs setting. Click to show studs on all of them."};
+  return '<a href="#" class="planestud" data-plane="'+pid+'" data-ov="'+(ov||"")+'" title="'+f.tip+'"'
+    +' style="display:inline-block;width:.85rem;height:.85rem;line-height:.78rem;font-size:.7rem;text-align:center;'
+    +'text-decoration:none;border:1px solid '+f.bd+';border-radius:2px;background:'+f.bg+';color:'+f.fg+'">'+f.ch+'</a>';
+}
 const nameOfMembers=mem=>{ for(const o of mem){ const n=o.el.getAttribute("data-plane-name"); if(n) return n; } return ""; };
 const planeNameOf =pid=>nameOfMembers(planeMembers(pid));
 const planeLabel  =pid=>planeNameOf(pid)||("Plane "+pid);
@@ -4433,13 +4463,21 @@ $("partstable").addEventListener("change",(e)=>{
   const p=e.target.closest(".partplane");
   if(p){ if(p.value==="") return;
     const v=String(Math.max(1, Math.round(+p.value||1)));
-    const pnm=planeNameOf(+v);   // read BEFORE the move: a part takes on the name of the plane it joins, and drops the old one
+    const tgt=planeMembers(+v);   // read BEFORE the move: a part takes on the name AND the studs override of the plane it joins, and drops the old ones
+    const pnm=nameOfMembers(tgt), pov=studOvOf(tgt);
     gidMembers(p).forEach(o=>{ o.el.setAttribute("data-plane", v);
       if(pnm) o.el.setAttribute("data-plane-name", pnm); else o.el.removeAttribute("data-plane-name");
+      if(pov) o.el.setAttribute("data-plane-studs", pov); else o.el.removeAttribute("data-plane-studs");
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
-  if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; }
+  if(c){ const mem=gidMembers(c); mem.forEach(o=>applyDimFlag("studs", c.checked, o));
+    c.removeAttribute("data-mixed"); scheduleCommit();
+    // The setting is stored either way - it just cannot be seen while the plane overrides it. Saying so
+    // beats a dead-looking control: the box changes, the model does not, and nothing explains why.
+    const ov=mem.length?planeStudsOf(mem[0]):null;
+    if(ov) say("Saved, but "+planeLabel(planeOf(mem[0]))+" is setting studs for the whole plane - clear its studs box to let this take effect.");
+    return; }
   });
 $("partstable").addEventListener("click",(e)=>{
   const t=e.target.closest(".planetog");
@@ -4447,10 +4485,20 @@ $("partstable").addEventListener("click",(e)=>{
     if(collapsedPlanes.has(pid)) collapsedPlanes.delete(pid); else collapsedPlanes.add(pid);
     refreshPartsTable();   // no scheduleCommit: folding the list is not an edit to the design
     return; }
+  const sb=e.target.closest(".planestud");
+  if(sb){ e.preventDefault(); const pid=+sb.dataset.plane, mem=planeMembers(pid), lbl=planeLabel(pid);
+    const next = sb.dataset.ov==="" ? "1" : sb.dataset.ov==="1" ? "0" : "";   // blank -> on -> off -> blank
+    mem.forEach(o=>{ if(next) o.el.setAttribute("data-plane-studs", next); else o.el.removeAttribute("data-plane-studs"); });
+    scheduleCommit(); refreshPartsTable(); draw(); pvRefresh();
+    say(next==="1" ? "Studs shown on every part in "+lbl+" - each part keeps its own setting underneath."
+      : next==="0" ? "Studs hidden on every part in "+lbl+" - each part keeps its own setting underneath."
+                   : lbl+": studs follow each part's own setting again.");
+    return; }
   const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
-  tableParts().forEach(o=>applyDimFlag("studs", on, o));
+  // it also clears every plane override, or the column would claim to set studs on parts a plane is governing
+  tableParts().forEach(o=>{ o.el.removeAttribute("data-plane-studs"); applyDimFlag("studs", on, o); });
   scheduleCommit(); refreshPartsTable();
   say(on ? "Studs shown on every part." : "Studs hidden - the massing reads as plain masses now."); });
 
@@ -4829,7 +4877,7 @@ cv.addEventListener("mousedown",(e)=>{
   }
   if(mode3D && selId!=null && !selMulti.length){   // click a LEGO cell on the selected shape to clear it; click its dotted ghost to put it back
     const co=objects.find(x=>x.id===selId), ga=s=>co&&co.el&&co.el.getAttribute?co.el.getAttribute(s):null;
-    const hasSt=ga("data-studs")==="1", hasSk=ga("data-sockets")==="1";
+    const hasSt=!!co&&studsOn(co), hasSk=ga("data-sockets")==="1";
     if(co&&(hasSt||hasSk) && (+ga("data-z")||0)>0 && co.poly){
       const {mx,my}=evtMM(e), pp=placeParams(), fit=+ga("data-fit")||0;
       const cells=hasSt?studCells(co.poly,fit):socketCells(co.poly,fit);     // the stud grid is the finer of the two, so hit-test on it when there is one
