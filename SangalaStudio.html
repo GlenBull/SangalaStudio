@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.150 -->
+<!-- SANGALA_VERSION: 2026-07-28.151 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -424,6 +424,10 @@ const isGuide   =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-role")==="g
 // Stored on the element, so it rides along in the .model with every other attribute and needs no new save code.
 const planeOf   =o=>(o.el&&o.el.getAttribute&&+o.el.getAttribute("data-plane"))||1;
 const isHidden  =o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-hidden")==="1";   // hidden with its plane: absent from the 3D preview, still in the file
+// Everything the Parts table governs. Named OR NOT: an unnamed mass used to be invisible here, so it could be
+// SEEN in the 3D view but never assigned a plane, a depth or a name - Glen found one stranded in the frame.
+// Named parts group into one row; an unnamed one gets a row of its own until it is given a name.
+const tableParts=()=>objects.filter(o=>o.el&&o.el.getAttribute&&isMosaicPart(o)&&!isGuide(o));   // hidden with its plane: absent from the 3D preview, still in the file
 const is3DOnly  =o=>isBar(o)||!!o.mesh||isHole(o)||isGuide(o)||isMosaicPart(o);   // a 3D bar, a baked mesh, a hole, a guide, or a mosaic mass: 3D-print only, never sent to the die cutter (and not drawn as a solid red cut)
 const cutObjs   =()=>objects.filter(o=>o.kind==="cut"   && !is3DOnly(o));
 const scoreObjs =()=>objects.filter(o=>o.kind==="score" && !is3DOnly(o));
@@ -4266,9 +4270,7 @@ $("fillPick").addEventListener("input",(e)=>setFill(e.target.value));   // live:
 // Object fields use - so the plates-to-mm conversion, the live preview and Undo behave identically here.
 function refreshPartsTable(){
   const panel=$("partspanel"), host=$("partstable");
-  // A NAMED part is the unit here - it is what Mosaic groups, what the paper calls a part, and what the
-  // Selected Object panel announces ("Part: Crown"). A mosaic import always carries one.
-  const parts=objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o));
+  const parts=tableParts();
   if(!mode3D || parts.length<2){ panel.style.display="none"; return; }   // 2 or more, else the Selected Object fields are simpler
   panel.style.display="block";
   const R=(o,a)=>+o.el.getAttribute(a)||0;
@@ -4291,19 +4293,24 @@ function refreshPartsTable(){
   // same edit. They ARE one part; the split is an artifact of the trace. Every cell acts on all members, and
   // a value that disagrees across them shows blank rather than imposing one member's number on the rest.
   const byName=new Map();
-  parts.forEach(o=>{ const k=o.el.getAttribute("data-name"); if(!byName.has(k)) byName.set(k,[]); byName.get(k).push(o); });
+  parts.forEach(o=>{ const n=o.el.getAttribute("data-name");
+    const k = n ? "n:"+n : "u:"+o.id;   // unnamed parts do not merge with each other - each keeps its own row until named
+    if(!byName.has(k)) byName.set(k,[]); byName.get(k).push(o); });
   partGroups=[...byName.values()];   // index = data-gid on every control in the table
   // undefined = the members DISAGREE (show blank); null = they agree the attribute is unset (show its default).
   // Returning null for both made an unset Plane read as "mixed" when every member simply had no plane yet.
   const same=(mem,a)=>{ const v=[...new Set(mem.map(o=>o.el.getAttribute(a)))]; return v.length===1?v[0]:undefined; };
   [...byName.entries()].forEach(([k,mem],gi)=>{
-    const nm=k.replace(/[<>]/g,"");   // student data: strip angle brackets, say() and this both take HTML
+    const nm=(mem[0].el.getAttribute("data-name")||"");
     const col=fillOf(mem[0])||"#a0a5a9";
     const gz=same(mem,"data-z"), gz0=same(mem,"data-z0"), gpl=same(mem,"data-plane"), gst=same(mem,"data-studs");
     const num=(cls,val,ph,w)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:'+w+';text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
     h+='<tr><td style="padding:.12rem .2rem"><span style="display:inline-block;width:.75rem;height:.75rem;border:1px solid #00000033;background:'
-      +col+';vertical-align:-1px;margin-right:.35rem"></span>'+nm
+      +col+';vertical-align:-1px;margin-right:.35rem"></span>'
+      +'<input class="partname" type="text" data-gid="'+gi+'" value="'+nm.replace(/"/g,"&quot;")+'" placeholder="unnamed"'
+      +' title="Type a name to group this part. Give it the SAME name as another part and the two become one row."'
+      +' style="width:7.2rem;font-size:.9rem;padding:.1rem .25rem">'
       +(mem.length>1?' <span style="color:#8a7350">('+mem.length+')</span>':'')+'</td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
       +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:2.4rem;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
@@ -4339,7 +4346,7 @@ function refreshPlanesTable(parts){
   });
   host.innerHTML=h+'</table>';
 }
-const planeMembers=pid=>objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o)&&planeOf(o)===pid);
+const planeMembers=pid=>tableParts().filter(o=>planeOf(o)===pid);
 $("planestable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
   planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
 $("planestable").addEventListener("change",(e)=>{
@@ -4369,12 +4376,22 @@ $("partstable").addEventListener("change",(e)=>{
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
-  if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; } });
+  if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; }
+  const nmi=e.target.closest(".partname");
+  if(nmi){ const mem=gidMembers(nmi), v=nmi.value.trim();
+    // Naming is how a part joins a group: give it a name another part already has and the two become one row.
+    // Clearing the name puts it back on its own. Renaming a group renames every member of it.
+    mem.forEach(o=>{ if(v) o.el.setAttribute("data-name", v); else o.el.removeAttribute("data-name"); });
+    const joined = v && tableParts().filter(o=>o.el.getAttribute("data-name")===v).length > mem.length;
+    scheduleCommit(); refreshPartsTable(); draw();
+    say(!v ? "Name cleared - the part stands on its own."
+           : joined ? 'Joined "'+v.replace(/[<>]/g,"")+'" - they now take a depth together.'
+                    : 'Named "'+v.replace(/[<>]/g,"")+'".');
+    return; } });
 $("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
-  objects.filter(o=>o.el&&o.el.getAttribute&&o.el.getAttribute("data-name")&&!isGuide(o))
-         .forEach(o=>applyDimFlag("studs", on, o));
+  tableParts().forEach(o=>applyDimFlag("studs", on, o));
   scheduleCommit(); refreshPartsTable();
   say(on ? "Studs shown on every part." : "Studs hidden - the massing reads as plain masses now."); });
 
