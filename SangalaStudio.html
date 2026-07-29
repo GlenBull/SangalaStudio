@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.155 -->
+<!-- SANGALA_VERSION: 2026-07-28.156 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4314,9 +4314,13 @@ function refreshPartsTable(){
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
     return '<tr><td style="padding:.12rem .2rem .12rem .9rem"><div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
       +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
-      +'<input class="partname" type="text" data-gid="'+gi+'" value="'+nm.replace(/"/g,"&quot;")+'" placeholder="unnamed"'
-      +' title="Type a name to group this part. Give it the SAME name as another part and the two become one row."'
-      +' style="flex:1 1 auto;min-width:0;font-size:.9rem;padding:.1rem .25rem">'
+      // the NAME leads the tooltip, because a long one is ellipsed in a column this narrow
+      +'<span class="partname" data-gid="'+gi+'" title="'
+      +escAttr((nm?nm+" - double-click to rename it. ":"Double-click to name this part. ")
+              +"Give it the SAME name as another part and the two become one row.")+'"'
+      +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+      +'cursor:text;border-bottom:1px dotted #c9b48c'+(nm?'':';font-style:italic;color:#8a7350')+'">'
+      +escText(nm||"unnamed")+'</span>'
       +(mem.length>1?'<span style="flex:0 0 auto;color:#8a7350">('+mem.length+')</span>':'')+'</div></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
       +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
@@ -4344,7 +4348,8 @@ function refreshPartsTable(){
       +'<input class="planeshow" type="checkbox" data-plane="'+pid+'"'+(shown?" checked":"")
       +' title="Show this plane in the 3D view and the STL" style="flex:0 0 auto;width:auto;margin:0">'
       +(nm?'<span style="flex:0 0 auto;color:#8a7350">'+pid+'</span>':'')
-      +'<span class="planename" data-plane="'+pid+'" title="Double-click to rename this plane"'
+      +'<span class="planename" data-plane="'+pid+'" title="'
+      +escAttr((nm?nm+" - ":"")+"double-click to rename this plane")+'"'
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
       +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
       +'<span style="flex:0 0 auto;color:#8a7350">('+pmem.length+')</span></div></td>'
@@ -4362,17 +4367,34 @@ const planeMembers=pid=>tableParts().filter(o=>planeOf(o)===pid);
 // It lives in data-plane-name on every MEMBER, not in a plane record: an attribute rides along in the .model
 // with no new save code, exactly as data-plane does, and a plane exists only for as long as parts sit in it.
 const escText     =s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const escAttr     =s=>escText(s).replace(/"/g,"&quot;");   // a name types straight into a title=""
 const nameOfMembers=mem=>{ for(const o of mem){ const n=o.el.getAttribute("data-plane-name"); if(n) return n; } return ""; };
 const planeNameOf =pid=>nameOfMembers(planeMembers(pid));
 const planeLabel  =pid=>planeNameOf(pid)||("Plane "+pid);
-$("partstable").addEventListener("dblclick",(e)=>{ const sp=e.target.closest(".planename"); if(!sp) return;
-  e.preventDefault(); const pid=+sp.dataset.plane, mem=planeMembers(pid);
-  const v=prompt("Name this plane (frame, background, near side …)", planeNameOf(pid));
-  if(v==null) return;                                            // Cancel leaves the name alone; an empty box clears it
+// A part and a plane are named the SAME way - double-click the name, type it in. Cancel leaves the name
+// alone; an empty box clears it. Naming a part is also how it joins a group: give it a name another part
+// already has and the two become one row. Clearing puts it back on its own, and renaming a group renames
+// every member of it.
+$("partstable").addEventListener("dblclick",(e)=>{
+  const sp=e.target.closest(".planename");
+  if(sp){ e.preventDefault(); const pid=+sp.dataset.plane, mem=planeMembers(pid);
+    const v=prompt("Name this plane (frame, background, near side …)", planeNameOf(pid));
+    if(v==null) return;
+    const n=v.trim();
+    mem.forEach(o=>{ if(n) o.el.setAttribute("data-plane-name", n); else o.el.removeAttribute("data-plane-name"); });
+    scheduleCommit(); refreshPartsTable();
+    say(n ? "Plane "+pid+" is now "+n+"." : "Plane "+pid+" name cleared."); return; }
+  const np=e.target.closest(".partname"); if(!np) return;
+  e.preventDefault(); const mem=gidMembers(np);
+  const v=prompt("Name this part (head, wing, near leg …)", mem[0].el.getAttribute("data-name")||"");
+  if(v==null) return;
   const n=v.trim();
-  mem.forEach(o=>{ if(n) o.el.setAttribute("data-plane-name", n); else o.el.removeAttribute("data-plane-name"); });
-  scheduleCommit(); refreshPartsTable();
-  say(n ? "Plane "+pid+" is now "+n+"." : "Plane "+pid+" name cleared."); });
+  mem.forEach(o=>{ if(n) o.el.setAttribute("data-name", n); else o.el.removeAttribute("data-name"); });
+  const joined = n && tableParts().filter(o=>o.el.getAttribute("data-name")===n).length > mem.length;
+  scheduleCommit(); refreshPartsTable(); draw();
+  say(!n ? "Name cleared - the part stands on its own."
+         : joined ? 'Joined "'+n.replace(/[<>]/g,"")+'" - they now take a depth together.'
+                  : 'Named "'+n.replace(/[<>]/g,"")+'".'); });
 $("partstable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
   planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
 $("partstable").addEventListener("change",(e)=>{
@@ -4405,17 +4427,7 @@ $("partstable").addEventListener("change",(e)=>{
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
   if(c){ gidMembers(c).forEach(o=>applyDimFlag("studs", c.checked, o)); c.removeAttribute("data-mixed"); scheduleCommit(); return; }
-  const nmi=e.target.closest(".partname");
-  if(nmi){ const mem=gidMembers(nmi), v=nmi.value.trim();
-    // Naming is how a part joins a group: give it a name another part already has and the two become one row.
-    // Clearing the name puts it back on its own. Renaming a group renames every member of it.
-    mem.forEach(o=>{ if(v) o.el.setAttribute("data-name", v); else o.el.removeAttribute("data-name"); });
-    const joined = v && tableParts().filter(o=>o.el.getAttribute("data-name")===v).length > mem.length;
-    scheduleCommit(); refreshPartsTable(); draw();
-    say(!v ? "Name cleared - the part stands on its own."
-           : joined ? 'Joined "'+v.replace(/[<>]/g,"")+'" - they now take a depth together.'
-                    : 'Named "'+v.replace(/[<>]/g,"")+'".');
-    return; } });
+  });
 $("partstable").addEventListener("click",(e)=>{ const a=e.target.closest("#studsAll"); if(!a) return;
   e.preventDefault();
   const on = a.dataset.on !== "1";   // all currently on -> turn all off, which is the point of the control
