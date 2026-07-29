@@ -8,7 +8,10 @@ $wdActiveEndPageNumber = 3
 $wdVerticalPositionRelativeToPage = 6
 $full = (Resolve-Path $Path).Path
 $w = New-Object -ComObject Word.Application; $w.Visible = $false
-$doc = $w.Documents.Open($full, $false, $true)   # ConfirmConversions=false, ReadOnly=true
+try { $doc = $w.Documents.Open($full, $false, $true) } catch { $doc = $null }   # ConfirmConversions=false, ReadOnly=true
+# A document Word cannot open has no paragraphs, so every count below is zero and the script printed
+# PAGINATION CLEAN over a file that would not open at all. Stop here instead.
+if ($doc -eq $null) { $w.Quit(); Write-Output "CANNOT OPEN - Word refused the file; the XML is malformed. No check was run."; exit 1 }
 $orphans = @(); $noKeep = @(); $auto = 0
 $blankRuns = @(); $blankRun = 0; $blankPage = 0
 $deepest = @{}                                   # page -> lowest content top seen (points), for underfilled-page detection
