@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.164 -->
+<!-- SANGALA_VERSION: 2026-07-29.165 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4247,10 +4247,53 @@ function setFill(c){
   const ids=selectedIds(); if(!ids.length){ say("Select a shape first, then pick a paper color."); return; }
   ids.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o||!o.el||!o.el.setAttribute) return;
     if(c==="none") o.el.removeAttribute("data-fill"); else o.el.setAttribute("data-fill",c); });
-  draw(); refreshEditPanel();
-  say(c==="none" ? "Paper color removed."
-                 : "Filled "+ids.length+" shape"+(ids.length!==1?"s":"")+" - a preview of the card. The die cutter still just follows the outline.");
+  draw(); pvRefresh(); refreshEditPanel();
+  // The same attribute means two things by mode, so the message has to follow: in 2D it previews the card the
+  // shape is cut from, in 3D it is the part's own color in the preview and in the exported mesh.
+  say(c==="none" ? (mode3D?"Color removed - the part goes back to plain gray.":"Paper color removed.")
+     : mode3D ? "Colored "+ids.length+" part"+(ids.length!==1?"s":"")+" - it shows in the 3D view and in the printed part."
+              : "Filled "+ids.length+" shape"+(ids.length!==1?"s":"")+" - a preview of the card. The die cutter still just follows the outline.");
 }
+/* ---------- The color palette, off a part's swatch in the Parts table ----------
+   In 3D the paper-color row is hidden - a 3D part has no card - yet data-fill is exactly what colors a part
+   in the 3D preview and the exported mesh. So the swatch opens the SAME palette in a popover and hands it to
+   the same setFill, which acts on the selection; clicking the swatch selects the row first, so a name that
+   split into several objects is recolored in one go. The popover carries its own color input: the page's
+   one lives inside the hidden row, and a control inside a display:none parent cannot open the OS picker. */
+let fillPop=null;
+function closeFillPop(){ if(fillPop){ fillPop.remove(); fillPop=null; } }
+function openFillPop(anchor){
+  closeFillPop();
+  const box=document.createElement("div");
+  box.id="fillpop";
+  box.style.cssText="position:absolute;z-index:60;display:flex;gap:3px;padding:.35rem;border:1px solid #cbb78f;"
+    +"border-radius:8px;background:#fffaf0;box-shadow:0 4px 14px rgba(60,40,20,.35)";
+  const mk=(c,tip,pick)=>{ const b=document.createElement("button");
+    b.className="swatch"+(pick?" pick":""); b.title=tip; b.type="button";
+    if(pick) b.dataset.pick="1"; else { b.dataset.fill=c||"none";
+      if(c) b.style.background=c; else { b.style.background="#fff"; b.textContent="✕"; } }
+    box.appendChild(b); };
+  mk("", "No color - plain gray");
+  FILL_COLORS.forEach(c=>mk(c,"Color this part "+c));
+  mk(null,"More colors - pick any color",true);
+  const pick=document.createElement("input");   // its own, so it is never inside a hidden parent
+  pick.type="color"; pick.style.cssText="position:absolute;width:0;height:0;padding:0;border:0;opacity:0;pointer-events:none";
+  const cur=fillOf(selObj());
+  if(cur) pick.value=cur;
+  pick.addEventListener("input",e=>setFill(e.target.value));   // live while the wheel is dragged
+  box.appendChild(pick);
+  box.addEventListener("click",(e)=>{ const b=e.target.closest(".swatch"); if(!b) return;
+    if(b.dataset.pick){ pick.click(); return; }                // the wheel stays open behind its own dialog
+    setFill(b.dataset.fill); closeFillPop(); });
+  document.body.appendChild(box);
+  const r=anchor.getBoundingClientRect(), vw=document.documentElement.clientWidth;
+  const left=Math.max(4, Math.min(r.left+window.scrollX, window.scrollX+vw-box.offsetWidth-6));
+  box.style.left=left+"px"; box.style.top=(r.bottom+window.scrollY+4)+"px";
+  fillPop=box;
+}
+document.addEventListener("click",(e)=>{ if(fillPop && !e.target.closest("#fillpop") && !e.target.closest(".partswatch")) closeFillPop(); });
+document.addEventListener("keydown",(e)=>{ if(e.key==="Escape") closeFillPop(); });
+window.addEventListener("resize",closeFillPop);
 /* ---------- Layer order ----------
    Which shape sits in front where they overlap is just the order of `objects`: the fill pass in draw() walks
    the array, so a later shape paints over an earlier one. Until now that was fixed at creation order, which
@@ -4311,7 +4354,7 @@ $("fillPick").addEventListener("input",(e)=>setFill(e.target.value));   // live:
 // the parts against each other while assigning them. Edits go through applyDim - the SAME path the Selected
 // Object fields use - so the plates-to-mm conversion, the live preview and Undo behave identically here.
 // The plane heading's prefix - triangle, Show box, plane number - is built from fixed slots, and the part
-// rows are indented by exactly their total. That is what lines a part's colour block up with the first
+// rows are indented by exactly their total. That is what lines a part's color block up with the first
 // letter of its plane's name. Derived, never two numbers to keep in step by hand.
 const ROW_PAD_N=0.2, ROW_GAP_N=0.25, TOG_W_N=0.8, BOX_W_N=0.95, NUM_W_N=1.05;   // rem
 const ROW_PAD=ROW_PAD_N+"rem", ROW_GAP=ROW_GAP_N+"rem", TOG_W=TOG_W_N+"rem", BOX_W=BOX_W_N+"rem", NUM_W=NUM_W_N+"rem";
@@ -4325,6 +4368,14 @@ const MIXED_PH="&mdash;", MIXED_TIP="The parts here differ - type a value to giv
 // because a plane is not a shape - it is the heading you pick before moving the whole plane.
 const SEL_BG="rgba(26,95,180,.12)", SEL_BG_PLANE="rgba(26,95,180,.20)";
 let selPlane=null;
+// Selecting a row's part: one place, because the row and its color swatch both do it. A name that split
+// into several objects at import selects as the whole part - every piece of it at once.
+function selectPartGroup(mem){
+  selPlane=null; selId2=null;
+  if(mem.length===1){ selId=mem[0].id; selMulti=[]; }
+  else { selMulti=mem.map(o=>o.id); selId=null; }
+  draw(); refreshEditPanel();
+}
 function refreshPartsTable(){
   const panel=$("partspanel"), host=$("partstable");
   const parts=tableParts();
@@ -4376,7 +4427,8 @@ function refreshPartsTable(){
     // indented to PART_INDENT: the swatch starts exactly where its plane's name starts
     return '<tr class="partrow" data-gid="'+gi+'" style="cursor:pointer'+(on?';background:'+SEL_BG:'')+'">'
       +'<td style="padding:.12rem '+ROW_PAD+' .12rem '+PART_INDENT+'"><div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
-      +'<span style="flex:0 0 auto;width:.75rem;height:.75rem;border:1px solid #00000033;background:'+col+'"></span>'
+      +'<button class="partswatch" data-gid="'+gi+'" title="Click to give this part a color"'
+      +' style="flex:0 0 auto;width:.85rem;height:.85rem;padding:0;border:1px solid #00000033;border-radius:2px;cursor:pointer;background:'+col+'"></button>'
       // the NAME leads the tooltip, because a long one is ellipsed in a column this narrow
       +'<span class="partname" data-gid="'+gi+'" title="'
       +escAttr((nm?nm+" - double-click to rename it. ":"Double-click to name this part. ")
@@ -4422,7 +4474,7 @@ function refreshPartsTable(){
       +'<td colspan="2" style="padding:.15rem '+ROW_PAD+'">'
       +'<div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
       // Every slot before the name is a FIXED width, so the name always starts at the same x whatever the
-      // plane number is - and PART_INDENT below is exactly that x, which is what puts a part's colour block
+      // plane number is - and PART_INDENT below is exactly that x, which is what puts a part's color block
       // under the first letter of its plane's name.
       // The disclosure triangle folds the plane's parts away, as a layer folds in Illustrator. It is a VIEW
       // control only - a folded plane is still in the 3D view and the STL. Hiding is the checkbox beside it.
@@ -4559,13 +4611,15 @@ $("partstable").addEventListener("click",(e)=>{
   // Clicking a ROW selects it. A part row selects that part on the mat - the same selection the canvas
   // sets, so the highlight is simply what the table already knows. A plane row picks the PLANE, which is
   // not a shape and so is held separately; clicking it again lets it go.
+  // the color swatch: select the row, then offer the palette for it
+  const sw=e.target.closest(".partswatch");
+  if(sw){ e.preventDefault(); const mem=gidMembers(sw);
+    if(mem.length){ selectPartGroup(mem); openFillPop(sw); }
+    return; }
   if(!e.target.closest("input,a,select")){
     const pr=e.target.closest(".partrow");
     if(pr){ const mem=gidMembers(pr); if(mem.length){
-        selPlane=null; selId2=null;
-        if(mem.length===1){ selId=mem[0].id; selMulti=[]; }
-        else { selMulti=mem.map(o=>o.id); selId=null; }   // a name that split into several objects selects as the whole part
-        draw(); refreshEditPanel();
+        selectPartGroup(mem);
         const nm=mem[0].el.getAttribute("data-name");
         say((nm?'"'+nm.replace(/[<>]/g,"")+'"':"That part")+" selected"+(mem.length>1?" - all "+mem.length+" pieces of it.":"."));
       }
