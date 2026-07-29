@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.158 -->
+<!-- SANGALA_VERSION: 2026-07-28.159 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -334,7 +334,10 @@
       <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
       <!-- Planes head the list and their parts sit under them: set a depth once and every part in the plane
            follows; clear a plane's checkbox to take it out of the 3D view while you judge the rest. -->
-      <div id="partstable" style="margin-top:.5rem;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
+      <!-- On the SAME card as the Selected Object readout above (#editdims): a field is #fffaf0, and on a
+           #fffaf0 card only its border shows, which is the quiet look. Straight on the panel the identical
+           field reads as a white box punched into the tan. -->
+      <div id="partstable" style="margin-top:.5rem;padding:.4rem .45rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;font-variant-numeric:tabular-nums"></div>
     </div>
     <div id="zoomctl">
       <button id="zoomOut" title="Zoom out">&minus;</button>
@@ -4295,13 +4298,15 @@ function refreshPartsTable(){
   // The header cell toggles every part at once - the usual want is "show me the massing", not one part.
   const allOn=parts.every(studsOn);   // what is actually SHOWING, plane overrides included
   let h='<table style="border-collapse:collapse;width:100%;table-layout:fixed"><colgroup>'
-      +'<col style="width:40%"><col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:11%"></colgroup>'
-      +'<tr style="color:#8a7350;font-size:.85rem">'
-      +'<th style="text-align:left;font-weight:600;padding:.1rem .2rem">Part</th>'
-      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Depth</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .2rem">Base</th>'
-      +'<th style="text-align:center;font-weight:600;padding:.1rem .2rem"><a href="#" id="studsAll" data-on="'+(allOn?1:0)
+      +'<col style="width:39%"><col style="width:14%"><col style="width:16%"><col style="width:17%"><col style="width:14%"></colgroup>'
+      // .72rem and tight padding: at a 274px panel the labels at .85rem were 8px wider than the table and
+      // ran into each other ("PlaneDepth"). The FIELDS keep their .9rem - it is only the column labels.
+      +'<tr style="color:#8a7350;font-size:.72rem">'
+      +'<th style="text-align:left;font-weight:600;padding:.1rem .1rem">Part</th>'
+      +'<th style="text-align:center;font-weight:600;padding:.1rem .1rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem">Depth</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem">Base</th>'
+      +'<th style="text-align:center;font-weight:600;padding:.1rem .1rem"><a href="#" id="studsAll" data-on="'+(allOn?1:0)
       +'" style="color:#8a7350;text-decoration:none;border-bottom:1px dotted #8a7350" title="'
       +(allOn?'Hide the studs on every part - the massing reads more clearly without them':'Show the studs on every part')
       +'">Studs</a></th></tr>';
@@ -4335,7 +4340,9 @@ function refreshPartsTable(){
       +escText(nm||"unnamed")+'</span>'
       +(mem.length>1?'<span style="flex:0 0 auto;color:#8a7350">('+mem.length+')</span>':'')+'</div></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="partplane" type="number" min="1" step="1" data-gid="'+gi
-      +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
+      // .1rem sides, not .2rem: a number input reserves room for its spinner, and at this column width the
+      // wider padding left 28px of content box for a 30px digit - the box fitted, the number inside did not
+      +'" value="'+(gpl===undefined?"":(+gpl||1))+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:center;font-weight:700;font-size:.9rem;padding:.1rem .1rem"></td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz", gz===undefined?null:PLATE_UNIT.f(+gz||0), "mixed")+'</td>'
       +'<td style="text-align:right;padding:.12rem .2rem">'+num("partz0", gz0===undefined?null:PLATE_UNIT.f(+gz0||0), "mixed")+'</td>'
       // dimmed, never disabled, while the plane overrides it: the box still edits the part's own setting,
@@ -4361,7 +4368,7 @@ function refreshPartsTable(){
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
     // a rule above each plane, so two folded planes in a row read as two blocks and not one
-    h+='<tr style="background:#efe3cc;border-top:1px solid #dcc9a4">'
+    h+='<tr style="background:#f2e7d1;border-top:1px solid #dcc9a4">'   // a light tan band on the cream card - enough to read as a heading, not enough to make the fields look white
       +'<td colspan="2" style="padding:.15rem .2rem">'
       +'<div style="display:flex;align-items:center;gap:.25rem;min-width:0">'
       // the disclosure triangle folds the plane's parts away, as a layer folds in Illustrator. It is a VIEW
@@ -4403,9 +4410,9 @@ const studOvOf=mem=>{ for(const o of mem){ const v=o.el.getAttribute("data-plane
 function studBox(pid,ov){
   const f = ov==="1" ? {bd:"#1a5fb4",bg:"#1a5fb4",fg:"#fff",ch:"&#10003;",
               tip:"Studs shown on every part in this plane. Click to hide them on all of them."}
-          : ov==="0" ? {bd:"#a33",bg:"#fff",fg:"#a33",ch:"&#10005;",
+          : ov==="0" ? {bd:"#a33",bg:"#fffaf0",fg:"#a33",ch:"&#10005;",
               tip:"Studs hidden on every part in this plane. Click to give each part its own setting back."}
-          :            {bd:"#b9a179",bg:"#fff",fg:"transparent",ch:"&#10003;",
+          :            {bd:"#b9a179",bg:"#fffaf0",fg:"transparent",ch:"&#10003;",
               tip:"Each part in this plane uses its own Studs setting. Click to show studs on all of them."};
   return '<a href="#" class="planestud" data-plane="'+pid+'" data-ov="'+(ov||"")+'" title="'+f.tip+'"'
     +' style="display:inline-block;width:.85rem;height:.85rem;line-height:.78rem;font-size:.7rem;text-align:center;'
