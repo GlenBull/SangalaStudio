@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.173 -->
+<!-- SANGALA_VERSION: 2026-07-29.174 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -186,16 +186,6 @@
   <div class="hint" id="mirrorhint" style="padding:.25rem .6rem;white-space:nowrap">Select one or more shapes to mirror.</div>
   <button id="mFlipH" title="Flip left-right, about the selection's own center">↔ Flip Horizontal</button>
   <button id="mFlipV" title="Flip top-bottom, about the selection's own center">↕ Flip Vertical</button>
-</div>
-<!-- Only shown when a plane is mirrored. A mirrored figure prints either as one solid - which needs support
-     under the overhangs - or as two halves laid flat side down, which needs none. The back half is a genuine
-     reflection, not a second copy of the front: printing the front twice and gluing them back to back gives a
-     figure that faces the same way from both sides, which a solid object does not. -->
-<div id="stlmenu" class="menu" style="position:fixed;z-index:31;display:none">
-  <div class="hint" style="padding:.25rem .6rem;white-space:nowrap">This design has a mirrored plane.</div>
-  <button id="sWhole" title="The whole figure, front and back as one solid. Printed upright it needs support under the overhangs.">◆ Whole Figure</button>
-  <button id="sFront" title="The front half only, flat side down - no support needed. Print this and the back half, then glue them together.">◐ Front Half</button>
-  <button id="sBack"  title="The back half only, flat side down. It is a true reflection of the front, not a second copy of it.">◑ Back Half</button>
 </div>
 <div id="partmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button data-part="brick">🧱 Brick</button>
@@ -2264,25 +2254,25 @@ function barTris(o){
 // kind of body alike - a sloped roof, a cone, a brick, a baked Combine mesh - each half keeping its own
 // slope instead of one ramp stretched over the doubled height. The two halves meet exactly at z=0; slicers
 // union solids that touch, so that face is not a seam in the print.
-const isMirrored=o=>o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-mirror")==="1";
+// THREE states, like the plane's studs box: "" = front half only, the relief as authored (no mirror);
+// "1" = both halves, the figure in the round; "back" = the reflection on its own. A figure printed in the
+// round needs support under its overhangs; each half laid flat side down needs none, so the two halves are
+// what a student prints and glues. Because the state is per plane and the STL is whatever buildTris returns,
+// exporting a half is just showing that half - the same rule as hiding a plane, and no export menu needed.
+const mirrorOf =o=>(o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-mirror"))||"";
+const isMirrored=o=>mirrorOf(o)!=="";
 // Reflected about the plane z=k, with the winding reversed so normals still point outward.
 const reflectZ=(tris,k)=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],2*k-p[2]]));
-// 0 = the whole figure; 1 = its front half only; -1 = its back half. A mirrored figure printed upright needs
-// support under every overhang, so the other way to make it is two halves, each laid flat side down, glued.
-// The back half must be a true REFLECTION and not a second copy of the front: two fronts glued back to back
-// would face the same way from both sides, which no solid object does.
-let buildHalf=0;
 function bodyTris(o,fuse){
-  const t=bodyTrisOne(o,fuse);
-  if(!isMirrored(o) || !t.length) return t;
-  if(buildHalf===1) return t;
+  const t=bodyTrisOne(o,fuse), m=mirrorOf(o);
+  if(!m || !t.length) return t;   // front half only: the body as authored
   // Reflect about the body's OWN lowest point, not about z=0. A part standing on the backdrop is unaffected
   // - its lowest point IS z=0 - but a RAISED part reflected through z=0 would leave its two halves hanging
   // either side of the gap it stands off by. About its own base the halves always meet, so a mirrored part
   // is one solid whatever its Base.
   let lo=Infinity; for(const tr of t) for(const p of tr) if(p[2]<lo) lo=p[2];
   const back=reflectZ(t,lo);
-  return buildHalf===-1 ? back : t.concat(back);
+  return m==="back" ? back : t.concat(back);   // the reflection on its own, or both halves together
 }
 function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
@@ -2381,7 +2371,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
   // so a grouped solid+hole renders and EXPORTS as a solid-with-a-hole without baking. No forced union of
   // solids - Intersect and a single merged mesh stay the Combine tool's job.
-  const useCache = !(onlyIds && onlyIds.size) && !buildHalf;   // a half build must never seed the preview's cache with half a bundle
+  const useCache = !(onlyIds && onlyIds.size);
   const buckets=new Map();   // outermost group id (or "solo<id>" for ungrouped) -> members
   nonBrick.forEach(o=>{ const g=gpathOf(o), key=g.length?g[0]:("solo"+o.id); if(!buckets.has(key))buckets.set(key,[]); buckets.get(key).push(o); });
   buckets.forEach((members,key)=>{
@@ -2422,43 +2412,30 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
 // silently wrote only one. Exporting what is selected sidesteps that completely: one piece, one click, one
 // dialog, and the student still chooses where every file goes. With nothing selected it writes the whole
 // design, which is the right thing when the pieces are laid out to print together in one job.
-async function exportSTL(half){
+// Exports WHAT IS SHOWN. A hidden plane is already absent from buildTris, and a plane showing one half
+// yields that half - so there is no export menu to keep in step with the view (Glen, 2026-07-29).
+async function exportSTL(){
   const sel=new Set(selectedIds());
-  buildHalf=half||0;
-  let built; try{ built=buildTris(sel.size?sel:null); } finally { buildHalf=0; }   // never leave the flag set: the preview builds through the same path
-  const {n,bricks,parts,nGuide}=built;
+  const {n,bricks,parts,nGuide}=buildTris(sel.size?sel:null);
   if(!n){ say(nGuide ? "Nothing to export yet - every shape here is a Guide, and a guide is scaffolding to build against, never material. Build parts against it, or untick Guide to make one solid."
                      : sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
                                 : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
-  const suffix = half===1 ? "-front.stl" : half===-1 ? "-back.stl" : sel.size ? "-part.stl" : ".stl";
+  const halves=[...new Set(objects.filter(o=>mirrorOf(o)).map(mirrorOf))];   // what the mirrored planes are showing
+  const suffix = sel.size ? "-part.stl"
+    : halves.length===1 && halves[0]==="1"    ? "-whole.stl"
+    : halves.length===1 && halves[0]==="back" ? "-back.stl"
+    : ".stl";
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
                             docFileName(suffix),"STL model",".stl");
   if(!name){ say("Export canceled - nothing written."); return; }
-  const what = half ? (half===1?"the front half":"the back half")
-             : sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
+  const what = sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
                         : (parts.length>1 ? "all "+parts.length+" pieces together" : "the model");
   say("Exported "+name+" - "+what+(bricks?", "+bricks+" hollow brick"+(bricks!==1?"s":""):"")+", "+tris.length+" triangles."
-      + (half===1 ? " Print it flat side down - no support needed - then export the back half and glue the two together." : "")
-      + (half===-1 ? " That is the pair to the front half; glue them back to back." : "")
-      + (!half && parts.length>1 && !sel.size ? " To save pieces separately, select one and export again." : ""));
+      + " It is exactly what the 3D view is showing."
+      + (parts.length>1 && !sel.size ? " To save pieces separately, select one and export again." : ""));
 }
-// With a mirrored plane there is a real choice to make, so the button offers it; with none, there is nothing
-// to choose and it exports straight away.
-const anyMirrored=()=>objects.some(isMirrored);
-function closeStl(){ $("stlmenu").style.display="none"; }
-$("bStl").onclick=(e)=>{
-  if(!anyMirrored()){ closeStl(); exportSTL(0); return; }
-  e.stopPropagation();
-  const t=$("stlmenu"), r=$("bStl").getBoundingClientRect(), open=t.style.display==="none";
-  t.style.display=open?"flex":"none";
-  if(open){ t.style.left=r.left+"px"; t.style.top=(r.bottom+6)+"px"; }
-};
-$("sWhole").onclick=()=>{ closeStl(); exportSTL(0); };
-$("sFront").onclick=()=>{ closeStl(); exportSTL(1); };
-$("sBack").onclick =()=>{ closeStl(); exportSTL(-1); };
-document.addEventListener("click",(e)=>{ const t=$("stlmenu");
-  if(t.style.display!=="none" && !t.contains(e.target) && !$("bStl").contains(e.target)) closeStl(); });
+$("bStl").onclick=()=>exportSTL();
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
@@ -4557,7 +4534,7 @@ function refreshPartsTable(){
     const bs=[...new Set(pmem.map(o=>+o.el.getAttribute("data-z0")||0))];
     const bval=bs.length===1?PLATE_UNIT.f(bs[0]):"";   // blank when the members disagree, same rule as Depth
     const shown=pmem.some(o=>!isHidden(o));
-    const mir=pmem.some(isMirrored);
+    const mir=pmem.map(mirrorOf).find(Boolean)||"";   // "" front half only | "1" both halves | "back" the reflection alone
     const nm=nameOfMembers(pmem);
     // The plane NUMBER shows in front of a name, because a part is still moved between planes by number.
     // a rule above each plane, so two folded planes in a row read as two blocks and not one
@@ -4583,21 +4560,16 @@ function refreshPartsTable(){
       +escAttr((nm?nm+" - ":"")+"double-click to rename this plane")+'"'
       +' style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'   // 0 1: the dotted underline hugs the name instead of stretching to the count, and still ellipses when long
       +'cursor:text;font-weight:700;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
-      // Mirror: reflect this plane through the backdrop so it reads in the round. Sits with the plane's own
-      // name rather than in a column, because there is no column free and it belongs to the whole plane.
-      +'<a href="#" class="planemirror" data-plane="'+pid+'" data-on="'+(mir?1:0)+'" title="'
-      +(mir?"Mirrored: this plane has a matching back. Click to make it a relief again."
-           :"Mirror this plane through the backdrop, so the figure has a matching back instead of stopping flat.")
-      // The SAME icon the Mirror tool carries in the toolbar (Glen, 2026-07-29) - two arrows away from a
-      // dashed line. One mark for one idea, wherever it appears; the tooltips say which axis each mirrors.
-      // Drawn in currentColor rather than the toolbar's fixed brown, so it can go white when lit.
+      // Mirror, in three states. Sits with the plane's own name rather than in a column, because there is
+      // no column free and it belongs to the whole plane. The tooltip names the state in words: left-is-front
+      // is a convention, and nothing on screen forces that reading.
+      +'<a href="#" class="planemirror" data-plane="'+pid+'" data-on="'+mir+'" title="'
+      +(mir==="1" ? "Both halves - the figure in the round. Click for the back half on its own."
+      : mir==="back" ? "Back half only - the reflection, to print flat side down. Click for the front half again."
+      : "Front half only - the relief as authored. Click to mirror it, so the figure has a matching back.")
       +'" style="flex:0 0 auto;margin-left:.2rem;display:inline-flex;align-items:center;text-decoration:none;'
       +'padding:.1rem .15rem;border:1px solid '+(mir?"#1a5fb4":"transparent")+';border-radius:3px;'
-      +'background:'+(mir?"#1a5fb4":"transparent")+';color:'+(mir?"#fff":"#a8977a")+'">'
-      +'<svg width="15" height="15" viewBox="0 0 24 24" style="display:block" aria-hidden="true">'
-      +'<line x1="12" y1="2.5" x2="12" y2="21.5" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/>'
-      +'<path d="M9.5 6 L4 9.5 L9.5 13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>'
-      +'<path d="M14.5 6 L20 9.5 L14.5 13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/></svg></a>'
+      +'background:'+(mir?"#1a5fb4":"transparent")+';color:'+(mir?"#fff":"#8a7350")+'">'+mirIcon(mir)+'</a>'
       +'</div></td>'
       // Depth and Base for the whole plane, in the same columns the parts use. Base is what lifts a plane
       // clear of the one behind it - the relief step itself - so setting it per plane is the point.
@@ -4626,6 +4598,16 @@ const studOvOf=mem=>{ for(const o of mem){ const v=o.el.getAttribute("data-plane
 const planeNum=(cls,pid,val,tip)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step
   +'" data-plane="'+pid+'" value="'+val+'" placeholder="'+MIXED_PH+'" title="'+escAttr(val===""?MIXED_TIP:tip)+'"'
   +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
+// The toolbar's own Mirror mark, with the SOLID chevron naming the half you keep and the other ghosted.
+// One mark, three readings: front alone, both, back alone.
+function mirIcon(m){
+  const front = m!=="back", back = m!=="";
+  const arm=(d,on)=>'<path d="'+d+'" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"'
+    +' stroke-linecap="round" opacity="'+(on?1:.28)+'"/>';
+  return '<svg width="15" height="15" viewBox="0 0 24 24" style="display:block" aria-hidden="true">'
+    +'<line x1="12" y1="2.5" x2="12" y2="21.5" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/>'
+    +arm("M9.5 6 L4 9.5 L9.5 13", front)+arm("M14.5 6 L20 9.5 L14.5 13", back)+'</svg>';
+}
 function studBox(pid,ov){
   const f = ov==="1" ? {bd:"#1a5fb4",bg:"#1a5fb4",fg:"#fff",ch:"&#10003;",
               tip:"Studs shown on every part in this plane. Click to hide them on all of them."}
@@ -4694,11 +4676,11 @@ $("partstable").addEventListener("change",(e)=>{
   if(p){ if(p.value==="") return;
     const v=String(Math.max(1, Math.round(+p.value||1)));
     const tgt=planeMembers(+v);   // read BEFORE the move: a part takes on the name AND the studs override of the plane it joins, and drops the old ones
-    const pnm=nameOfMembers(tgt), pov=studOvOf(tgt), pmir=tgt.some(isMirrored);
+    const pnm=nameOfMembers(tgt), pov=studOvOf(tgt), pmir=tgt.map(mirrorOf).find(Boolean)||"";
     gidMembers(p).forEach(o=>{ o.el.setAttribute("data-plane", v);
       if(pnm) o.el.setAttribute("data-plane-name", pnm); else o.el.removeAttribute("data-plane-name");
       if(pov) o.el.setAttribute("data-plane-studs", pov); else o.el.removeAttribute("data-plane-studs");
-      if(pmir) o.el.setAttribute("data-plane-mirror","1"); else o.el.removeAttribute("data-plane-mirror");
+      if(pmir) o.el.setAttribute("data-plane-mirror", pmir); else o.el.removeAttribute("data-plane-mirror");
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
@@ -4718,11 +4700,12 @@ $("partstable").addEventListener("click",(e)=>{
     return; }
   const mb=e.target.closest(".planemirror");
   if(mb){ e.preventDefault(); const pid=+mb.dataset.plane, mem=planeMembers(pid), lbl=planeLabel(pid);
-    const on = mb.dataset.on!=="1";
-    mem.forEach(o=>{ if(on) o.el.setAttribute("data-plane-mirror","1"); else o.el.removeAttribute("data-plane-mirror"); });
+    const next = mb.dataset.on==="" ? "1" : mb.dataset.on==="1" ? "back" : "";   // front -> both -> back -> front
+    mem.forEach(o=>{ if(next) o.el.setAttribute("data-plane-mirror", next); else o.el.removeAttribute("data-plane-mirror"); });
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh();
-    say(on ? lbl+" mirrored - it now has a matching back, so it reads in the round rather than as a relief."
-           : lbl+" is a relief again - front only.");
+    say(next==="1" ? lbl+" mirrored - it reads in the round now. Printed upright it needs support under the overhangs."
+      : next==="back" ? lbl+": the back half on its own. Export it, print it flat side down, and glue it to the front half."
+                      : lbl+" is a relief again - the front half on its own.");
     return; }
   const sb=e.target.closest(".planestud");
   if(sb){ e.preventDefault(); const pid=+sb.dataset.plane, mem=planeMembers(pid), lbl=planeLabel(pid);
