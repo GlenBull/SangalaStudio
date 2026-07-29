@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.153 -->
+<!-- SANGALA_VERSION: 2026-07-28.154 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -3558,13 +3558,20 @@ function placeBrick(e){
 // Node tool: make a shape editable point-by-point the first time a node is moved. A parametric rect becomes a
 // <polygon>; a stroke from an imported design (a <path>, or a turtle trail) becomes a <polyline> - it must NOT
 // become a polygon, which would close it, and the blade would then cut the closing edge that was never drawn.
+// ONE list, used by both conversions below. It was written out twice, and the two copies drifted - the plane
+// attributes reached only the live element, so node-editing a shape dropped its plane, its plane name and its
+// hidden state (a hidden part would quietly come back into the 3D view and the STL). Same drift, same cure as
+// the parts table's tableParts(): keep the list in one place.
+const KEEP_ATTRS=["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role",
+  "data-mosaic","data-name","data-plane","data-plane-name","data-hidden","data-slopes","data-cone","data-slope-inv",
+  "data-slope-run","data-slope-dir"];   // extrude Depth/Base, per-side Slope, LEGO connectors, paper color, part name, plane
 function ensurePolygon(o){
   const t=o.el.tagName.toLowerCase();
   if(t==="polygon"||t==="polyline") return;             // already editable
   if(t==="rect"){                                       // the app's own rect: 4 corners, in the app's mm document
     const nodes=shapeNodes(o);
     const attrs={points:nodes.map(p=>fmtn(p[0])+","+fmtn(p[1])).join(" ")};
-    ["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role","data-mosaic","data-name","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });   // keep any extrude Depth/Base, per-side Slope, LEGO connectors and paper color
+    KEEP_ATTRS.forEach(a=>{ if(o.el.hasAttribute(a)) attrs[a]=o.el.getAttribute(a); });
     const poly=svgNode("polygon",attrs);
     if(o.el&&o.el.remove) o.el.remove();
     o.el=poly; o.poly=nodes.concat([nodes[0]]);         // closed ring for preview/cut
@@ -3573,7 +3580,7 @@ function ensurePolygon(o){
   const closed=objClosed(o);                            // an imported shape: swap it for an editable one IN PLACE, so it
   const el=document.createElementNS(SVGNS, closed?"polygon":"polyline");   // keeps the file's parent, transforms and units
   ["stroke","stroke-width","stroke-dasharray","stroke-linecap","fill","style","transform","data-tr0","data-shx","data-shy",
-   "data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-open","data-fill","data-role","data-mosaic","data-name","data-slopes","data-cone","data-slope-inv","data-slope-run","data-slope-dir"].forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });
+   "data-open"].concat(KEEP_ATTRS).forEach(a=>{ if(o.el.hasAttribute(a)) el.setAttribute(a,o.el.getAttribute(a)); });   // an imported shape also keeps how it is drawn and where the file put it
   o.el.parentNode.insertBefore(el,o.el);
   o.el.remove(); o.el=el;
   o.el.setAttribute("points", elPoints(o));             // same page position, now as movable points
