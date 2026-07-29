@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.167 -->
+<!-- SANGALA_VERSION: 2026-07-29.168 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4407,8 +4407,11 @@ function refreshPartsTable(){
       +'<tr style="color:#8a7350;font-size:.8rem">'
       +'<th style="text-align:left;font-weight:600;padding:.1rem .1rem">Part</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .1rem" title="Which plane this part belongs to. Parts in one plane take a depth together.">Plane</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem">Depth</th>'
-      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem">Base</th>'
+      // The two are easy to mistake for each other, so each says plainly what it does and what the other does not
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem" title="How THICK a part is - how far it'
+      +' stands out from where it starts. In plates: 3 plates = 1 brick.">Depth</th>'
+      +'<th style="text-align:right;font-weight:600;padding:.1rem .1rem" title="WHERE a part starts, measured up'
+      +' from the backdrop. 0 sits it on the backdrop; raise it and the part stands off, with a gap underneath.">Base</th>'
       +'<th style="text-align:center;font-weight:600;padding:.1rem .1rem"><a href="#" id="studsAll" data-on="'+(allOn?1:0)
       +'" style="color:#8a7350;text-decoration:none;border-bottom:1px dotted #8a7350" title="'
       +(allOn?'Hide the studs on every part - the massing reads more clearly without them':'Show the studs on every part')
