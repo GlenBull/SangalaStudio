@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.172 -->
+<!-- SANGALA_VERSION: 2026-07-29.173 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -186,6 +186,16 @@
   <div class="hint" id="mirrorhint" style="padding:.25rem .6rem;white-space:nowrap">Select one or more shapes to mirror.</div>
   <button id="mFlipH" title="Flip left-right, about the selection's own center">↔ Flip Horizontal</button>
   <button id="mFlipV" title="Flip top-bottom, about the selection's own center">↕ Flip Vertical</button>
+</div>
+<!-- Only shown when a plane is mirrored. A mirrored figure prints either as one solid - which needs support
+     under the overhangs - or as two halves laid flat side down, which needs none. The back half is a genuine
+     reflection, not a second copy of the front: printing the front twice and gluing them back to back gives a
+     figure that faces the same way from both sides, which a solid object does not. -->
+<div id="stlmenu" class="menu" style="position:fixed;z-index:31;display:none">
+  <div class="hint" style="padding:.25rem .6rem;white-space:nowrap">This design has a mirrored plane.</div>
+  <button id="sWhole" title="The whole figure, front and back as one solid. Printed upright it needs support under the overhangs.">◆ Whole Figure</button>
+  <button id="sFront" title="The front half only, flat side down - no support needed. Print this and the back half, then glue them together.">◐ Front Half</button>
+  <button id="sBack"  title="The back half only, flat side down. It is a true reflection of the front, not a second copy of it.">◑ Back Half</button>
 </div>
 <div id="partmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button data-part="brick">🧱 Brick</button>
@@ -2257,15 +2267,22 @@ function barTris(o){
 const isMirrored=o=>o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-plane-mirror")==="1";
 // Reflected about the plane z=k, with the winding reversed so normals still point outward.
 const reflectZ=(tris,k)=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],2*k-p[2]]));
+// 0 = the whole figure; 1 = its front half only; -1 = its back half. A mirrored figure printed upright needs
+// support under every overhang, so the other way to make it is two halves, each laid flat side down, glued.
+// The back half must be a true REFLECTION and not a second copy of the front: two fronts glued back to back
+// would face the same way from both sides, which no solid object does.
+let buildHalf=0;
 function bodyTris(o,fuse){
   const t=bodyTrisOne(o,fuse);
   if(!isMirrored(o) || !t.length) return t;
+  if(buildHalf===1) return t;
   // Reflect about the body's OWN lowest point, not about z=0. A part standing on the backdrop is unaffected
   // - its lowest point IS z=0 - but a RAISED part reflected through z=0 would leave its two halves hanging
   // either side of the gap it stands off by. About its own base the halves always meet, so a mirrored part
   // is one solid whatever its Base.
   let lo=Infinity; for(const tr of t) for(const p of tr) if(p[2]<lo) lo=p[2];
-  return t.concat(reflectZ(t,lo));
+  const back=reflectZ(t,lo);
+  return buildHalf===-1 ? back : t.concat(back);
 }
 function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
   const g=s=>+o.el.getAttribute(s)||0, gb=s=>o.el.getAttribute(s)!=="0", G=fuse?FUSE_GROW:0;
@@ -2364,7 +2381,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
   // so a grouped solid+hole renders and EXPORTS as a solid-with-a-hole without baking. No forced union of
   // solids - Intersect and a single merged mesh stay the Combine tool's job.
-  const useCache = !(onlyIds && onlyIds.size);
+  const useCache = !(onlyIds && onlyIds.size) && !buildHalf;   // a half build must never seed the preview's cache with half a bundle
   const buckets=new Map();   // outermost group id (or "solo<id>" for ungrouped) -> members
   nonBrick.forEach(o=>{ const g=gpathOf(o), key=g.length?g[0]:("solo"+o.id); if(!buckets.has(key))buckets.set(key,[]); buckets.get(key).push(o); });
   buckets.forEach((members,key)=>{
@@ -2405,22 +2422,43 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
 // silently wrote only one. Exporting what is selected sidesteps that completely: one piece, one click, one
 // dialog, and the student still chooses where every file goes. With nothing selected it writes the whole
 // design, which is the right thing when the pieces are laid out to print together in one job.
-async function exportSTL(){
+async function exportSTL(half){
   const sel=new Set(selectedIds());
-  const {n,bricks,parts,nGuide}=buildTris(sel.size?sel:null);
+  buildHalf=half||0;
+  let built; try{ built=buildTris(sel.size?sel:null); } finally { buildHalf=0; }   // never leave the flag set: the preview builds through the same path
+  const {n,bricks,parts,nGuide}=built;
   if(!n){ say(nGuide ? "Nothing to export yet - every shape here is a Guide, and a guide is scaffolding to build against, never material. Build parts against it, or untick Guide to make one solid."
                      : sel.size ? "Nothing in the selection has a Depth yet - give the shape a Depth, or use the Brick tool."
                                 : "No 3D objects yet - draw a shape and give it a Depth, or use the Brick tool."); return; }
   const tris=[].concat.apply([], parts.map(p=>cleanMesh(p)));   // full manifold clean PER PIECE here (combines only weld-only en route, for speed) - never across pieces, which would weld separate parts together
+  const suffix = half===1 ? "-front.stl" : half===-1 ? "-back.stl" : sel.size ? "-part.stl" : ".stl";
   const name=await saveBlob(new Blob([stlAscii(tris,"sangala")],{type:"model/stl"}),
-                            sel.size?docFileName("-part.stl"):docFileName(".stl"),"STL model",".stl");
+                            docFileName(suffix),"STL model",".stl");
   if(!name){ say("Export canceled - nothing written."); return; }
-  const what = sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
+  const what = half ? (half===1?"the front half":"the back half")
+             : sel.size ? (parts.length>1 ? parts.length+" selected pieces" : "the selected piece")
                         : (parts.length>1 ? "all "+parts.length+" pieces together" : "the model");
   say("Exported "+name+" - "+what+(bricks?", "+bricks+" hollow brick"+(bricks!==1?"s":""):"")+", "+tris.length+" triangles."
-      + (parts.length>1 && !sel.size ? " To save pieces separately, select one and export again." : ""));
+      + (half===1 ? " Print it flat side down - no support needed - then export the back half and glue the two together." : "")
+      + (half===-1 ? " That is the pair to the front half; glue them back to back." : "")
+      + (!half && parts.length>1 && !sel.size ? " To save pieces separately, select one and export again." : ""));
 }
-$("bStl").onclick=exportSTL;
+// With a mirrored plane there is a real choice to make, so the button offers it; with none, there is nothing
+// to choose and it exports straight away.
+const anyMirrored=()=>objects.some(isMirrored);
+function closeStl(){ $("stlmenu").style.display="none"; }
+$("bStl").onclick=(e)=>{
+  if(!anyMirrored()){ closeStl(); exportSTL(0); return; }
+  e.stopPropagation();
+  const t=$("stlmenu"), r=$("bStl").getBoundingClientRect(), open=t.style.display==="none";
+  t.style.display=open?"flex":"none";
+  if(open){ t.style.left=r.left+"px"; t.style.top=(r.bottom+6)+"px"; }
+};
+$("sWhole").onclick=()=>{ closeStl(); exportSTL(0); };
+$("sFront").onclick=()=>{ closeStl(); exportSTL(1); };
+$("sBack").onclick =()=>{ closeStl(); exportSTL(-1); };
+document.addEventListener("click",(e)=>{ const t=$("stlmenu");
+  if(t.style.display!=="none" && !t.contains(e.target) && !$("bStl").contains(e.target)) closeStl(); });
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
