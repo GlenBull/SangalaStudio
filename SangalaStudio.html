@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.162 -->
+<!-- SANGALA_VERSION: 2026-07-29.163 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -7,6 +7,11 @@
 <title>Sangala Studio</title>
 <style>
   *{box-sizing:border-box}
+  /* Always keep room for the page scrollbar. Selecting a shape makes the side panel taller than the window
+     and the scrollbar appears; picking a plane hides that panel again and it goes - so the whole layout was
+     stepping 15px left and back on every click between a part and a plane, which reads as the side column
+     jumping about. Reserving the gutter means the bar can come and go without moving anything. */
+  html{scrollbar-gutter:stable}
   body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#26303a;background:#37587a}
   .denim{background-color:#3f6b8e;
     background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 4px),
@@ -331,7 +336,10 @@
       <div id="brickctl" style="display:none;margin-top:.6rem;padding:.5rem .6rem;border:1px solid #cbb78f;border-radius:8px;background:#fffaf0;font-size:.9rem;color:#5a4326;line-height:1.5;font-variant-numeric:tabular-nums"></div>
     </div>
     <!-- Every named part with its Depth and Base in one table, so a relief is set up in one pass instead of
-         clicking each part in turn. Independent of the selection, so it stays put while parts are edited. -->
+         clicking each part in turn. Independent of the selection, so it stays put while parts are edited.
+         It sits ABOVE Selected Object deliberately: that readout appears for a shape and vanishes for a
+         plane, and with it below the list the list stopped moving. Clicking between a part and a plane used
+         to shift this table 428px down the panel and back. -->
     <div id="partspanel" style="display:none;margin-top:.8rem;border-top:1px solid #d8c4a0;padding-top:.6rem">
       <h2 class="marker" style="margin-top:0">Parts</h2>
       <div id="partshint" class="hint" style="margin-top:0">Depth and Base are in plates &mdash; 3 plates = 1 brick.</div>
