@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.165 -->
+<!-- SANGALA_VERSION: 2026-07-29.166 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2520,10 +2520,24 @@ function renderPreview(){
     if(edge){ const p=i<<2; px[p]=(px[p]*0.45)|0; px[p+1]=(px[p+1]*0.45)|0; px[p+2]=(px[p+2]*0.45)|0; }
   }
   g.putImageData(img,0,0);
-  if(pvPlate){   // bed label
+  if(pvPlate){
+    // The bed is drawn UNDER the model, so a design wider than 180 mm hides it completely and the plate
+    // looks as though it never came on. Re-draw its edge OVER the model, dashed where the model covers it:
+    // the outline is then always visible, and where it crosses the design it says plainly that the design
+    // runs off the bed. (A relief on a Letter page is 216 mm wide - it does not fit an A1 Mini.)
+    let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+    for(const t of pvTris) for(const p of t){ if(p[0]<mnx)mnx=p[0]; if(p[1]<mny)mny=p[1]; if(p[0]>mxx)mxx=p[0]; if(p[1]>mxy)mxy=p[1]; }
+    const bed=pvBed([mnx,mny],[mxx,mxy]), Q=(x,y)=>proj([x,y,0]);
+    const c=[Q(bed.x0,bed.y0),Q(bed.x1,bed.y0),Q(bed.x1,bed.y1),Q(bed.x0,bed.y1)];
+    g.save();
+    g.setLineDash([6,4]); g.lineWidth=1.5; g.strokeStyle="rgba(58,72,90,.75)";
+    g.beginPath(); g.moveTo(c[0][0],c[0][1]); for(let k=1;k<4;k++) g.lineTo(c[k][0],c[k][1]); g.closePath(); g.stroke();
+    g.restore();
+    const over = mxx-mnx > bed.x1-bed.x0 + 0.01 || mxy-mny > bed.y1-bed.y0 + 0.01;
     g.fillStyle="rgba(58,72,90,.85)"; g.textAlign="left"; g.textBaseline="alphabetic";
     g.font="600 "+Math.max(11,Math.round(W*0.024))+"px 'Segoe UI',system-ui,sans-serif";
-    g.fillText("Bambu A1 Mini bed · 180 × 180 mm", 12, H-12);
+    g.fillText("Bambu A1 Mini bed · 180 × 180 mm"
+      +(over?"  ·  this design is "+Math.round(mxx-mnx)+" × "+Math.round(mxy-mny)+" mm and runs off it":""), 12, H-12);
   }
 }
 function openPreview(){
