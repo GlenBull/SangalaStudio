@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.174 -->
+<!-- SANGALA_VERSION: 2026-07-29.175 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -47,7 +47,7 @@
   /* the right column was 300px, sized before the Parts table existed. The table has five columns and a
      nested indent to fit, and the board beside it has room to spare - so widen the column rather than
      squeeze the table into it. The mat keeps scaling to whatever the middle column is left with. */
-  .stage{display:grid;grid-template-columns:auto 1fr 380px;gap:.7rem;padding:.7rem}
+  .stage{display:grid;grid-template-columns:auto 1fr 420px;gap:.7rem;padding:.7rem}
   .ltools{display:flex;flex-direction:column;gap:.4rem;align-self:start}
   .ltitle{font-size:.8rem;color:#eaf1f8;text-align:center;margin:.1rem 0 .1rem}
   .ltbtn{width:52px;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;
@@ -4490,9 +4490,17 @@ function refreshPartsTable(){
     const num=(cls,val,ph)=>'<input class="'+cls+'" type="number" step="'+PLATE_UNIT.step+'" min="0" data-gid="'+gi
       +'" value="'+(val===null?"":val)+'" placeholder="'+ph+'"'+(val===null?' title="'+MIXED_TIP+'"':'')
       +' style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem">';
-    // indented to PART_INDENT: the swatch starts exactly where its plane's name starts
+    // A part's own Show box, parallel to the plane's, and indented to start under the first letter of the
+    // plane's NAME (Glen, 2026-07-29). Hiding one part is how a build is exported in pieces: hide the legs,
+    // export the rest, then show only the legs and export those.
+    const hid=mem.every(isHidden);
     return '<tr class="partrow" data-gid="'+gi+'" style="cursor:pointer'+(on?';background:'+SEL_BG:'')+'">'
       +'<td style="padding:.12rem '+ROW_PAD+' .12rem '+PART_INDENT+'"><div style="display:flex;align-items:center;gap:'+ROW_GAP+';min-width:0">'
+      // not centred in a slot: its LEFT edge has to land on the plane name's first letter, and centring it
+      // pushed the box half the slack (1.1px) to the right of that
+      +'<input class="partshow" type="checkbox" data-gid="'+gi+'"'+(hid?"":" checked")
+      +' title="Show this part in the 3D view and the STL. Clear it to leave the part out - that is how a build is exported in pieces."'
+      +' style="flex:0 0 auto;width:auto;margin:0">'
       +'<button class="partswatch" data-gid="'+gi+'" title="Click to give this part a color"'
       +' style="flex:0 0 auto;width:.85rem;height:.85rem;padding:0;border:1px solid #00000033;border-radius:2px;cursor:pointer;background:'+col+'"></button>'
       // the NAME leads the tooltip, because a long one is ellipsed in a column this narrow
@@ -4583,6 +4591,11 @@ function refreshPartsTable(){
     if(!shut) partGroups.forEach((mem,gi)=>{ if(planeOf(mem[0])===pid) h+=rowFor(mem,gi); });
   });
   host.innerHTML=h+'</table>';
+  // A plane with some of its parts hidden is neither shown nor hidden, and the checkbox can say so - but
+  // only from script, since indeterminate is not an attribute. Ticking it still reveals the whole plane.
+  ids.forEach(pid=>{ const mem=parts.filter(o=>planeOf(o)===pid);
+    const box=host.querySelector('.planeshow[data-plane="'+pid+'"]');
+    if(box) box.indeterminate = mem.some(isHidden) && mem.some(o=>!isHidden(o)); });
 }
 const planeMembers=pid=>tableParts().filter(o=>planeOf(o)===pid);
 // A plane can carry a NAME - "Frame", "Background" reads better than "Plane 2" once a relief has several.
@@ -4659,7 +4672,8 @@ $("partstable").addEventListener("change",(e)=>{
   const s=e.target.closest(".planeshow"); if(!s) return;
   const mem=planeMembers(+s.dataset.plane), lbl=planeLabel(+s.dataset.plane);
   mem.forEach(o=>{ if(s.checked) o.el.removeAttribute("data-hidden"); else o.el.setAttribute("data-hidden","1"); });
-  scheduleCommit(); draw(); pvRefresh();
+  // the parts carry their own Show boxes now, and this just changed them - redraw the table or they lie
+  scheduleCommit(); refreshPartsTable(); draw(); pvRefresh();
   say(s.checked ? lbl+" shown." : lbl+" hidden - it is out of the 3D view and the STL until you show it again."); });
 // Every control carries data-gid - the index of a NAME's members - so one edit reaches all of them.
 // live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected.
@@ -4683,6 +4697,14 @@ $("partstable").addEventListener("change",(e)=>{
       if(pmir) o.el.setAttribute("data-plane-mirror", pmir); else o.el.removeAttribute("data-plane-mirror");
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
+  const sh=e.target.closest(".partshow");
+  if(sh){ const mem=gidMembers(sh);
+    mem.forEach(o=>{ if(sh.checked) o.el.removeAttribute("data-hidden"); else o.el.setAttribute("data-hidden","1"); });
+    scheduleCommit(); refreshPartsTable(); draw(); pvRefresh();
+    const nm=(mem[0].el.getAttribute("data-name")||"").replace(/[<>]/g,"");
+    say(sh.checked ? (nm||"That part")+" shown."
+                   : (nm||"That part")+" hidden - it is out of the 3D view and the STL until you show it again.");
+    return; }
   const c=e.target.closest(".partstud");
   if(c){ const mem=gidMembers(c); mem.forEach(o=>applyDimFlag("studs", c.checked, o));
     c.removeAttribute("data-mixed"); scheduleCommit();
