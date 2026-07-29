@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-28.152 -->
+<!-- SANGALA_VERSION: 2026-07-28.153 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -4340,7 +4340,14 @@ function refreshPlanesTable(parts){
     const ds=[...new Set(mem.map(o=>+o.el.getAttribute("data-z")||0))];
     const val=ds.length===1?PLATE_UNIT.f(ds[0]):"";              // blank = the members disagree
     const shown=mem.some(o=>!isHidden(o));
-    h+='<tr><td style="padding:.12rem .2rem">Plane '+pid+' <span style="color:#8a7350">('+mem.length+')</span></td>'
+    const nm=nameOfMembers(mem);
+    // Double-click the name to rename, the same gesture Mosaic uses on a part. The plane NUMBER stays
+    // visible in front of a name, because the Plane column in the parts table below assigns by number.
+    h+='<tr><td style="padding:.12rem .2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+      +(nm?'<span style="color:#8a7350">'+pid+'</span> ':'')
+      +'<span class="planename" data-plane="'+pid+'" title="Double-click to rename this plane"'
+      +' style="cursor:text;border-bottom:1px dotted #c9b48c">'+escText(nm||("Plane "+pid))+'</span>'
+      +' <span style="color:#8a7350">('+mem.length+')</span></td>'
       +'<td style="text-align:right;padding:.12rem .2rem"><input class="planedepth" type="number" step="'+PLATE_UNIT.step
       +'" data-plane="'+pid+'" value="'+val+'" placeholder="mixed" style="width:100%;box-sizing:border-box;text-align:right;font-weight:700;font-size:.9rem;padding:.1rem .2rem"></td>'
       +'<td style="text-align:center;padding:.12rem .2rem"><input class="planeshow" type="checkbox" data-plane="'+pid+'"'
@@ -4349,6 +4356,21 @@ function refreshPlanesTable(parts){
   host.innerHTML=h+'</table>';
 }
 const planeMembers=pid=>tableParts().filter(o=>planeOf(o)===pid);
+// A plane can carry a NAME - "Frame", "Background" reads better than "Plane 2" once a relief has several.
+// It lives in data-plane-name on every MEMBER, not in a plane record: an attribute rides along in the .model
+// with no new save code, exactly as data-plane does, and a plane exists only for as long as parts sit in it.
+const escText     =s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const nameOfMembers=mem=>{ for(const o of mem){ const n=o.el.getAttribute("data-plane-name"); if(n) return n; } return ""; };
+const planeNameOf =pid=>nameOfMembers(planeMembers(pid));
+const planeLabel  =pid=>planeNameOf(pid)||("Plane "+pid);
+$("planestable").addEventListener("dblclick",(e)=>{ const sp=e.target.closest(".planename"); if(!sp) return;
+  e.preventDefault(); const pid=+sp.dataset.plane, mem=planeMembers(pid);
+  const v=prompt("Name this plane (frame, background, near side …)", planeNameOf(pid));
+  if(v==null) return;                                            // Cancel leaves the name alone; an empty box clears it
+  const n=v.trim();
+  mem.forEach(o=>{ if(n) o.el.setAttribute("data-plane-name", n); else o.el.removeAttribute("data-plane-name"); });
+  scheduleCommit(); refreshPartsTable();
+  say(n ? "Plane "+pid+" is now "+n+"." : "Plane "+pid+" name cleared."); });
 $("planestable").addEventListener("input",(e)=>{ const i=e.target.closest(".planedepth"); if(!i||i.value==="") return;
   planeMembers(+i.dataset.plane).forEach(o=>applyDim("z", +i.value||0, true, o)); });
 $("planestable").addEventListener("change",(e)=>{
@@ -4356,10 +4378,10 @@ $("planestable").addEventListener("change",(e)=>{
   if(d && d.value!==""){ planeMembers(+d.dataset.plane).forEach(o=>applyDim("z", +d.value||0, true, o));
     scheduleCommit(); refreshPartsTable(); return; }
   const s=e.target.closest(".planeshow"); if(!s) return;
-  const mem=planeMembers(+s.dataset.plane);
+  const mem=planeMembers(+s.dataset.plane), lbl=planeLabel(+s.dataset.plane);
   mem.forEach(o=>{ if(s.checked) o.el.removeAttribute("data-hidden"); else o.el.setAttribute("data-hidden","1"); });
   scheduleCommit(); draw(); pvRefresh();
-  say(s.checked ? "Plane "+s.dataset.plane+" shown." : "Plane "+s.dataset.plane+" hidden - it is out of the 3D view and the STL until you show it again."); });
+  say(s.checked ? lbl+" shown." : lbl+" hidden - it is out of the 3D view and the STL until you show it again."); });
 // Every control carries data-gid - the index of a NAME's members - so one edit reaches all of them.
 // live=true throughout: showDims() would rewrite the Selected Object readout with a part that is not selected.
 let partGroups=[];
@@ -4374,7 +4396,9 @@ $("partstable").addEventListener("change",(e)=>{
   const p=e.target.closest(".partplane");
   if(p){ if(p.value==="") return;
     const v=String(Math.max(1, Math.round(+p.value||1)));
+    const pnm=planeNameOf(+v);   // read BEFORE the move: a part takes on the name of the plane it joins, and drops the old one
     gidMembers(p).forEach(o=>{ o.el.setAttribute("data-plane", v);
+      if(pnm) o.el.setAttribute("data-plane-name", pnm); else o.el.removeAttribute("data-plane-name");
       if(isHidden(o)) o.el.removeAttribute("data-hidden"); });   // moving into a plane brings the part back into view; the new plane's Show governs from now on
     scheduleCommit(); refreshPartsTable(); draw(); pvRefresh(); return; }
   const c=e.target.closest(".partstud");
