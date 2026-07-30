@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-30.176 -->
+<!-- SANGALA_VERSION: 2026-07-30.177 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2277,12 +2277,14 @@ const reflectZ=(tris,k)=>tris.map(t=>[t[2],t[1],t[0]].map(p=>[p[0],p[1],2*k-p[2]
 function bodyTris(o,fuse){
   const t=bodyTrisOne(o,fuse), m=mirrorOf(o);
   if(!m || !t.length) return t;   // front half only: the body as authored
-  // Reflect about the body's OWN lowest point, not about z=0. A part standing on the backdrop is unaffected
-  // - its lowest point IS z=0 - but a RAISED part reflected through z=0 would leave its two halves hanging
-  // either side of the gap it stands off by. About its own base the halves always meet, so a mirrored part
-  // is one solid whatever its Base.
-  let lo=Infinity; for(const tr of t) for(const p of tr) if(p[2]<lo) lo=p[2];
-  const back=reflectZ(t,lo);
+  // Reflect about the BACKDROP, z=0, which is the figure's midline. Base is then how far a part stands
+  // off that midline, and SEPARATION IS ACHIEVED BY ELEVATING THE BASE BEFORE EXTRUDING (Glen's rule,
+  // 2026-07-30): a part at Base 0 spans the midline and comes out solid, while a paired part - the legs,
+  // the horns - stands off it and mirrors into two pieces a gap of twice its Base apart.
+  // This previously reflected about each part's OWN lowest point so the halves always met. That made a
+  // mirrored part one solid whatever its Base, which in effect ruled that no design may need support
+  // material - a rule the printer never imposed and this code had no business inventing.
+  const back=reflectZ(t,0);
   return m==="back" ? back : t.concat(back);   // the reflection on its own, or both halves together
 }
 function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a group with other bodies, so grow it a hair to weld to them
