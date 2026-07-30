@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-29.175 -->
+<!-- SANGALA_VERSION: 2026-07-30.176 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -152,7 +152,7 @@
       <div></div>
     </div>
     <label class="fld" style="margin-top:.6rem">Page size (material)</label>
-    <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option></select>
+    <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option><option value="baseplate">LEGO baseplate 32 x 32 studs</option></select>
     <label class="fld" style="margin-top:.6rem">Units <span style="font-weight:normal;color:#8a7350">(2D only; 3D always in mm)</span></label>
     <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
     <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
@@ -470,13 +470,24 @@ const MM_UNIT={f:v=>Math.round(v*10)/10, step:"0.1", lab:"mm"};
 const PLATE_MM=3.2, PLATE_UNIT={f:v=>Math.round(v/PLATE_MM*100)/100, step:"1", lab:"plates"};   // EVERY 3D height - shape, baked part or brick - is counted in LEGO plates: 3 plates = 1 brick = 9.6 mm. Millimetres are the printer's unit; plates are the builder's, and working in 9.6s to stack bricks is awkward (Glen, 2026-07-27). Geometry is still stored in mm; only the fields convert.
 function unit2D(){ return units==="in" ? {f:v=>Math.round(v/25.4*100)/100, step:"0.01", lab:"in"} : MM_UNIT; }
 function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:PAGE_H;   // the MATERIAL page, in its DISPLAYED orientation
+  // a baseplate is counted in studs, not inches: "10.1 x 10.1 in" tells a builder nothing
+  if(pageKind==="baseplate") return BASEPLATE_STUDS+" x "+BASEPLATE_STUDS+" studs";
   if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
   const f=x=>{const r=Math.round(x/25.4*10)/10; return Number.isInteger(r)?String(r):r.toFixed(1);};   // 215.9 mm -> "8.5", not "9"
   return f(a)+" x "+f(b)+" in";}
 function applyRanges(){const ox=$("offx"),oy=$("offy");
   if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(PAGE_W/25.4);oy.max=fmtn(PAGE_H/25.4);}
   else{ox.step=oy.step=1;ox.max=Math.round(PAGE_W);oy.max=Math.round(PAGE_H);}}
-function setPageSize(v){ if(v==="12x12"){PAGE_W=304.8;PAGE_H=304.8;} else {PAGE_W=215.9;PAGE_H=279.4;}   // Letter is the default; 12x12 is for plain cut / layout (registered print-and-cut stays Letter for now)
+/* A LEGO baseplate is the workspace for mosaic and brick work. The 8.5 x 11 page is the Silhouette
+   Portrait's material, and it has nothing to do with building in brick: a 32 x 32 plate is 256 mm,
+   wider than a Letter page, so a full-plate mosaic overflows a page it was never meant to sit on
+   (Glen, 2026-07-30). Sized from the stud pitch rather than a literal 256, so the two cannot drift. */
+const BASEPLATE_STUDS=32, STUD_MM=8, BASEPLATE_MM=BASEPLATE_STUDS*STUD_MM;   // STUD_MM lives here now: Snap to Studs below uses the same one, so the lattice and the plate cannot disagree
+let pageKind="letter";
+function setPageSize(v){ pageKind=v;
+  if(v==="12x12"){PAGE_W=304.8;PAGE_H=304.8;}
+  else if(v==="baseplate"){PAGE_W=BASEPLATE_MM;PAGE_H=BASEPLATE_MM;}
+  else {PAGE_W=215.9;PAGE_H=279.4;}   // Letter is the default; 12x12 is for plain cut / layout (registered print-and-cut stays Letter for now)
   applyRanges(); draw(); }
 function setUnits(u){
   const oxmm=offMM(+$("offx").value), oymm=offMM(+$("offy").value);
@@ -3319,7 +3330,7 @@ function snapSample(p){         // the dragged shape's own snap points: its node
    already, because a tile is a stud. 3D only; a die-cutter design has no studs to snap to.
    Snapping the FOOTPRINT's minimum corner is what puts a brick's studs over a tile's studs: both
    grids are anchored to their own bbox, so aligning the corners aligns every stud after it. */
-const STUD_MM=8;
+// STUD_MM is declared with BASEPLATE_MM above - one stud pitch for the lattice and the plate alike
 let studSnapOn=true;
 function studSnapDelta(poly, ddx, ddy){   // extra offset that lands the moved footprint on the lattice
   if(!studSnapOn || !mode3D || !poly || !poly.length) return null;
