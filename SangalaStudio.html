@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-30.177 -->
+<!-- SANGALA_VERSION: 2026-07-30.178 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1522,7 +1522,7 @@ function collectProject(){
       mask: (refImg.mask && refImg.mask.toDataURL) ? refImg.mask.toDataURL("image/png") : null,
       threshold: traceThreshold, pathomit: tracePathomit } : null;
   return { sangala:"project", version:2,
-    mode3D:mode3D, units:units, showMarks:showMarks,
+    mode3D:mode3D, units:units, showMarks:showMarks, pageSize:pageKind,   // a mosaic authored on a LEGO baseplate reopens on the baseplate, not on a Letter page it overflows
     material: $("material")?$("material").value:null, offx: $("offx")?$("offx").value:null, offy: $("offy")?$("offy").value:null,
     settings: settings, view: {zoom:view.zoom, panX:view.panX, panY:view.panY},
     refImage: refImage, state: serializeState() };
@@ -1547,6 +1547,10 @@ function openProject(text){
   bgImg=null; refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   histBusy=true; restoreState(proj.state); histBusy=false;   // rebuild the EXACT objects (verbatim attrs + poly + mesh; no re-sampling)
   hist=[]; redoStack=[]; commit();                           // start a fresh undo history at the loaded state
+  // Page size BEFORE units: setPageSize re-ranges the position fields and setUnits rewrites them, so the
+  // saved offsets land last. Absent on files written before .178 - leave the current workspace alone then,
+  // since an older file cannot say which one it was authored on.
+  if(proj.pageSize && $("pagesize")){ $("pagesize").value=proj.pageSize; setPageSize(proj.pageSize); }
   if(proj.units && $("units")){ $("units").value=proj.units; setUnits(proj.units); }   // units first: setUnits rewrites the position fields, then we restore their saved values
   if(proj.settings) for(const id in proj.settings){ const el=$(id); if(el) el.value=proj.settings[id]; }
   if(proj.material && $("material")) $("material").value=proj.material;
