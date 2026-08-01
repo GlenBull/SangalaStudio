@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-01.179 -->
+<!-- SANGALA_VERSION: 2026-08-01.180 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1309,6 +1309,14 @@ function importMosaic(text,fname){
   // arrived 24 mm high, with the gap moved from above it to below it. Where a mosaic sits on its
   // baseplate is part of the design, so it is carried across unchanged.
   objects.forEach(placeEl);   // keep each element's geometry in step with o.poly
+  // Place it at the plate origin, unscaled. Position defaults to 0.5 (a margin from the page edge,
+  // right for cardstock on a die cutter) and Scale to whatever the last design used - but a mosaic's
+  // coordinates ARE plate coordinates, so any offset shifts the whole plate off its own page. At the
+  // inch default that is 12.7 mm right and down, which ran a full 32 x 32 design off two edges.
+  if($("scale")) $("scale").value=100;
+  if($("offx"))  $("offx").value=0;
+  if($("offy"))  $("offy").value=0;
+  applyRanges();
   if(!mode3D) setMode3D(true);   // extruding the tiles is a 3D act - arrive in 3D mode, ready to set Depths. BEFORE draw(): the stud overlay paints only in 3D mode, and setMode3D does not redraw
   draw(); refreshEditPanel();
   if(pvOn){ const t3=buildTris(); if(!t3.n) closePreview(); else { pvSetTris(t3); pvBounds(); renderPreview(); } }
