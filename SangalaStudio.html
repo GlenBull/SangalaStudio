@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-01.181 -->
+<!-- SANGALA_VERSION: 2026-08-01.182 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -883,7 +883,7 @@ function draw(){
     addRing(o.poly);
     (o.holes||[]).forEach(addRing);                                // inner loops punch back out under even-odd, so a frame reads as a frame
     ctx.fill("evenodd"); ctx.restore(); });
-  // Mosaic tile colours, FLAT VIEW ONLY. The fill above painted each part in its one colour - the one
+  // Mosaic tile colors, FLAT VIEW ONLY. The fill above painted each part in its one color - the one
   // it will extrude with. Here the tiles that differ are painted back over it, so the eyes, the beak
   // and the muzzle read on the plan exactly where they were drawn. bodyTris() never looks at this:
   // a part is one solid in 3D, and that is a fact about extrusion rather than about the picture.
@@ -1312,12 +1312,12 @@ function importMosaic(text,fname){
       const outer=outers.reduce((a,q)=>Math.abs(q.area)>Math.abs(a.area)?q:a);   // a 4-connected component has one outer ring; guard by taking the largest
       const counts={}; let bestC=0, bestN=-1;   // the piece's color = its most common tile color
       for(const cell of comp){ const v=idx[(cell/gw)|0][cell%gw]; counts[v]=(counts[v]||0)+1; if(counts[v]>bestN){ bestN=counts[v]; bestC=v; } }
-      // The tiles that DIFFER from the piece's colour, kept for the flat view only. A part extrudes
-      // as one solid, so 3D can carry just one colour - but the plan has no such constraint, and the
+      // The tiles that DIFFER from the piece's color, kept for the flat view only. A part extrudes
+      // as one solid, so 3D can carry just one color - but the plan has no such constraint, and the
       // white of an eye or the orange of a beak is where the student put it. Stored as offsets from
       // the piece's own grid corner (so it travels with a drag) plus the piece's extent in studs (so
       // a resize can be detected and the flat fill kept instead). Only the exceptions: the buffalo's
-      // 443 tiles come to about 90 entries, since most of each part is its main colour.
+      // 443 tiles come to about 90 entries, since most of each part is its main color.
       let mnC=1e9, mnR=1e9, mxC=-1, mxR=-1;
       for(const cell of comp){ const r=(cell/gw)|0, c=cell%gw;
         if(c<mnC)mnC=c; if(r<mnR)mnR=r; if(c>mxC)mxC=c; if(r>mxR)mxR=r; }
