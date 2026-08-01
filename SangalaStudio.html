@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-01.180 -->
+<!-- SANGALA_VERSION: 2026-08-01.181 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -883,6 +883,26 @@ function draw(){
     addRing(o.poly);
     (o.holes||[]).forEach(addRing);                                // inner loops punch back out under even-odd, so a frame reads as a frame
     ctx.fill("evenodd"); ctx.restore(); });
+  // Mosaic tile colours, FLAT VIEW ONLY. The fill above painted each part in its one colour - the one
+  // it will extrude with. Here the tiles that differ are painted back over it, so the eyes, the beak
+  // and the muzzle read on the plan exactly where they were drawn. bodyTris() never looks at this:
+  // a part is one solid in 3D, and that is a fact about extrusion rather than about the picture.
+  const tileParts=objects.filter(o=>isMosaicPart(o)&&!o.mesh&&o.el&&o.el.getAttribute("data-tiles"));
+  if(tileParts.length){ const pp=placeParams(); const side=MOSAIC_TILE_MM*pp.s*k;
+    ctx.save();
+    tileParts.forEach(o=>{
+      const spec=o.el.getAttribute("data-tiles").split(" ");
+      const wS=+spec[0], hS=+spec[1];
+      let mnx=1e9, mny=1e9, mxx=-1e9, mxy=-1e9;
+      o.poly.forEach(q=>{ if(q[0]<mnx)mnx=q[0]; if(q[1]<mny)mny=q[1]; if(q[0]>mxx)mxx=q[0]; if(q[1]>mxy)mxy=q[1]; });
+      if(Math.abs((mxx-mnx)-wS*MOSAIC_TILE_MM)>0.01||Math.abs((mxy-mny)-hS*MOSAIC_TILE_MM)>0.01) return;   // resized or rotated: the tile grid no longer lines up with the footprint, so leave the flat fill alone rather than paint a lie
+      for(let i=2;i<spec.length;i++){ const t=spec[i].split(",");
+        if(t.length!==3) continue;
+        const col=MOSAIC_COLORS[+t[2]]; if(!col) continue;
+        const x0=((mnx+ +t[0]*MOSAIC_TILE_MM)*pp.s+pp.ox)*k, y0=((mny+ +t[1]*MOSAIC_TILE_MM)*pp.s+pp.oy)*k;
+        ctx.fillStyle=col; ctx.fillRect(x0,y0,side,side); }
+    });
+    ctx.restore(); }
   if(selMulti.length){   // multi-selection: a faint translucent plate BENEATH each member (drawn before the machine
     ctx.save(); ctx.fillStyle="rgba(0,0,0,0.07)";   // lines, so red stays red and blue stays blue). Fills cannot be mistaken for a cut or fold, which are strokes;
     selMulti.forEach(id=>{ const o=objects.find(x=>x.id===id); if(!o)return;    // and where plates overlap, the gray deepens - stacking stays visible
@@ -1292,8 +1312,21 @@ function importMosaic(text,fname){
       const outer=outers.reduce((a,q)=>Math.abs(q.area)>Math.abs(a.area)?q:a);   // a 4-connected component has one outer ring; guard by taking the largest
       const counts={}; let bestC=0, bestN=-1;   // the piece's color = its most common tile color
       for(const cell of comp){ const v=idx[(cell/gw)|0][cell%gw]; counts[v]=(counts[v]||0)+1; if(counts[v]>bestN){ bestN=counts[v]; bestC=v; } }
+      // The tiles that DIFFER from the piece's colour, kept for the flat view only. A part extrudes
+      // as one solid, so 3D can carry just one colour - but the plan has no such constraint, and the
+      // white of an eye or the orange of a beak is where the student put it. Stored as offsets from
+      // the piece's own grid corner (so it travels with a drag) plus the piece's extent in studs (so
+      // a resize can be detected and the flat fill kept instead). Only the exceptions: the buffalo's
+      // 443 tiles come to about 90 entries, since most of each part is its main colour.
+      let mnC=1e9, mnR=1e9, mxC=-1, mxR=-1;
+      for(const cell of comp){ const r=(cell/gw)|0, c=cell%gw;
+        if(c<mnC)mnC=c; if(r<mnR)mnR=r; if(c>mxC)mxC=c; if(r>mxR)mxR=r; }
+      const odd=[];
+      for(const cell of comp){ const r=(cell/gw)|0, c=cell%gw, v=idx[r][c];
+        if(v!==bestC) odd.push((c-mnC)+","+(r-mnR)+","+v); }
       const attrs={ points:outer.ring.map(q=>fmtn(q[0]*T)+","+fmtn(q[1]*T)).join(" "),
         "data-mosaic":"1","data-z":9.6,"data-z0":0,"data-studs":"1","data-fill":MOSAIC_COLORS[bestC]||"#a0a5a9" };   // studs on by default: studs on the 8 mm grid are what make the figure read as LEGO. The Studs checkbox turns them off per piece (a wing wants a smooth top), and clicking a stud on the mat removes just that one
+      if(odd.length) attrs["data-tiles"]=(mxC-mnC+1)+" "+(mxR-mnR+1)+" "+odd.join(" ");
       if(nm) attrs["data-name"]=nm;
       const el=svgNode("polygon",attrs);
       const o={id:++objSeq,el:el,kind:"cut",orig:"cut",poly:toMM(outer.ring)};
@@ -1313,6 +1346,10 @@ function importMosaic(text,fname){
   // right for cardstock on a die cutter) and Scale to whatever the last design used - but a mosaic's
   // coordinates ARE plate coordinates, so any offset shifts the whole plate off its own page. At the
   // inch default that is 12.7 mm right and down, which ran a full 32 x 32 design off two edges.
+  // The workspace comes with it. A mosaic is brick work, so the plate is its page: a 32 x 32 design
+  // is 256 mm and overflows the 216 mm Letter page it would otherwise land on. setPageSize FIRST -
+  // it re-ranges the Position fields, which are zeroed just below.
+  if($("pagesize")){ $("pagesize").value="baseplate"; setPageSize("baseplate"); }
   if($("scale")) $("scale").value=100;
   if($("offx"))  $("offx").value=0;
   if($("offy"))  $("offy").value=0;
@@ -3679,7 +3716,7 @@ function placeBrick(e){
 // attributes reached only the live element, so node-editing a shape dropped its plane, its plane name and its
 // hidden state (a hidden part would quietly come back into the 3D view and the STL). Same drift, same cure as
 // the parts table's tableParts(): keep the list in one place.
-const KEEP_ATTRS=["data-z","data-z0","data-studs","data-sockets","data-nostuds","data-fit","data-fill","data-role",
+const KEEP_ATTRS=["data-z","data-z0","data-studs","data-tiles","data-sockets","data-nostuds","data-fit","data-fill","data-role",
   "data-mosaic","data-name","data-plane","data-plane-name","data-plane-studs","data-plane-mirror","data-hidden","data-slopes","data-cone","data-slope-inv",
   "data-slope-run","data-slope-dir"];   // extrude Depth/Base, per-side Slope, LEGO connectors, paper color, part name, plane
 function ensurePolygon(o){
