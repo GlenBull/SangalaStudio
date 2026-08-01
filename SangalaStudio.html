@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-07-30.178 -->
+<!-- SANGALA_VERSION: 2026-08-01.179 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1302,8 +1302,13 @@ function importMosaic(text,fname){
     }
   }
   if(!pieces){ clearDoc(); say("No pieces could be read from that mosaic."); return; }
-  normalize();
-  objects.forEach(placeEl);   // normalize() shifts o.poly but rewrites element geometry only for rect/circle - re-sync the polygon points
+  // NO normalize() here, deliberately. Every ring above is already in true plate coordinates -
+  // cell (0,0) of the mosaic grid is 0,0 mm on the page, and Mosaic's tile pitch is Studio's stud
+  // pitch. Normalizing would shift the design so its bounding box sat at the origin, throwing away
+  // the empty margin the student left around the subject: a buffalo drawn three rows down the plate
+  // arrived 24 mm high, with the gap moved from above it to below it. Where a mosaic sits on its
+  // baseplate is part of the design, so it is carried across unchanged.
+  objects.forEach(placeEl);   // keep each element's geometry in step with o.poly
   if(!mode3D) setMode3D(true);   // extruding the tiles is a 3D act - arrive in 3D mode, ready to set Depths. BEFORE draw(): the stud overlay paints only in 3D mode, and setMode3D does not redraw
   draw(); refreshEditPanel();
   if(pvOn){ const t3=buildTris(); if(!t3.n) closePreview(); else { pvSetTris(t3); pvBounds(); renderPreview(); } }
