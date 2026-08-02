@@ -452,6 +452,26 @@ excluded from the die cutter, drawn on the plan as a teal line (bar) or gray out
   `data-mesh-tris`, and carry through Undo/Redo. A z-scale about the base is a positive affine, so the mesh
   stays watertight. (Footprint x/y still resize only via box-resize; the z fields cover thickness + elevation.)
 
+## Making a NEW .docx: use `tools\makedocx.py`. Do not start from scratch, and do not probe.
+**None of the docx skill's four dependencies exist here — no Node (so no docx-js), no python-docx, no
+`zip`, no LibreOffice/`pdftoppm`.** Checking for them again wastes a turn every single time; Glen has
+called this out. `tools\makedocx.py` is the answer, already built and tested:
+
+```python
+import sys; sys.path.insert(0, r"D:\Code Projects\Silhouette Tools\tools")
+from makedocx import Doc
+d = Doc(); d.title("A Title"); d.heading("A section")
+d.body("Ordinary paragraph."); d.body("Lead-in.", before_list=True)
+d.step("A numbered step."); d.item("A Label. ", "Paragraph led by an italic label.")
+print(d.save(r"...\_Drafts", "Document Name"))     # -> "Document Name (Ver 1.0).docx"
+```
+House formatting comes by construction: Letter with 1 in margins, Times New Roman 11 pt black,
+headings carrying `keepNext` + `keepLines`, 5 pt after a body paragraph and 3 pt after a list item,
+no autospacing. `save()` reads the folder AT WRITE TIME for the next unused version and opens with
+mode `"x"`, so it raises rather than overwrite a number someone else has claimed. Still run
+`tools\docxcheck.ps1` on the result — `powershell -NoProfile -ExecutionPolicy Bypass -File` (plain
+`-File` is blocked by the execution policy).
+
 ## Editing a .docx on THIS machine (read before touching a doc — I have hit this 6+ times)
 The standard skill recipe's rezip step **does not work here: there is no `zip` command.**
 `unzip` exists; `zip` does not. Do not run `zip -Xr` and rediscover this again.
