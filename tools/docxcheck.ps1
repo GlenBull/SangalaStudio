@@ -20,8 +20,32 @@ foreach ($p in $doc.Paragraphs) {
   try { if ($p.SpaceBeforeAuto -or $p.SpaceAfterAuto) { $auto++ } } catch {}
   $pg = $p.Range.Information($wdActiveEndPageNumber)
   if ($p.Range.Text.Trim().Length -gt 0) {
-    $vp = $p.Range.Information($wdVerticalPositionRelativeToPage)
-    if (-not $deepest.ContainsKey($pg) -or $vp -gt $deepest[$pg]) { $deepest[$pg] = $vp }
+    # Measure the BOTTOM of the paragraph's LAST line, not the top of its first.
+    # Information(wdVerticalPositionRelativeToPage) on a whole paragraph returns the top of its
+    # bounding rectangle, so a page ending in a long paragraph used to report everything below that
+    # paragraph's first line as blank - Chapter 5 page 8 read as 3.6 in empty when it holds ~1.9.
+    # A collapsed range just before the paragraph mark sits on the LAST line; add one line's height.
+    $rEnd = $p.Range.Duplicate
+    $rEnd.SetRange($p.Range.End - 1, $p.Range.End - 1)
+    $pgEnd = $rEnd.Information($wdActiveEndPageNumber)
+    $top   = $rEnd.Information($wdVerticalPositionRelativeToPage)
+    $h = 14                                        # a plain line, when nothing better is known
+    try { $fs = $p.Range.Font.Size; if ($fs -gt 1 -and $fs -lt 200) { $h = $fs * 1.25 } } catch {}
+    try { if ($p.Range.InlineShapes.Count -gt 0) {  # an image paragraph is as tall as its picture
+            $ih = $p.Range.InlineShapes.Item(1).Height; if ($ih -gt $h) { $h = $ih } } } catch {}
+    $bottom = $top + $h
+    if (-not $deepest.ContainsKey($pgEnd) -or $bottom -gt $deepest[$pgEnd]) { $deepest[$pgEnd] = $bottom }
+    # A paragraph whose text WRAPS across a page fills every page it crosses, so those pages are not
+    # short. But a paragraph carrying a manual break (Chr 12) also spans two pages without filling the
+    # first - that is exactly how the User Guide opens each appendix - so exclude it, or the deliberate
+    # short page before an appendix is silently marked full and stops being reported at all.
+    if (-not $p.Range.Text.Contains([char]12)) {
+      $rStart = $p.Range.Duplicate; $rStart.Collapse(1)
+      $pgStart = $rStart.Information($wdActiveEndPageNumber)
+      if ($pgEnd -gt $pgStart) {
+        for ($sp = $pgStart; $sp -lt $pgEnd; $sp++) { $deepest[$sp] = [double]::MaxValue }
+      }
+    }
   }
   # Runs of consecutive EMPTY paragraphs are invisible vertical padding. They caused a 92 pt hole above
   # section 5 of the Tech Manual that no other check could see: the underfilled test measures the BOTTOM of
