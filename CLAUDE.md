@@ -34,8 +34,8 @@ USB only, user-mode.** This constraint is absolute.
   `Documents/README.md`. Show the mat/page in inches as whole numbers. The drag-snapping function is **"Snap to Fit"** — never bare "Snap", which collides with the **Snap!** programming language (which has its own button in the app); in UI status text and the docs, set *Snap to Fit* in italics to mark it as a function.
 
 ## Document formatting standards (User Guide & Tech Manual .docx)
-- **Never regenerate a doc to revise it — edit the user's actual file IN PLACE** (surgical
-  text edits only; run no document-wide formatting commands). Regenerating wipes his manual
+- **Never regenerate a doc to revise it — edit the user's actual file IN PLACE** (change only the
+  requested text; run no document-wide formatting commands). Regenerating wipes his manual
   formatting and has caused repeated rework. New version = copy to the next version number, edit,
   then MOVE the prior version into the `Documents/.Archive` subfolder (the docs live in `Documents/`, which shows only the current version of each).
 - **NEVER PUT A VERSION NUMBER INSIDE A DOCUMENT. The filename carries it (Glen, 2026-07-28).** Do not add
@@ -458,7 +458,8 @@ The standard skill recipe's rezip step **does not work here: there is no `zip` c
 1. `unzip -q "Doc.docx" -d unpacked/`
 2. **Skip `merge_runs.py`** — it corrupts validation on this machine (a merged-but-unedited
    control failed identically). Targets have matched in raw XML anyway.
-3. Edit `unpacked/word/document.xml` surgically with a small Python script (read/write UTF-8).
+3. Edit `unpacked/word/document.xml` with a small Python script (read/write UTF-8), changing only the
+   requested text.
 4. **Rezip with Python's `zipfile`** (`[Content_Types].xml` first, then walk the tree) — this is
    the established method here and has been used for every past doc edit.
 5. Validate with `scripts/office/validate.py out.docx --original <orig>`, and set
