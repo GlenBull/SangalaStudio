@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-02.183 -->
+<!-- SANGALA_VERSION: 2026-08-02.184 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1130,16 +1130,21 @@ $("bConnect").onclick=connect;
 // arrived 1.32 in (127/96), measured on the mat 2026-08-02.
 // Rather than scale the geometry afterwards, give the SVG a physical width and height and let the
 // browser's own getCTM do the arithmetic - the same path every other import uses.
-const TS_MM_PER_STEP = 0.2;                       // 127 steps = 1 inch = 25.4 mm, i.e. 5 steps per mm
-function snapSvgToSangala(text, via){
+// Snap! has NO inherent dimensions - it is a screen turtle, and its exporter writes the same bare
+// numbers - so a step there means whatever we decide. It is given TurtleStitch's 0.2 mm (Glen,
+// 2026-08-02: "we can match TurtleStitch, but I don't really have an opinion"), so ONE turtle step
+// means one thing across both editors and the same program cuts the same size in either. Read at the
+// SVG default a 100-step square arrived 1.04 in (100/96); it is now 20 mm.
+const MM_PER_TURTLE_STEP = 0.2;                   // 127 steps = 1 inch = 25.4 mm, i.e. 5 steps per mm
+function snapSvgToSangala(text){
   text = text.replace(/stroke:rgb\((\d+),\s*(\d+),\s*(\d+)\)/g, (m,rs,gs,bs)=>{
     const r=+rs, g=+gs, b=+bs, blue = b>120 && b>r+40 && b>g+40;
     return blue ? "stroke:#ff0000;stroke-dasharray:4 1.2" : "stroke:#ff0000";   // fold lines are perforated; everything else is a cut/draw line
   });
-  if(/turtlestitch/i.test(via||""))               // Snap!'s own export is stage pixels, a different unit - leave it alone
-    text = text.replace(/<svg\b([^>]*?)\swidth="([\d.]+)"([^>]*?)\sheight="([\d.]+)"/i,
-      (m,a,w,b,h)=>'<svg'+a+' width="'+(+w*TS_MM_PER_STEP)+'mm"'+b+' height="'+(+h*TS_MM_PER_STEP)+'mm"');
-  return text;
+  // Both exporters write width/height/viewBox as bare numbers, so neither file states its own size.
+  // Give the SVG a physical width and height and the browser's own getCTM does the conversion.
+  return text.replace(/<svg\b([^>]*?)\swidth="([\d.]+)"([^>]*?)\sheight="([\d.]+)"/i,
+    (m,a,w,b,h)=>'<svg'+a+' width="'+(+w*MM_PER_TURTLE_STEP)+'mm"'+b+' height="'+(+h*MM_PER_TURTLE_STEP)+'mm"');
 }
 function centerDesign(){   // a turtle drawing carries Snap!'s own corner as its origin, which is meaningless here - put it in the middle of the page
   const pts=objects.filter(o=>o.poly).reduce((a,o)=>a.concat(o.poly),[]);
@@ -1151,7 +1156,7 @@ function centerDesign(){   // a turtle drawing carries Snap!'s own corner as its
   objects.forEach(o=>translateObj(o,dx,dy));
 }
 function tookFromSnap(text, via){
-  loadSVG(snapSvgToSangala(text, via));
+  loadSVG(snapSvgToSangala(text));
   // A turtle drawing is NOT a Silhouette print-and-cut page. loadSVG marks any design carrying red
   // strokes as one - and this bridge has just recolored EVERY stroke red - so the import always tripped
   // that test. printFile then pins Scale % to 1 and Position to zero, which is right for a page whose
@@ -1279,7 +1284,12 @@ $("mSnapProjGo").onclick=async (e)=>{
   if(!base || !ref){ say("That does not look like a Snap! or TurtleStitch project link."); return; }
   // Open the ORDINARY address, the one on the blog and the one a teacher hands out. window.open must
   // stay inside the click or the pop-up blocker takes it.
-  const w=window.open(base+"#cloud:Username="+ref.user+"&ProjectName="+ref.name, "sangala_snap");
+  // Both editors fetch a PUBLIC project through "#cloud:". Snap! additionally needs the "&edit" flag
+  // (read by applyFlags at the end of its URL handler) or the project opens in presentation mode - the
+  // stage alone, with no palette to put blocks in and no scripts to run. TurtleStitch opens in the
+  // editor without it and is validated that way, so it is left as it is.
+  const edit = /snap\.berkeley\.edu/i.test(base) ? "&edit" : "";
+  const w=window.open(base+"#cloud:Username="+ref.user+"&ProjectName="+ref.name+edit, "sangala_snap");
   if(!w){ say("The browser blocked the window - allow pop-ups for this page and press Open again."); return; }
   snapWin=w; snapOrigin=editorOriginFor(base);
   paletteWhenReady(w, snapOrigin);
