@@ -89,6 +89,16 @@ class Doc:
         self.numbered = True
         self._p(parts, after=60, num=True)
 
+    def code(self, text):
+        """A command line, set in Consolas and indented. Sits tight to the step that introduces it
+        (keepNext), so an instruction is never separated from the command it names."""
+        ppr = ('<w:pPr><w:keepNext/><w:keepLines/><w:ind w:left="720"/>'
+               '<w:spacing w:before="60" w:after="120"/></w:pPr>')
+        rpr = ('<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>'
+               '<w:color w:val="000000"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>')
+        self.paras.append('<w:p>%s<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r></w:p>'
+                          % (ppr, rpr, esc(text)))
+
     def page_break(self):
         self.paras.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
 
