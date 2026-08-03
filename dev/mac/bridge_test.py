@@ -153,6 +153,51 @@ except B.CutterError:
 
 check("score_force", (B.score_force(33), B.score_force(1)), (16, 1))
 
+
+# ---- zero-length packets. A bulk transfer ends on a SHORT packet, so a write that exactly fills
+# its last packet leaves the transfer unterminated and the device may wait for more. Off by default;
+# --zlp closes it. These drive the REAL _write_raw, which FakeCutter above deliberately bypasses.
+class FakeEndpoint:
+    def __init__(self, packet=64):
+        self.wMaxPacketSize = packet
+        self.bEndpointAddress = 0x01
+        self.writes = []
+
+    def write(self, data, timeout=None):
+        self.writes.append(bytes(data))
+        return len(data)
+
+
+def wired(zlp, packet=64):
+    c = B.Cutter(zlp=zlp)
+    c._out = FakeEndpoint(packet)
+    c._max_packet = packet
+    return c, c._out
+
+
+c, ep = wired(False); c._write_raw(b"x" * 64)
+check("zlp off: exact multiple is not closed", ep.writes, [b"x" * 64])
+c, ep = wired(True); c._write_raw(b"x" * 64)
+check("zlp on: exact multiple is closed", ep.writes, [b"x" * 64, b""])
+c, ep = wired(True); c._write_raw(b"x" * 128)
+check("zlp on: two whole packets closed", ep.writes, [b"x" * 128, b""])
+c, ep = wired(True); c._write_raw(b"x" * 63)
+check("zlp on: short packet needs nothing", ep.writes, [b"x" * 63])
+c, ep = wired(True); c._write_raw(b"x" * 65)
+check("zlp on: partial second packet needs nothing", ep.writes, [b"x" * 65])
+c, ep = wired(True); c._write_raw(b"")
+check("zlp on: an empty write is not doubled", ep.writes, [b""])
+c, ep = wired(True, 512); c._write_raw(b"x" * 512)
+check("zlp on: honors a 512-byte endpoint", ep.writes, [b"x" * 512, b""])
+c, ep = wired(True, 512); c._write_raw(b"x" * 64)
+check("zlp on: 64 is not a multiple of 512", ep.writes, [b"x" * 64])
+c, ep = wired(True); c._max_packet = 0; c._write_raw(b"x" * 64)
+check("zlp on: unknown packet size does nothing", ep.writes, [b"x" * 64])
+
+# the default must stay OFF, so the behavior already tested above is what runs unless asked
+check("default is off", B.Cutter().zlp, False)
+check("flag reaches the cutter", B.Cutter(zlp=True).zlp, True)
+
 print()
 print("FAILURES: %d" % len(fails))
 sys.exit(1 if fails else 0)

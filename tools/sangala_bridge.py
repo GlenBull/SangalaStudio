@@ -84,12 +84,21 @@ class CutterError(Exception):
 class Cutter:
     """GPGL engine over a libusb bulk pipe. Transliterated from Cutter in DieCutter.cs."""
 
-    def __init__(self):
+    def __init__(self, zlp=False):
         self.model_name, self.width_mm, self.mat_tg, self.eye_right_mm = FALLBACK_MODEL
         self._dev = None
         self._intf = None
         self._out = None
         self._in = None
+        # A USB bulk transfer ends when a packet arrives SHORT of the endpoint's packet size. A
+        # transfer whose length is an exact multiple of that size therefore has no end marker, and
+        # the device may sit waiting for more. usbprint.sys adds a zero-length packet on Windows;
+        # libusb does not, so it has to be done here. The reference driver that runs these machines
+        # on macOS does not appear to need it, so this is OFF by default and the tested behavior is
+        # unchanged -- but a job that STALLS PARTWAY, machine idle and the page still waiting, is
+        # this. Start the bridge with --zlp to switch it on.
+        self.zlp = zlp
+        self._max_packet = 0
 
     # ---- transport. These four methods are the ONLY platform-specific code in the file.
     def open(self):
@@ -147,16 +156,26 @@ class Cutter:
             raise CutterError("The Die Cutter did not offer both a bulk OUT and a bulk IN endpoint.")
 
         self._dev, self._intf, self._out, self._in = dev, intf, out, inp
+        self._max_packet = getattr(out, "wMaxPacketSize", 0) or 0
+        print("  endpoints OUT 0x%02X / IN 0x%02X, %d-byte packets%s"
+              % (out.bEndpointAddress, inp.bEndpointAddress, self._max_packet,
+                 ", zero-length packets ON" if self.zlp else ""))
 
     def _write_raw(self, b):
         if self._out is None:
             raise CutterError("Not connected to the Die Cutter.")
         try:
-            # libusb splits this into 64-byte packets itself, so an arbitrary length is fine.
-            # NOTE for a future stall: if a write whose length is an exact multiple of the endpoint's
-            # packet size ever hangs, a zero-length packet is the classic cure. usbprint.sys adds one
-            # on Windows. Not needed in testing so far; this is where it would go.
+            # libusb splits this into packet-sized pieces itself, so an arbitrary length is fine.
             self._out.write(b, timeout=8000)
+            # See the note on self.zlp. A write that exactly fills its last packet leaves the
+            # transfer unterminated; either close it, or say so, because it is the one place a job
+            # can stall with everything else working.
+            if self._max_packet and len(b) and len(b) % self._max_packet == 0:
+                if self.zlp:
+                    self._out.write(b"", timeout=8000)
+                else:
+                    print("  (a %d-byte write exactly fills the %d-byte packet. If the job stalls "
+                          "HERE, stop and restart with --zlp)" % (len(b), self._max_packet))
         except Exception as e:
             raise CutterError("write to the Die Cutter failed: %s" % e)
 
@@ -394,6 +413,7 @@ class State:
         self.snap_svg = None                    # a drawing Snap! has posted, waiting for the page
         self.snap_lock = threading.Lock()
         self.machine_lock = threading.Lock()    # one job at a time on the USB pipe
+        self.zlp = False                        # --zlp; see Cutter.zlp
 
 
 S = State()
@@ -471,7 +491,7 @@ def do_connect():
     if S.cutter is not None:
         S.cutter.dispose()
         S.cutter = None
-    c = Cutter()
+    c = Cutter(zlp=S.zlp)
     c.open()
     S.cutter = c
     S.framed = False
@@ -842,6 +862,12 @@ class Handler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------- startup
 def main():
     global ROOT
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("usage: python3 tools/sangala_bridge.py [--zlp]")
+        print("  --zlp  end every packet-filling write with a zero-length packet. Try this, and")
+        print("         only this, if a job stalls partway with the machine idle.")
+        return 0
+    S.zlp = "--zlp" in sys.argv
     ROOT = find_root()
     if ROOT is None:
         print("SangalaStudio.html was not found. Run this from a clone of the repository:")
@@ -864,6 +890,8 @@ def main():
     print("Sangala Studio bridge")
     print("  serving %s" % ROOT)
     print("  at      %s" % url)
+    if S.zlp:
+        print("  zero-length packets ON (--zlp)")
     print("  Press Ctrl-C to stop.")
     print()
     try:
