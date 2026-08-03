@@ -99,6 +99,7 @@ class Cutter:
         # this. Start the bridge with --zlp to switch it on.
         self.zlp = zlp
         self._max_packet = 0
+        self._backend = None                    # set by open() if libusb-package supplied one
 
     # ---- transport. These four methods are the ONLY platform-specific code in the file.
     def open(self):
@@ -108,12 +109,26 @@ class Cutter:
         except ImportError:
             raise CutterError("pyusb is not installed. Run: python3 -m pip install pyusb")
 
+        # pyusb is only a wrapper: it needs libusb underneath, and macOS does not ship one.
+        # Measured 2026-08-03 on two Macs: Moses's had it (a conda environment supplied it) and
+        # Roger's clean machine did not. Homebrew is the usual cure and is no use to a
+        # non-technical user, so fall back to libusb-package, a pip package that carries the
+        # library itself. pyusb does NOT find it on its own - the backend has to be handed over.
+        backend = None
         try:
             devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID))
         except usb.core.NoBackendError:
-            raise CutterError(
-                "pyusb has no libusb backend. Install libusb (brew install libusb), or use a "
-                "Python that ships one.")
+            try:
+                import libusb_package
+                backend = libusb_package.get_libusb1_backend()
+            except Exception:
+                backend = None
+            if backend is None:
+                raise CutterError(
+                    "pyusb has no libusb backend. Run: python3 -m pip install libusb-package "
+                    "(or, if you have Homebrew, brew install libusb), then try again.")
+            devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID, backend=backend))
+        self._backend = backend
         if not devices:
             raise CutterError("Die Cutter not found. Is it powered on and connected by USB, and "
                               "is Silhouette Studio closed?")
