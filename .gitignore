@@ -42,6 +42,17 @@ desktop.ini
 # Claude Code: commit shared settings.json, ignore machine-specific local settings
 .claude/settings.local.json
 
+# Design scratch: working .model / .mosaic studies pile up here as designs are
+# iterated. Ignore the folder's contents, but keep the few studies already committed.
+Projects/*
+!Projects/Buffalo (Figure).model
+!Projects/Buffalo (Relief).model
+!Projects/Buffalo (Relief 2).model
+!Projects/Crane 8.model
+
+# Python bytecode from tools/
+__pycache__/
+
 # local sync bookkeeping for Sync with Dropbox.cmd
 tools/.publish-state.json
 tools/sync-log.txt
