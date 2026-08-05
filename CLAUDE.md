@@ -46,11 +46,17 @@ USB only, user-mode.** This constraint is absolute.
   `docxcheck.ps1` withhold `PAGINATION CLEAN` over it, so the invention enforced itself. Both are removed.
   When a document does carry such a line (older files still do), leave it alone unless asked; do not add
   one to anything new, and do not reintroduce the check.
+- **SCOPE OF THE TWO RULES BELOW — going FORWARD only (Glen, 2026-08-05).** They apply to every NEW
+  document, and to an existing document **while it is being revised for some other reason** — bring it
+  up to the rules as part of that edit. **Otherwise leave past documents alone: do not open a finished
+  document just to add a page number or recase its headings, and do not offer to.** So a legacy document
+  that `docxcheck` flags for a missing page number is NOT a defect to fix — same standing as the legacy
+  autospacing paragraphs below. The flag matters when the document is already open for editing.
 - **PAGE NUMBERS — every document longer than one page carries one, BOTTOM CENTER (Glen, 2026-08-05).**
   A one-page document does not. Use a PAGE field, never a typed digit. `makedocx.Doc()` adds it by
   default (`Doc(page_numbers=False)` for a genuine one-pager), and `docxcheck.ps1` prints the page count
   and the footer state and **withholds `PAGINATION CLEAN`** when a multi-page document has no centered
-  PAGE field. Adding one to an EXISTING document is still a change to that document — ask first.
+  PAGE field.
 - **HEADINGS ARE MIXED CASE (Glen, 2026-08-05)** — capitalize each word, not just the first:
   *Where the Change Must Be Made*, not *Where the change must be made*. Minor words stay lowercase
   (a, an, the, and, or, to, in, of, for, with) unless they open the heading. This matches the UI rule
