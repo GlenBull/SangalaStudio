@@ -46,6 +46,17 @@ USB only, user-mode.** This constraint is absolute.
   `docxcheck.ps1` withhold `PAGINATION CLEAN` over it, so the invention enforced itself. Both are removed.
   When a document does carry such a line (older files still do), leave it alone unless asked; do not add
   one to anything new, and do not reintroduce the check.
+- **PAGE NUMBERS — every document longer than one page carries one, BOTTOM CENTER (Glen, 2026-08-05).**
+  A one-page document does not. Use a PAGE field, never a typed digit. `makedocx.Doc()` adds it by
+  default (`Doc(page_numbers=False)` for a genuine one-pager), and `docxcheck.ps1` prints the page count
+  and the footer state and **withholds `PAGINATION CLEAN`** when a multi-page document has no centered
+  PAGE field. Adding one to an EXISTING document is still a change to that document — ask first.
+- **HEADINGS ARE MIXED CASE (Glen, 2026-08-05)** — capitalize each word, not just the first:
+  *Where the Change Must Be Made*, not *Where the change must be made*. Minor words stay lowercase
+  (a, an, the, and, or, to, in, of, for, with) unless they open the heading. This matches the UI rule
+  above, which is already Title Case. It is a WRITING rule, not a mechanical one — no check enforces it,
+  because only the author knows which words are proper nouns. **Note the older `§6`-style label
+  convention recorded further down is sentence case in Glen's own existing files; leave those alone.**
 - Body = **Times New Roman 11 pt**, black, never below 11 pt; code identifiers in Consolas.
 - Numbered lists for step sequences; **3 pt space after each list item**. A label leading a list
   item is **italic** (not bold). Labels: Title-Case every word EXCEPT words in parentheses (lowercase).

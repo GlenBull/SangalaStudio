@@ -5,7 +5,7 @@ What there is: Python 3.12 and its `zipfile`. This module wraps the hand-built O
 package so a new document is a dozen lines, not a rediscovery.
 
     from makedocx import Doc
-    d = Doc()
+    d = Doc()                       # page numbers ON; pass Doc(page_numbers=False) for a one-pager
     d.title("A Title")
     d.heading("A section")
     d.body("An ordinary paragraph.")
@@ -16,6 +16,16 @@ package so a new document is a dozen lines, not a rediscovery.
 House formatting is applied by construction: Letter page with 1 in margins, Times New
 Roman 11 pt black body, headings carrying keepNext AND keepLines so they cannot orphan,
 5 pt after a body paragraph and 3 pt after a list item, and NO autospacing anywhere.
+
+A PAGE NUMBER sits at the bottom center, because any document longer than one page must
+carry one (Glen, 2026-08-05). It is ON by default, since nearly every document runs past
+a page and the failure mode is forgetting it. A document that really is one page should
+be built with Doc(page_numbers=False); docxcheck reports the page count, so build first
+and turn it off only if the count comes back 1.
+
+Heading text is written in Mixed Case - capitalize each word except the minor ones (a, an,
+the, and, or, to, in, of, for, with). That is the caller's job; this module cannot know
+which words are proper nouns.
 
 `save()` computes the next unused version number in the folder AT WRITE TIME and opens
 the file with mode "x", so it cannot overwrite anything - not one of Glen's documents,
@@ -51,9 +61,10 @@ def _runs(parts, sz=22):
 
 
 class Doc:
-    def __init__(self):
+    def __init__(self, page_numbers=True):
         self.paras = []
         self.numbered = False
+        self.page_numbers = page_numbers
 
     def _p(self, parts, before=0, after=100, keep=False, jc=None, sz=22, num=False):
         ppr = "<w:pPr>"
@@ -94,13 +105,30 @@ class Doc:
 
     # --- packaging ---------------------------------------------------------
     def _parts(self):
+        # A footerReference must come FIRST inside sectPr - CT_SectPr fixes that order, and Word
+        # rejects the package if the page size precedes it.
+        ftr_ref = '<w:footerReference w:type="default" r:id="rId9"/>' if self.page_numbers else ""
         document = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-            '<w:document xmlns:w="%s"><w:body>%s'
-            '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>'
+            '<w:document xmlns:w="%s" xmlns:r="%s"><w:body>%s'
+            '<w:sectPr>%s<w:pgSz w:w="12240" w:h="15840"/>'
             '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"'
             ' w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
-            "</w:body></w:document>" % (W, "".join(self.paras))
+            "</w:body></w:document>" % (W, OFF, "".join(self.paras), ftr_ref)
+        )
+        # The page number is a PAGE field, not literal text, so it counts itself on every page.
+        # The <w:t>1</w:t> between separate and end is the cached result Word shows before it
+        # repaginates; Word replaces it on open.
+        footer = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            '<w:ftr xmlns:w="%s"><w:p><w:pPr><w:jc w:val="center"/>'
+            '<w:spacing w:before="0" w:after="0"/></w:pPr>'
+            '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+            '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+            '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+            '%s'
+            '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>'
+            % (W, _run("1"))
         )
         styles = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
@@ -134,6 +162,10 @@ class Doc:
             overrides += ('<Override PartName="/word/numbering.xml" '
                           'ContentType="%swordprocessingml.numbering+xml"/>' % CT)
             doc_rel += '<Relationship Id="rId2" Type="%s/numbering" Target="numbering.xml"/>' % OFF
+        if self.page_numbers:
+            overrides += ('<Override PartName="/word/footer1.xml" '
+                          'ContentType="%swordprocessingml.footer+xml"/>' % CT)
+            doc_rel += '<Relationship Id="rId9" Type="%s/footer" Target="footer1.xml"/>' % OFF
         content_types = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -158,6 +190,8 @@ class Doc:
         }
         if self.numbered:
             parts["word/numbering.xml"] = numbering
+        if self.page_numbers:
+            parts["word/footer1.xml"] = footer
         return parts
 
     def save(self, folder, stem=None, version=None):

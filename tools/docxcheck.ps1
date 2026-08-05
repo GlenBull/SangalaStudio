@@ -136,7 +136,33 @@ for ($pg = $firstContentPage; $pg -lt $pages; $pg++) {   # every page BUT the co
     }
   }
 }
+# PAGE NUMBERS. Any document longer than one page carries one, bottom center (Glen, 2026-08-05).
+# A one-page document is exempt, so the count decides. Look for a PAGE field rather than text: a
+# literal "2" typed into a footer looks right on page 2 and wrong everywhere else.
+$wdHeaderFooterPrimary = 1
+$wdFieldPage = 33
+$pageNumState = "n/a (one page)"
+$pageNumBad = $false
+if ($pages -gt 1) {
+  $hasField = $false; $centered = $false
+  foreach ($sec in $doc.Sections) {
+    try {
+      $f = $sec.Footers.Item($wdHeaderFooterPrimary)
+      foreach ($fld in $f.Range.Fields) {
+        if ($fld.Type -eq $wdFieldPage) {
+          $hasField = $true
+          try { if ($fld.Code.Paragraphs(1).Alignment -eq 1) { $centered = $true } } catch {}
+        }
+      }
+    } catch {}
+  }
+  if (-not $hasField) { $pageNumState = "MISSING - $pages pages and no PAGE field in the footer"; $pageNumBad = $true }
+  elseif (-not $centered) { $pageNumState = "present but NOT centered - move it to the bottom center"; $pageNumBad = $true }
+  else { $pageNumState = "present, bottom center" }
+}
 $doc.Close($false); $w.Quit()
+Write-Output ("pages: " + $pages)
+Write-Output ("page numbers: " + $pageNumState)
 Write-Output ("autospacing paragraphs (never ADD more): " + $auto)
 Write-Output ("headings lacking keepNext (fix - they can orphan): " + $noKeep.Count)
 $noKeep | ForEach-Object { Write-Output ("  - " + $_) }
@@ -154,5 +180,5 @@ Write-Output ("RUNS of blank paragraphs (invisible vertical gaps): " + $blanks.C
 $blanks | ForEach-Object { Write-Output ("  _ " + $_) }
 Write-Output ("FLOATING figures in text boxes - CHECK each still sits beside its narrative: " + $floats.Count)
 $floats | ForEach-Object { Write-Output ("  ~ " + $_) }
-if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0 -and $blanks.Count -eq 0) { Write-Output "PAGINATION CLEAN" }
+if ($orphans.Count -eq 0 -and $noKeep.Count -eq 0 -and $underfilled.Count -eq 0 -and $blanks.Count -eq 0 -and (-not $pageNumBad)) { Write-Output "PAGINATION CLEAN" }
 if ($floats.Count -gt 0) { Write-Output "(the floating figures above still need a human eye - CLEAN does not cover them)" }
