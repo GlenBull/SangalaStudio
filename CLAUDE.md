@@ -70,14 +70,27 @@ USB only, user-mode.** This constraint is absolute.
   are wrong here and I have had to be corrected: **Heading 3 = 0 pt before, 3 pt after**; a body
   paragraph **immediately before a list = 0 pt before, 3 pt after** (not the usual 5/5). An ordinary
   body paragraph keeps 5 pt. Set these explicitly — never inherit them from the style.
-- **FIGURE CAPTIONS — apply ALL FOUR, and VERIFY each before delivering.** Sit the caption
-  directly beneath its figure ("Figure N. <sentence>", numbered sequentially through the document;
-  renumber the later figures when inserting one):
+- **FIGURE CAPTIONS — apply ALL FIVE, and VERIFY each before delivering.** Sit the caption
+  directly beneath its figure ("Figure N. <Caption>", numbered sequentially through the document;
+  renumber the later figures when inserting one — and **every figure gets a caption**, Glen 2026-08-05):
   1. **3 pt space between the figure and its caption** (space-before on the caption paragraph).
   2. **Centered** beneath the figure.
   3. **Italic** — the whole caption.
   4. **If it wraps to two lines, BALANCE them** (roughly equal length) with a manual line break
      (Shift+Enter) at a word boundary near the middle. A long first line over a stub is wrong.
+  5. **MIXED CASE, and NO closing period (Glen, 2026-08-05)** — *Figure 4. The Finished Collage with
+     All Layers in Their Final Positions*, not *…final positions.* Same minor-word list as the heading
+     rule above, and **prepositions stay lowercase too** (within, through, into) — his own caption reads
+     *Image of a Crested Crane*. Hyphenated compounds capitalize BOTH parts (*Three-Dimensional*),
+     EXCEPT a technical term the body text writes otherwise (*Z-fold* stays *Z-fold*).
+  - **A caption must carry the document's `Caption` STYLE, not hand-applied formatting.** This is how
+    the rule gets broken invisibly: a caption typed as an ordinary centered paragraph inherits the BODY
+    font and renders upright black Times while every other caption is the style's Arial italic gray —
+    it looks fine as you type it and wrong beside the others. Same for the figure above it (a `Figure`
+    style supplying `keepNext`). **So CHECK THE STYLE, NOT THE APPEARANCE — and never audit captions by
+    scanning paragraph XML for `<w:i/>` or `<w:keepNext/>`.** I did exactly that on the Preface and
+    reported three correct captions as defective and a fourth defect that did not exist, because the
+    style supplied what the paragraph did not. Resolve `pStyle` against `styles.xml` first.
 - **A FIGURE IN A TEXT BOX IS DELIBERATE — never flag it as a defect (Glen, 2026-07-25).** He
   sometimes puts a figure AND its caption inside a Word text box and turns on Wrap Text, so the pair
   cannot be separated and the narrative flows beside it (User Guide Ver 6.1, Figure 15, page 12). He
