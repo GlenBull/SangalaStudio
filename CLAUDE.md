@@ -38,6 +38,13 @@ USB only, user-mode.** This constraint is absolute.
   requested text; run no document-wide formatting commands). Regenerating wipes his manual
   formatting and has caused repeated rework. New version = copy to the next version number, edit,
   then MOVE the prior version into the `Documents/.Archive` subfolder (the docs live in `Documents/`, which shows only the current version of each).
+- **ALWAYS ARCHIVE THE PRIOR VERSION — every folder, every document, no exceptions (Glen, 2026-08-06).**
+  Do it as part of writing the new version, and **do not ask.** A folder shows only the current version
+  of each document; everything superseded moves to an `Archive` subfolder beside it (`.Archive` in the
+  repo's `Documents/`, `Archive` elsewhere). **Create the `Archive` folder if it does not exist.** This
+  covers versions someone ELSE annotated too — archiving is not deleting, and a folder cluttered with
+  five versions is the thing the rule exists to prevent. I had been leaving prior versions in place and
+  offering to archive them; that offer is the defect.
 - **NEVER PUT A VERSION NUMBER INSIDE A DOCUMENT. The filename carries it (Glen, 2026-07-28).** Do not add
   a "Version X.Y" line to a cover, a title block, or a header, and do not "bump" one. Glen has never used
   them: the number is obvious from the filename, maintaining a second copy inside the file is friction, and
