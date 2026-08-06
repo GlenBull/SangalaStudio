@@ -366,6 +366,19 @@ blade 7, 2 passes.
 - Open threads: adapt designs wider than the 8" (203 mm) Portrait width by re-nesting
   (no scaling); prepare a CAD Library entry (open SVG + metadata + instructions);
   a "Open from Library" linkage that fetches a design SVG by URL.
+- **LDraw export — pipeline VALIDATED 2026-08-06, feature NOT built.** A brick design would export
+  `.ldr`/`.mpd`: one line per placement, holding a part number, a color code and a 3×4 matrix, all of
+  which the object model already carries. The payoff is that LEGO-style building instructions then come
+  free — `0 STEP` lines and `0 !LPUB CALLOUT BEGIN`/`END` metas in the SAME text file drive **LPub3D**
+  (Windows portable zip, no admin, bundles its own parts library) to render numbered steps, a per-step
+  parts callout, the cream sub-assembly box with its `Nx` corner mark, and a bill of materials. So a
+  brick tool would need no renderer, no page layout and no instruction code of its own; that argues it
+  should EXPORT rather than grow a booklet generator. **The cost is the part CATALOG, not the geometry:**
+  23,868 files named `3005.dat`, no semantic names, no declared dimensions, so a curated palette of ~30
+  parts with MEASURED footprints is the real work. Two facts to carry over — a part's origin sits at the
+  TOP of its body (stack by subtracting the ADDED part's own height, not the one below), and LDraw's
+  20-unit stud pitch at 0.4 mm/unit is the 8 mm pitch Snap to Studs already uses. See the
+  `ldraw-instruction-pipeline` memory for the working command and the measuring script.
 
 ## 3D bars and line-driven holes (feature branch `claude/repo-review-det4qo`)
 A straight line can be turned into a solid 3D **bar** (round or rectangular cross-section,
