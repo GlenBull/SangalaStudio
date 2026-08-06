@@ -539,13 +539,22 @@ The standard skill recipe's rezip step **does not work here: there is no `zip` c
    perfectly good UTF-8. Confirm any such "error" against the bytes before believing it.
 6. **CHECK PAGINATION before delivering — MANDATORY. This is how the defects get caught; skipping it is how
    they shipped.** Orphaned headings live in the PAGINATION, not the XML, so `validate.py` passes while the
-   page looks wrong. No LibreOffice/poppler here and the Read tool can't rasterize a PDF either — instead drive
-   **Word via COM**, which reports where each heading falls. Run the ready-made check:
+   page looks wrong. There is no LibreOffice/poppler here and the Read tool still cannot open a PDF (it shells
+   out to the absent `pdftoppm`) — so drive **Word via COM**, which reports where each heading falls. Run the
+   ready-made check:
    `powershell -NoProfile -File tools\docxcheck.ps1 "Documents\User Guide (Ver 4.3).docx"`
    It opens the doc read-only (works even while Glen has it open) and prints: headings lacking `keepNext`, any
    heading currently split from its text across a page break, and the autospacing count. **Deliver only when it
    prints `PAGINATION CLEAN`** (zero orphans, zero headings missing keepNext). If you need a human-eyeball copy,
    Word COM `ExportAsFixedFormat` to a PDF for Glen — but the script is the gate.
+7. **I CAN NOW LOOK AT THE PAGES MYSELF — use it where the script is blind (2026-08-06).** `PyMuPDF` is
+   installed (`python -m pip install pymupdf`, no admin), so the `ExportAsFixedFormat` PDF above can be
+   rasterized and READ: `fitz.open(f)[0].get_pixmap(dpi=150).save("p1.png")`, then Read the PNG; add
+   `clip=fitz.Rect(...)` at a higher dpi to zoom. This does NOT replace `docxcheck.ps1` — the script stays
+   the gate, because reading a picture of a page cannot tell you a heading lacks `keepNext`. It covers the
+   cases the script CANNOT judge and says so itself: the underfilled-page blind spots above (a run of pages
+   each a little short, a near-empty last page), and whether a floating figure still sits beside the right
+   text. Looking is also the only check on a caption's line balance.
 Useful facts already established: the docs use em dash U+2014 with spaces, straight apostrophes,
 keystrokes as italic runs written `Ctrl-Z` (hyphen), body paragraphs are `<w:pStyle w:val="NormalWeb"/>`,
 and §6-style labels are sentence case (matching the file, e.g. *Break at a node*).
