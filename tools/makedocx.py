@@ -100,6 +100,26 @@ class Doc:
         self.numbered = True
         self._p(parts, after=60, num=True)
 
+    def caption(self, text):
+        """A figure caption carrying the document's Caption STYLE, not hand-applied formatting.
+
+        The style is what makes a caption italic, centered and 3 pt below its figure. A caption typed
+        as an ordinary paragraph inherits the BODY font and renders upright black Times beside the
+        others - which looks right as you type it and wrong on the page. Write the text Mixed Case
+        with no closing period: "Figure 4. The Finished Collage with All Layers in Their Final
+        Positions".
+
+        This module cannot place images, so when a figure is pasted in afterward, set the image's own
+        paragraph to the Figure style: it carries keepNext, so the figure can never separate from its
+        caption, and its `next` is Caption, so pressing Enter after it lands in the right style.
+        """
+        # The run carries NO rPr on purpose. Every other paragraph shape here writes explicit Times
+        # New Roman onto each run, and direct formatting beats a style - so a caption built that way
+        # would reference the Caption style and still render as upright black Times beside the ones
+        # that inherit it. An empty run lets the style govern, which is the whole point.
+        self.paras.append('<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr>'
+                          '<w:r><w:t xml:space="preserve">%s</w:t></w:r></w:p>' % esc(text))
+
     def code(self, text):
         """A command line, set in Consolas and indented. Sits tight to the step that introduces it
         (keepNext), so an instruction is never separated from the command it names."""
@@ -149,7 +169,23 @@ class Doc:
             '<w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="100"/></w:pPr></w:pPrDefault>'
             "</w:docDefaults>"
             '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
-            '<w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>' % W
+            '<w:name w:val="Normal"/><w:qFormat/></w:style>'
+            # Caption and Figure, cloned from the User Guide's own definitions so a document built
+            # here matches the ones Glen has been writing by hand. Caption = Arial 10 pt italic gray,
+            # centered, 3 pt above. Figure carries keepNext so an image cannot part from its caption,
+            # and names Caption as what follows it.
+            '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/>'
+            '<w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>'
+            '<w:pPr><w:keepLines/><w:spacing w:before="60" w:after="200"/>'
+            '<w:jc w:val="center"/></w:pPr>'
+            '<w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>'
+            '<w:i/><w:iCs/><w:color w:val="444444"/><w:sz w:val="20"/><w:szCs w:val="20"/>'
+            '</w:rPr></w:style>'
+            '<w:style w:type="paragraph" w:customStyle="1" w:styleId="Figure">'
+            '<w:name w:val="Figure"/><w:basedOn w:val="Normal"/><w:next w:val="Caption"/>'
+            '<w:pPr><w:keepNext/><w:spacing w:before="320" w:after="0"/>'
+            '<w:jc w:val="center"/></w:pPr></w:style>'
+            "</w:styles>" % W
         )
         numbering = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
