@@ -67,6 +67,39 @@ MODELS = {
 FALLBACK_MODEL = ("Silhouette Portrait 3", 203.0, "3", 30.0)
 
 
+ON_LINUX = sys.platform.startswith("linux")
+
+
+# Why these two functions exist: every "the machine will not open" message used to end with "close
+# Silhouette Studio", which is right on Windows and macOS and WRONG on Linux, where Silhouette Studio
+# does not run at all. Anthony's Chromebook hit exactly this on 5 August 2026 - the real cause was the
+# missing udev rule, and the bridge told him to close a program that was not installed. A Chromebook
+# runs Linux, so this is the platform a beginner is most likely to meet.
+def _missing_advice():
+    """The machine was not found at all."""
+    if ON_LINUX:
+        return ("Is it powered on and connected by USB? On a Chromebook it must also be handed to "
+                "Linux: Settings > About ChromeOS > Developers > Linux development environment > "
+                "Manage USB devices, and turn on the entry named \"USB device\" (the machine reports "
+                "no name of its own).")
+    return "Is it powered on and connected by USB, and is Silhouette Studio closed?"
+
+
+def _blocked_advice(exc):
+    """The machine was found but would not open. On Linux that is nearly always permission."""
+    if not ON_LINUX:
+        return "This is usually another program holding it - close Silhouette Studio and retry."
+    text = str(exc).lower()
+    if "denied" in text or "permission" in text or "errno 13" in text:
+        return ("On Linux this is a permission problem, not another program. Install the rule that "
+                "grants access - run: bash setup.sh - then unplug the die cutter and plug it back "
+                "in.")
+    return ("On Linux this is usually the permission rule (run: bash setup.sh, then unplug the die "
+            "cutter and plug it back in). If that is already done, something else is holding the "
+            "machine: on a Chromebook, check it has not been saved as a printer in Settings - "
+            "Sangala Studio never prints to it.")
+
+
 def SU(mm):
     """Millimetres -> Silhouette Units. 1 mm = 20 SU.
 
@@ -130,8 +163,7 @@ class Cutter:
             devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID, backend=backend))
         self._backend = backend
         if not devices:
-            raise CutterError("Die Cutter not found. Is it powered on and connected by USB, and "
-                              "is Silhouette Studio closed?")
+            raise CutterError("Die Cutter not found. " + _missing_advice())
 
         dev = devices[0]
         self.model_name, self.width_mm, self.mat_tg, self.eye_right_mm = MODELS.get(
@@ -141,8 +173,7 @@ class Cutter:
             dev.set_configuration()          # harmless if it is already configured
             cfg = dev.get_active_configuration()
         except Exception as e:
-            raise CutterError("Could not configure the Die Cutter (%s). This is usually another "
-                              "program holding it - close Silhouette Studio and retry." % e)
+            raise CutterError("Could not configure the Die Cutter (%s). %s" % (e, _blocked_advice(e)))
 
         intf = cfg[(0, 0)]
         # On Linux a class driver must be detached first. On macOS the printing class driver does
@@ -159,8 +190,7 @@ class Cutter:
         try:
             usb.util.claim_interface(dev, intf.bInterfaceNumber)
         except Exception as e:
-            raise CutterError("Could not claim the Die Cutter (%s). Another program has it - close "
-                              "Silhouette Studio (and any earlier tool), then retry." % e)
+            raise CutterError("Could not claim the Die Cutter (%s). %s" % (e, _blocked_advice(e)))
 
         out = usb.util.find_descriptor(intf, custom_match=lambda e:
                                        usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT)
