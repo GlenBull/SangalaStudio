@@ -16,6 +16,13 @@ $orphans = @(); $noKeep = @(); $auto = 0
 $blankRuns = @(); $blankRun = 0; $blankPage = 0
 $deepest = @{}                                   # page -> lowest content top seen (points), for underfilled-page detection
 $forced = @{}                                    # page -> $true when a deliberate break STARTS that page
+# Where each section ends, except the last. The paragraph at that position CARRIES the section
+# break: it is empty by design, and it ends its page on purpose - a guide numbers its front matter
+# I, II and restarts the body at 1 exactly this way.
+$sectEnds = @{}
+try {
+  for ($si = 1; $si -lt $doc.Sections.Count; $si++) { $sectEnds[$doc.Sections.Item($si).Range.End] = $true }
+} catch {}
 foreach ($p in $doc.Paragraphs) {
   try { if ($p.SpaceBeforeAuto -or $p.SpaceAfterAuto) { $auto++ } } catch {}
   $pg = $p.Range.Information($wdActiveEndPageNumber)
@@ -50,7 +57,16 @@ foreach ($p in $doc.Paragraphs) {
   # Runs of consecutive EMPTY paragraphs are invisible vertical padding. They caused a 92 pt hole above
   # section 5 of the Tech Manual that no other check could see: the underfilled test measures the BOTTOM of
   # a page and the gap was interior, while each individual step was a normal ~30 pt. The tell is the blanks.
-  $isBlank = ($p.Range.Text.Trim().Length -eq 0) -and (-not $p.Range.Information(12)) -and ($p.Range.InlineShapes.Count -eq 0)
+  # A paragraph can be empty of text and still be STRUCTURAL rather than padding. Two kinds matter:
+  # the paragraph that carries a section break, and the terminator of a field such as a table of
+  # contents. Both are empty, neither is a vertical gap, and counting them made every document with
+  # a contents list report a blank run it did not have.
+  # NOTE: do NOT test this with Range.WordOpenXML. It returns a whole flat-OPC document containing
+  # the body's own sectPr, so every paragraph looks structural and the blank-run check silently
+  # stops reporting anything - which is exactly what happened the first time this was written.
+  $structural = $false
+  try { $structural = ($p.Range.Fields.Count -gt 0) -or $sectEnds.ContainsKey($p.Range.End) } catch {}
+  $isBlank = ($p.Range.Text.Trim().Length -eq 0) -and (-not $p.Range.Information(12)) -and ($p.Range.InlineShapes.Count -eq 0) -and (-not $structural)
   if ($isBlank) {
     if ($blankRun -eq 0) { $blankPage = $pg }
     $blankRun++
@@ -77,6 +93,13 @@ foreach ($p in $doc.Paragraphs) {
       $forced[$fs.Information($wdActiveEndPageNumber)] = $true
     } elseif ($p.Range.Text.Contains([char]12)) {
       $forced[$pg] = $true
+    }
+    # A "next page" SECTION break ends its page every bit as deliberately as a page break, and the
+    # front matter of a guide is separated from the body exactly that way - so that a title page and
+    # a contents list can be numbered I, II while the body restarts at 1. Without this the contents
+    # page reports as underfilled forever.
+    if ($sectEnds.ContainsKey($p.Range.End)) {
+      $forced[$pg + 1] = $true
     }
   } catch {}
 
