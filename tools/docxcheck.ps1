@@ -160,8 +160,29 @@ if ($pages -gt 1) {
   elseif (-not $centered) { $pageNumState = "present but NOT centered - move it to the bottom center"; $pageNumBad = $true }
   else { $pageNumState = "present, bottom center" }
 }
+# PAGE FILL. The UNDERFILLED gate above only speaks when a page is more than 3 in short, and it skips
+# the last page - so it passed a concept draft whose page 2 was 1.5 in short and visibly half empty,
+# and Glen found it rather than the script. This reports the same measurement UNCONDITIONALLY, for
+# every page including the last, so a gap that is real but under the gate is still visible. It does
+# NOT withhold CLEAN: a short page is often a section ending, and only a person can tell.
+$fill = @()
+$fullPages = 0
+for ($pg = $firstContentPage; $pg -le $pages; $pg++) {
+  if (-not $deepest.ContainsKey($pg)) { continue }
+  if ($deepest[$pg] -eq [double]::MaxValue) { $fullPages++; continue }
+  $slack = $usableBottom - $deepest[$pg]
+  if ($slack -gt 72) {
+    $note = ""
+    if ($pg -eq $pages) { $note = "  (last page - normal)" }
+    elseif ($forced.ContainsKey($pg + 1)) { $note = "  (deliberate break follows)" }
+    $fill += ("page {0}: {1} in blank{2}" -f $pg, [math]::Round($slack/72,1), $note)
+  } else { $fullPages++ }
+}
+
 $doc.Close($false); $w.Quit()
 Write-Output ("pages: " + $pages)
+Write-Output ("PAGE FILL - pages more than 1 in short (informational, does NOT withhold CLEAN): " + $fill.Count + " of " + $pages)
+$fill | ForEach-Object { Write-Output ("  . " + $_) }
 Write-Output ("page numbers: " + $pageNumState)
 Write-Output ("autospacing paragraphs (never ADD more): " + $auto)
 Write-Output ("headings lacking keepNext (fix - they can orphan): " + $noKeep.Count)
