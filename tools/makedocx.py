@@ -37,6 +37,12 @@ W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
 OFF = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 CT = "application/vnd.openxmlformats-officedocument."
+WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
+PIC = "http://schemas.openxmlformats.org/drawingml/2006/picture"
+
+EMU_PER_IN = 914400
+TEXT_WIDTH_IN = 6.5          # Letter less the 1 in margins this module sets
 
 
 def esc(t):
@@ -60,11 +66,43 @@ def _runs(parts, sz=22):
     return "".join(_run(t, italic=i, bold=b, sz=sz) for (t, i, b) in parts)
 
 
+def _pixel_size(path):
+    """Width and height of a PNG or JPEG, read from the file's own header.
+
+    Deliberately dependency-free: this module's whole reason to exist is that the usual
+    toolchains are absent here, so it must not acquire a Pillow dependency to place a figure.
+    """
+    with open(path, "rb") as f:
+        head = f.read(32)
+        if head[:8] == b"\x89PNG\r\n\x1a\n":                    # IHDR is always the first chunk
+            return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+        if head[:2] == b"\xff\xd8":                             # JPEG: walk to the first SOF marker
+            f.seek(2)
+            while True:
+                b = f.read(1)
+                if not b:
+                    break
+                if b != b"\xff":
+                    continue
+                marker = f.read(1)
+                while marker == b"\xff":
+                    marker = f.read(1)
+                if marker[0] in range(0xC0, 0xCF) and marker[0] not in (0xC4, 0xC8, 0xCC):
+                    f.read(3)
+                    h = int.from_bytes(f.read(2), "big")
+                    w = int.from_bytes(f.read(2), "big")
+                    return w, h
+                size = int.from_bytes(f.read(2), "big")
+                f.seek(size - 2, 1)
+    raise ValueError("cannot read image dimensions: %s" % path)
+
+
 class Doc:
     def __init__(self, page_numbers=True):
         self.paras = []
         self.numbered = False
         self.page_numbers = page_numbers
+        self.images = []                 # (zip name, bytes, extension)
 
     def _p(self, parts, before=0, after=100, keep=False, jc=None, sz=22, num=False):
         ppr = "<w:pPr>"
@@ -120,6 +158,40 @@ class Doc:
         self.paras.append('<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr>'
                           '<w:r><w:t xml:space="preserve">%s</w:t></w:r></w:p>' % esc(text))
 
+    def image(self, path, width_in=None):
+        """Place a figure, centered, in the Figure style - so it cannot part from its caption.
+
+        Call caption() immediately afterward. The image is scaled to `width_in` (default: the
+        full 6.5 in text column, or its natural size at 96 dpi if that is narrower), aspect
+        ratio preserved. The Figure style carries keepNext and names Caption as what follows,
+        which is what keeps a figure and its caption on the same page.
+        """
+        px_w, px_h = _pixel_size(path)
+        want = width_in if width_in else min(TEXT_WIDTH_IN, px_w / 96.0)
+        cx = int(want * EMU_PER_IN)
+        cy = int(cx * px_h / px_w)
+        ext = os.path.splitext(path)[1].lower().lstrip(".")
+        ext = "jpeg" if ext == "jpg" else ext
+        n = len(self.images) + 1
+        name = "media/image%d.%s" % (n, ext)
+        with open(path, "rb") as f:
+            self.images.append((name, f.read(), ext))
+        rid = "rIdImg%d" % n
+        self.paras.append(
+            '<w:p><w:pPr><w:pStyle w:val="Figure"/></w:pPr><w:r><w:drawing>'
+            '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+            '<wp:extent cx="%d" cy="%d"/><wp:effectExtent l="0" t="0" r="0" b="0"/>'
+            '<wp:docPr id="%d" name="Figure %d"/>'
+            '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            '<a:graphic><a:graphicData uri="%s">'
+            '<pic:pic><pic:nvPicPr><pic:cNvPr id="%d" name="image%d.%s"/><pic:cNvPicPr/></pic:nvPicPr>'
+            '<pic:blipFill><a:blip r:embed="%s"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/></a:xfrm>'
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+            "</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"
+            % (cx, cy, n, n, PIC, n, n, ext, rid, cx, cy)
+        )
+
     def code(self, text):
         """A command line, set in Consolas and indented. Sits tight to the step that introduces it
         (keepNext), so an instruction is never separated from the command it names."""
@@ -140,11 +212,12 @@ class Doc:
         ftr_ref = '<w:footerReference w:type="default" r:id="rId9"/>' if self.page_numbers else ""
         document = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-            '<w:document xmlns:w="%s" xmlns:r="%s"><w:body>%s'
+            '<w:document xmlns:w="%s" xmlns:r="%s" xmlns:wp="%s" xmlns:a="%s" xmlns:pic="%s">'
+            "<w:body>%s"
             '<w:sectPr>%s<w:pgSz w:w="12240" w:h="15840"/>'
             '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"'
             ' w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
-            "</w:body></w:document>" % (W, OFF, "".join(self.paras), ftr_ref)
+            "</w:body></w:document>" % (W, OFF, WP, DML, PIC, "".join(self.paras), ftr_ref)
         )
         # The page number is a PAGE field, not literal text, so it counts itself on every page.
         # The <w:t>1</w:t> between separate and end is the cached result Word shows before it
@@ -212,11 +285,18 @@ class Doc:
             overrides += ('<Override PartName="/word/footer1.xml" '
                           'ContentType="%swordprocessingml.footer+xml"/>' % CT)
             doc_rel += '<Relationship Id="rId9" Type="%s/footer" Target="footer1.xml"/>' % OFF
+        defaults = ""
+        for ext in sorted({e for _, _, e in self.images}):
+            defaults += '<Default Extension="%s" ContentType="image/%s"/>' % (ext, ext)
+        for i, (name, _, _) in enumerate(self.images, 1):
+            doc_rel += ('<Relationship Id="rIdImg%d" Type="%s/image" Target="%s"/>'
+                        % (i, OFF, name))
         content_types = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-            '<Default Extension="xml" ContentType="application/xml"/>%s</Types>' % overrides
+            '<Default Extension="xml" ContentType="application/xml"/>%s%s</Types>'
+            % (defaults, overrides)
         )
         rels = (
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
@@ -250,6 +330,8 @@ class Doc:
         parts = self._parts()
         for name, text in parts.items():         # never ship a package Word cannot open
             xml.dom.minidom.parseString(text)
+        for name, blob, _ in self.images:        # binary parts, validated by being readable
+            parts["word/" + name] = blob
         if stem is None:
             out = folder
         else:
