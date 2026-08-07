@@ -57,3 +57,6 @@ __pycache__/
 tools/.publish-state.json
 tools/sync-log.txt
 SYNC CONFLICT.txt
+
+# built distribution zip - rebuild it with tools/chromebook/build_zip.py
+tools/chromebook/*.zip

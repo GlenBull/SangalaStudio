@@ -1,0 +1,3 @@
+# Sangala Studio - let a normal user open the Silhouette die cutter.
+# 0b4d is Silhouette. setup.sh installs this for you.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0b4d", MODE="0666"

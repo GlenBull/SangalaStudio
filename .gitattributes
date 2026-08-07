@@ -5,3 +5,9 @@
 *.jpg   binary
 *.jpeg  binary
 *.exe   binary
+
+# Files that run on Linux. A shell script checked out with CRLF fails on the Chromebook with an
+# unreadable complaint about '\r', so pin them to LF whatever the platform's default is.
+# (tools/chromebook/build_zip.py normalises on the way into the zip as well - belt and braces.)
+*.sh                                text eol=lf
+tools/chromebook/99-silhouette.rules text eol=lf

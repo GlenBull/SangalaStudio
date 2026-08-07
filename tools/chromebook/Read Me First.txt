@@ -1,0 +1,56 @@
+Sangala Studio on a Chromebook
+==============================
+
+You type ONE line, once. After that Sangala Studio is an icon in the launcher,
+and you never need the Terminal again.
+
+Four things have to be done in ChromeOS first. They cannot be scripted.
+
+1. Turn on Linux.
+   Settings > About ChromeOS > Developers > "Linux development environment" > Set up.
+   This takes ten minutes or more and ends by opening a Terminal.
+
+2. Plug in the die cutter and switch it ON.
+
+3. Share it with Linux.
+   Settings > About ChromeOS > Developers > "Linux development environment" >
+   "Manage USB devices", and turn ON the entry named "USB device".
+   It is called "USB device" because the machine reports no name. To be certain
+   which entry it is, unplug the die cutter and see which one disappears.
+
+4. Copy these files into Linux.
+   In the Files application: My files > Downloads, double-click this zip,
+   press Ctrl-A then Ctrl-C, click "Linux files" on the left, press Ctrl-V.
+
+Then, in the Terminal, type this one line:
+
+    bash setup.sh
+
+It installs everything else, checks that the die cutter can be opened and says
+which model it found, tells you plainly what to do if anything is wrong, adds
+Sangala Studio to the ChromeOS launcher, and starts it.
+
+After that
+----------
+Open the launcher (the circle at the bottom-left of the screen), search for
+"Sangala", and click Sangala Studio. It opens a small window showing its address
+and opens the design page in Chrome. To stop it, press Ctrl-C in that window or
+just close it.
+
+The first time, the icon can take a few seconds to appear in the launcher.
+
+Two things worth knowing
+------------------------
+  - Do NOT add the die cutter as a printer in ChromeOS Settings. Sangala Studio
+    never prints to it, and the printing system claiming it is the one thing that
+    stops this working.
+
+  - Pasting into the Terminal is Ctrl-Shift-V, not Ctrl-V. If a pasted command
+    fails with something like $'\E[200~sudo', run "bash setup.sh" once more and
+    open a fresh Terminal window - setup.sh fixes pasting for good.
+
+If something goes wrong
+-----------------------
+Run "bash setup.sh" again. It is safe to run any number of times: every step
+checks before it acts, and it stops at the first thing that is wrong with a
+sentence saying what to do about it.
