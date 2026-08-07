@@ -140,7 +140,11 @@ class Cutter:
             import usb.core
             import usb.util
         except ImportError:
-            raise CutterError("pyusb is not installed. Run: python3 -m pip install pyusb")
+            # Debian - and so ChromeOS's Linux container - has no pip by default and refuses pip
+            # installs into the system Python even when it is there. apt is the answer on Linux and
+            # pip is the answer everywhere else.
+            raise CutterError("pyusb is not installed. Run: %s" % (
+                "sudo apt install python3-usb" if ON_LINUX else "python3 -m pip install pyusb"))
 
         # pyusb is only a wrapper: it needs libusb underneath, and macOS does not ship one.
         # Measured 2026-08-03 on two Macs: Moses's had it (a conda environment supplied it) and
@@ -157,9 +161,10 @@ class Cutter:
             except Exception:
                 backend = None
             if backend is None:
-                raise CutterError(
-                    "pyusb has no libusb backend. Run: python3 -m pip install libusb-package "
-                    "(or, if you have Homebrew, brew install libusb), then try again.")
+                raise CutterError("pyusb has no libusb backend. Run: %s, then try again." % (
+                    "sudo apt install libusb-1.0-0" if ON_LINUX else
+                    "python3 -m pip install libusb-package (or, if you have Homebrew, "
+                    "brew install libusb)"))
             devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID, backend=backend))
         self._backend = backend
         if not devices:
