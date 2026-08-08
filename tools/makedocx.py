@@ -103,13 +103,14 @@ class Doc:
         self.numbered = False
         self.page_numbers = page_numbers
         self.images = []                 # (zip name, bytes, extension)
+        self.numid = 1                   # the list step() is currently adding to; see new_list()
 
     def _p(self, parts, before=0, after=100, keep=False, jc=None, sz=22, num=False):
         ppr = "<w:pPr>"
         if keep:
             ppr += "<w:keepNext/><w:keepLines/>"
         if num:
-            ppr += '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'
+            ppr += ('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="%d"/></w:numPr>' % self.numid)
             ppr += '<w:ind w:left="720" w:hanging="360"/>'
         ppr += '<w:spacing w:before="%d" w:after="%d"/>' % (before, after)
         if jc:
@@ -137,6 +138,20 @@ class Doc:
         """A numbered step, 3 pt after."""
         self.numbered = True
         self._p(parts, after=60, num=True)
+
+    def new_list(self):
+        """Begin a fresh numbered list: the next step() starts again at 1.
+
+        Call this between two separate step sequences. Without it every step() in the document
+        shares one counter, so a second sequence of seven continues at 8 - which reads as a fault
+        under a heading that announces a new procedure. This was found in a real document only by
+        rendering the page, because the XML looks correct either way.
+
+        A NEW numId ALONE DOES NOT RESTART A LIST: it inherits the abstract definition's counter,
+        so each one is emitted with an explicit lvlOverride/startOverride (see save()). Verify with
+        Word COM Range.ListFormat.ListString, never by reading the XML.
+        """
+        self.numid += 1
 
     def caption(self, text):
         """A figure caption carrying the document's Caption STYLE, not hand-applied formatting.
@@ -267,7 +282,13 @@ class Doc:
             '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>'
             '<w:lvlText w:val="%%1."/><w:lvlJc w:val="left"/>'
             '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>'
-            '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>' % W
+            "%s</w:numbering>" % (
+                W,
+                # One <w:num> per list new_list() handed out, each restarting the shared abstract
+                # definition's counter at 1. The override is what actually restarts it.
+                "".join('<w:num w:numId="%d"><w:abstractNumId w:val="0"/>'
+                        '<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride>'
+                        "</w:num>" % n for n in range(1, self.numid + 1)))
         )
         overrides = (
             '<Override PartName="/word/document.xml" ContentType="%swordprocessingml.document.main+xml"/>'
