@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-09.186 -->
+<!-- SANGALA_VERSION: 2026-08-09.187 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2634,7 +2634,7 @@ $("bStl").onclick=()=>exportSTL();
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
-let pvPart=null, pvIdBuf=null;   // which PIECE each triangle belongs to, and the piece under each pixel - see the outline pass
+let pvPart=null, pvIdBuf=null, pvNrm=null;   // which PIECE each triangle belongs to, the piece under each pixel, and the surface normal there - see the outline pass
 // One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
 // different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
 // one triangle soup, so two shapes that merely overlap look exactly like two that are fused - which is how a
@@ -2691,8 +2691,10 @@ function renderPreview(){
   const img=g.getImageData(0,0,W,H), px=img.data;     // composite over the background + plate already drawn
   if(!pvZbuf || pvZbuf.length!==W*H) pvZbuf=new Float32Array(W*H);
   if(!pvIdBuf || pvIdBuf.length!==W*H) pvIdBuf=new Uint16Array(W*H);
+  if(!pvNrm || pvNrm.length!==W*H*3) pvNrm=new Int8Array(W*H*3);   // the winning surface's normal, x/y/z scaled to +-127 - the crease test reads it
   pvZbuf.fill(Infinity);                              // depth: smaller = nearer
   pvIdBuf.fill(0);                                    // which PIECE won each pixel; 0 = none
+  // pvNrm needs no clearing: a pixel is only ever read where pvZbuf says a surface won it, and the two are written together
   for(let ti=0; ti<pvTris.length; ti++){
     const t=pvTris[ti];
     const base=(pvCol && pvCol[ti]) || PIECE_COLORS[0];   // this triangle's PIECE color (see pvSetTris)
@@ -2710,6 +2712,7 @@ function renderPreview(){
     const s = lit>0.72 ? 1.0 : lit>0.34 ? 0.80 : 0.62;
     const R=(base[0]*s)|0, G=(base[1]*s)|0, B=(base[2]*s)|0;
     const pid=(pvPart && pvPart[ti])||0;
+    const qnx=(nx*127)|0, qny=(ny*127)|0, qnz=(nz*127)|0;   // this face's normal, packed for the crease test
     let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
     let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
     if(x0>x1||y0>y1) continue;
@@ -2722,7 +2725,8 @@ function renderPreview(){
         const w2=1-w0-w1; if(w2<-1e-6) continue;
         const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
         if(z>=pvZbuf[i]) continue;                    // something nearer is already there
-        pvZbuf[i]=z; pvIdBuf[i]=pid; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
+        pvZbuf[i]=z; pvIdBuf[i]=pid; const q=i*3; pvNrm[q]=qnx; pvNrm[q+1]=qny; pvNrm[q+2]=qnz;
+        const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
       } }
   }
   // ---- guides: the massing you are building against. Rasterized into their OWN depth buffer and then
@@ -2769,16 +2773,34 @@ function renderPreview(){
   // exactly the case where seeing the seam matters (a brick sitting on a brick, a part placed against a
   // massing). Only the NEARER side of the pair is darkened, so the seam is one pixel wide rather than two;
   // an exact depth tie is broken by piece number, which is stable from frame to frame.
+  // A THIRD test: the pixel next door lies on the same piece at the same depth but its surface FACES
+  // ELSEWHERE - a crease, where two faces of one part meet. This is what draws the top-against-side edge of
+  // every box, and it is most of what makes a technical illustration read as a built object rather than a
+  // shaded lump. Depth cannot see it (the surface is continuous across the fold) and neither can the piece
+  // id (it is one piece). CREASE_COS is a cosine, so a fold sharper than about 32 degrees draws and a gentle
+  // one does not - which is what keeps a faceted cone from turning into a set of contour lines.
+  const CREASE_COS=0.85, NSC=1/(127*127);
+  const crease=(i,q,z,k)=>{
+    if(pvZbuf[k]===Infinity || pvIdBuf[k]!==pvIdBuf[i]) return false;   // background and piece seams are the other two tests
+    const r=k*3, d=(pvNrm[q]*pvNrm[r] + pvNrm[q+1]*pvNrm[r+1] + pvNrm[q+2]*pvNrm[r+2])*NSC;
+    if(d>=CREASE_COS) return false;
+    const zk=pvZbuf[k];
+    if(zk!==z) return zk>z;                       // draw on the nearer side, so the fold is one pixel wide
+    // dead level: pick a side by the normal itself, the same way every frame, or the line would crawl
+    return pvNrm[q+2]!==pvNrm[r+2] ? pvNrm[q+2]>pvNrm[r+2]
+         : pvNrm[q]!==pvNrm[r]     ? pvNrm[q]>pvNrm[r]
+                                   : pvNrm[q+1]>pvNrm[r+1];
+  };
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const i=y*W+x, z=pvZbuf[i]; if(z===Infinity) continue;   // background
-    const id=pvIdBuf[i];
+    const id=pvIdBuf[i], q=i*3;
     // written out four times rather than through a helper: this runs once per pixel per frame, and a closure
     // allocated here costs more than the whole test
     let edge=false, zn, dn;
-    if(x+1<W){ zn=pvZbuf[i+1]; dn=pvIdBuf[i+1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
-    if(!edge && x>0){ zn=pvZbuf[i-1]; dn=pvIdBuf[i-1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
-    if(!edge && y+1<H){ zn=pvZbuf[i+W]; dn=pvIdBuf[i+W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
-    if(!edge && y>0){ zn=pvZbuf[i-W]; dn=pvIdBuf[i-W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
+    if(x+1<W){ zn=pvZbuf[i+1]; dn=pvIdBuf[i+1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+1)) edge=true; }
+    if(!edge && x>0){ zn=pvZbuf[i-1]; dn=pvIdBuf[i-1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-1)) edge=true; }
+    if(!edge && y+1<H){ zn=pvZbuf[i+W]; dn=pvIdBuf[i+W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+W)) edge=true; }
+    if(!edge && y>0){ zn=pvZbuf[i-W]; dn=pvIdBuf[i-W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-W)) edge=true; }
     if(edge){ const p=i<<2; px[p]=(px[p]*0.45)|0; px[p+1]=(px[p+1]*0.45)|0; px[p+2]=(px[p+2]*0.45)|0; }
   }
   g.putImageData(img,0,0);
