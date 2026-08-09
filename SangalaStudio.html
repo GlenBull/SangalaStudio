@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-09.185 -->
+<!-- SANGALA_VERSION: 2026-08-09.186 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2634,6 +2634,7 @@ $("bStl").onclick=()=>exportSTL();
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
+let pvPart=null, pvIdBuf=null;   // which PIECE each triangle belongs to, and the piece under each pixel - see the outline pass
 // One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
 // different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
 // one triangle soup, so two shapes that merely overlap look exactly like two that are fused - which is how a
@@ -2641,9 +2642,9 @@ let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvB
 // Piece 1 keeps the original brick red, so a single-piece model looks exactly as it always did.
 const PIECE_COLORS=[[214,74,48],[62,116,178],[86,150,90],[196,150,54],[142,96,166],[70,150,150]];
 function pvSetTris(b){   // parts are concatenated in order by buildTris, so a per-triangle color array lines up
-  pvTris=b.tris; pvCol=[]; pvGuide=b.guides&&b.guides.length?b.guides:null;
+  pvTris=b.tris; pvCol=[]; pvPart=[]; pvGuide=b.guides&&b.guides.length?b.guides:null;
   (b.parts||[]).forEach((tris,i)=>{ const c=(b.cols&&b.cols[i])||PIECE_COLORS[i%PIECE_COLORS.length];   // a mosaic mass wears its tile color; everything else keeps the piece cycle (which is how a Fuse stays visible)
-    for(let k=0;k<tris.length;k++) pvCol.push(c); });
+    for(let k=0;k<tris.length;k++){ pvCol.push(c); pvPart.push(i+1); } });   // piece number, 1-based: 0 is left for "no piece here" in the pixel id buffer
 }
 const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
@@ -2689,7 +2690,9 @@ function renderPreview(){
   // stud against the large flat face it sits on, so the face paints over it. A z-buffer keeps whatever is nearest. ----
   const img=g.getImageData(0,0,W,H), px=img.data;     // composite over the background + plate already drawn
   if(!pvZbuf || pvZbuf.length!==W*H) pvZbuf=new Float32Array(W*H);
+  if(!pvIdBuf || pvIdBuf.length!==W*H) pvIdBuf=new Uint16Array(W*H);
   pvZbuf.fill(Infinity);                              // depth: smaller = nearer
+  pvIdBuf.fill(0);                                    // which PIECE won each pixel; 0 = none
   for(let ti=0; ti<pvTris.length; ti++){
     const t=pvTris[ti];
     const base=(pvCol && pvCol[ti]) || PIECE_COLORS[0];   // this triangle's PIECE color (see pvSetTris)
@@ -2698,8 +2701,15 @@ function renderPreview(){
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;   // outward normal
     if((nx*sa+ny*ca)*ce - nz*se >= 0) continue;       // backface cull: rotated-normal depth points away
     const a=proj(t[0]),b=proj(t[1]),c=proj(t[2]);
-    const s=0.34+0.66*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+    // THREE TONES, not a continuous gradient. A face takes one of three fixed multipliers by how squarely it
+    // faces the light, the way a technical illustration is drawn (and the way the booklet renderer draws a
+    // brick: top, right, left). A smooth Lambert ramp reads as a photograph of a lump; three flat tones let
+    // the eye separate one face of a part from the next. A curved surface bands into three stripes as a
+    // result - the cost of the convention, and the reason the tone boundaries are where the shape reads.
+    const lit=Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+    const s = lit>0.72 ? 1.0 : lit>0.34 ? 0.80 : 0.62;
     const R=(base[0]*s)|0, G=(base[1]*s)|0, B=(base[2]*s)|0;
+    const pid=(pvPart && pvPart[ti])||0;
     let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
     let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
     if(x0>x1||y0>y1) continue;
@@ -2712,7 +2722,7 @@ function renderPreview(){
         const w2=1-w0-w1; if(w2<-1e-6) continue;
         const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
         if(z>=pvZbuf[i]) continue;                    // something nearer is already there
-        pvZbuf[i]=z; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
+        pvZbuf[i]=z; pvIdBuf[i]=pid; const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
       } }
   }
   // ---- guides: the massing you are building against. Rasterized into their OWN depth buffer and then
@@ -2754,13 +2764,21 @@ function renderPreview(){
   const ceA=Math.abs(ce)||1e-6, seA=Math.abs(se)||1e-6;
   const flatGrad=Math.max(ceA/seA, seA/ceA)/scale;      // the largest depth change a flat face can show across one pixel
   const eT=Math.max(0.3, 1.8*flatGrad);                 // a real step (a 1.8 mm stud) is far bigger than that
+  // A SECOND test joins it: the pixel next door belongs to a DIFFERENT PIECE. Two parts resting flush against
+  // each other have no depth cliff between them, so the cliff test alone drew them as one undivided mass -
+  // exactly the case where seeing the seam matters (a brick sitting on a brick, a part placed against a
+  // massing). Only the NEARER side of the pair is darkened, so the seam is one pixel wide rather than two;
+  // an exact depth tie is broken by piece number, which is stable from frame to frame.
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const i=y*W+x, z=pvZbuf[i]; if(z===Infinity) continue;   // background
-    let edge=false, zn;
-    if(x+1<W){ zn=pvZbuf[i+1]; if(zn===Infinity || zn-z>eT) edge=true; }
-    if(!edge && x>0){ zn=pvZbuf[i-1]; if(zn===Infinity || zn-z>eT) edge=true; }
-    if(!edge && y+1<H){ zn=pvZbuf[i+W]; if(zn===Infinity || zn-z>eT) edge=true; }
-    if(!edge && y>0){ zn=pvZbuf[i-W]; if(zn===Infinity || zn-z>eT) edge=true; }
+    const id=pvIdBuf[i];
+    // written out four times rather than through a helper: this runs once per pixel per frame, and a closure
+    // allocated here costs more than the whole test
+    let edge=false, zn, dn;
+    if(x+1<W){ zn=pvZbuf[i+1]; dn=pvIdBuf[i+1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
+    if(!edge && x>0){ zn=pvZbuf[i-1]; dn=pvIdBuf[i-1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
+    if(!edge && y+1<H){ zn=pvZbuf[i+W]; dn=pvIdBuf[i+W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
+    if(!edge && y>0){ zn=pvZbuf[i-W]; dn=pvIdBuf[i-W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn)))) edge=true; }
     if(edge){ const p=i<<2; px[p]=(px[p]*0.45)|0; px[p+1]=(px[p+1]*0.45)|0; px[p+2]=(px[p+2]*0.45)|0; }
   }
   g.putImageData(img,0,0);
