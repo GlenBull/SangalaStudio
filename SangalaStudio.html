@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-09.187 -->
+<!-- SANGALA_VERSION: 2026-08-09.188 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2634,7 +2634,7 @@ $("bStl").onclick=()=>exportSTL();
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
-let pvPart=null, pvIdBuf=null, pvNrm=null;   // which PIECE each triangle belongs to, the piece under each pixel, and the surface normal there - see the outline pass
+let pvPart=null, pvIdBuf=null, pvNrm=null, pvEdge=null;   // which PIECE each triangle belongs to, the piece under each pixel, the surface normal there, and the line weight drawn over it - see the outline pass
 // One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
 // different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
 // one triangle soup, so two shapes that merely overlap look exactly like two that are fused - which is how a
@@ -2763,8 +2763,9 @@ function renderPreview(){
       px[p]=(104+62*s)|0; px[p+1]=(120+62*s)|0; px[p+2]=(142+58*s)|0; px[p+3]=255;   // reads as no ghost at all
     }
   }
-  // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim) or against the
-  // background (the silhouette). The threshold tracks the view, so a flat face's own gradient never trips it. ----
+  // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim), against the
+  // background (the silhouette), against another PIECE, or across a fold in its own surface (a crease). The
+  // depth threshold tracks the view, so a flat face's own gradient never trips it. ----
   const ceA=Math.abs(ce)||1e-6, seA=Math.abs(se)||1e-6;
   const flatGrad=Math.max(ceA/seA, seA/ceA)/scale;      // the largest depth change a flat face can show across one pixel
   const eT=Math.max(0.3, 1.8*flatGrad);                 // a real step (a 1.8 mm stud) is far bigger than that
@@ -2791,17 +2792,38 @@ function renderPreview(){
          : pvNrm[q]!==pvNrm[r]     ? pvNrm[q]>pvNrm[r]
                                    : pvNrm[q+1]>pvNrm[r+1];
   };
+  // TWO LINE WEIGHTS, which is where a technical drawing gets its authority: a HEAVY outline around the
+  // object's silhouette, a LIGHTER one on the folds and seams inside it. Drawn at one weight the silhouette
+  // separates the object from the background no more strongly than one face separates from the next, and the
+  // whole thing reads flat. The marks are collected first and applied afterward, because darkening a pixel
+  // while still scanning would compound wherever two tests land on it.
+  if(!pvEdge || pvEdge.length!==W*H) pvEdge=new Uint8Array(W*H);
+  pvEdge.fill(0);   // 0 none, 1 interior line (crease / seam / depth cliff), 2 silhouette, 3 silhouette widened
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const i=y*W+x, z=pvZbuf[i]; if(z===Infinity) continue;   // background
     const id=pvIdBuf[i], q=i*3;
     // written out four times rather than through a helper: this runs once per pixel per frame, and a closure
     // allocated here costs more than the whole test
-    let edge=false, zn, dn;
-    if(x+1<W){ zn=pvZbuf[i+1]; dn=pvIdBuf[i+1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+1)) edge=true; }
-    if(!edge && x>0){ zn=pvZbuf[i-1]; dn=pvIdBuf[i-1]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-1)) edge=true; }
-    if(!edge && y+1<H){ zn=pvZbuf[i+W]; dn=pvIdBuf[i+W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+W)) edge=true; }
-    if(!edge && y>0){ zn=pvZbuf[i-W]; dn=pvIdBuf[i-W]; if(zn===Infinity || zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-W)) edge=true; }
-    if(edge){ const p=i<<2; px[p]=(px[p]*0.45)|0; px[p+1]=(px[p+1]*0.45)|0; px[p+2]=(px[p+2]*0.45)|0; }
+    let sil=false, line=false, zn, dn;
+    if(x+1<W){ zn=pvZbuf[i+1]; dn=pvIdBuf[i+1]; if(zn===Infinity) sil=true; else if(zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+1)) line=true; }
+    if(x>0){ zn=pvZbuf[i-1]; dn=pvIdBuf[i-1]; if(zn===Infinity) sil=true; else if(zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-1)) line=true; }
+    if(y+1<H){ zn=pvZbuf[i+W]; dn=pvIdBuf[i+W]; if(zn===Infinity) sil=true; else if(zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i+W)) line=true; }
+    if(y>0){ zn=pvZbuf[i-W]; dn=pvIdBuf[i-W]; if(zn===Infinity) sil=true; else if(zn-z>eT || (dn!==id && (zn>z || (zn===z && id<dn))) || crease(i,q,z,i-W)) line=true; }
+    pvEdge[i] = sil?2 : line?1 : 0;                          // a pixel that is both takes the heavier weight
+  }
+  // Widen the silhouette INWARD by one pixel - never outward, or the object would grow as it turned. Widened
+  // pixels are marked 3 rather than 2 so a second pixel never widens off the first and the line stays 2 wide.
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x; if(pvEdge[i]!==2) continue;
+    if(x+1<W && pvZbuf[i+1]!==Infinity && pvEdge[i+1]<2) pvEdge[i+1]=3;
+    if(x>0     && pvZbuf[i-1]!==Infinity && pvEdge[i-1]<2) pvEdge[i-1]=3;
+    if(y+1<H && pvZbuf[i+W]!==Infinity && pvEdge[i+W]<2) pvEdge[i+W]=3;
+    if(y>0     && pvZbuf[i-W]!==Infinity && pvEdge[i-W]<2) pvEdge[i-W]=3;
+  }
+  for(let i=0;i<W*H;i++){
+    const m=pvEdge[i]; if(!m) continue;
+    const f = m>=2 ? 0.35 : 0.55;                            // silhouette heavy and dark, interior lines light
+    const p=i<<2; px[p]=(px[p]*f)|0; px[p+1]=(px[p+1]*f)|0; px[p+2]=(px[p+2]*f)|0;
   }
   g.putImageData(img,0,0);
   if(pvPlate){
