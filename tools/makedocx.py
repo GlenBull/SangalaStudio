@@ -105,13 +105,24 @@ class Doc:
         self.images = []                 # (zip name, bytes, extension)
         self.numid = 1                   # the list step() is currently adding to; see new_list()
 
-    def _p(self, parts, before=0, after=100, keep=False, jc=None, sz=22, num=False):
+    def _p(self, parts, before=0, after=100, keep=False, jc=None, sz=22, num=False, ind=0,
+           brk=False):
         ppr = "<w:pPr>"
         if keep:
             ppr += "<w:keepNext/><w:keepLines/>"
+        if brk:
+            # pageBreakBefore, not a <w:br> in a paragraph of its own: docxcheck recognises this as
+            # a deliberate break and stops counting the short page before it against PAGINATION
+            # CLEAN. The schema wants it here, after keepLines and before numPr.
+            ppr += "<w:pageBreakBefore/>"
         if num:
             ppr += ('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="%d"/></w:numPr>' % self.numid)
             ppr += '<w:ind w:left="720" w:hanging="360"/>'
+        elif ind:
+            # Aligns a continuation paragraph under the TEXT of a numbered step, whose text sits at
+            # 720. Without this, a sub-paragraph falls back to the margin and the step's own indent
+            # makes the two look unrelated - the list stops reading as blocks.
+            ppr += '<w:ind w:left="%d"/>' % ind
         ppr += '<w:spacing w:before="%d" w:after="%d"/>' % (before, after)
         if jc:
             ppr += '<w:jc w:val="%s"/>' % jc
@@ -122,22 +133,29 @@ class Doc:
     def title(self, text):
         self._p([(text, False, True)], after=240, jc="center", sz=28)
 
-    def heading(self, text):
-        """Headings carry keepNext + keepLines, and sit tight to what follows (0 before / 3 pt after)."""
-        self._p([(text, False, True)], before=240, after=60, keep=True)
+    def heading(self, text, page_break_before=False):
+        """Headings carry keepNext + keepLines, and sit tight to what follows (0 before / 3 pt after).
+
+        page_break_before=True starts the section on a fresh page - use it for an appendix, in
+        preference to page_break(), which docxcheck cannot tell from an accidental short page.
+        """
+        self._p([(text, False, True)], before=240, after=60, keep=True, brk=page_break_before)
 
     def body(self, parts, before_list=False):
         """An ordinary body paragraph keeps 5 pt after; one introducing a list takes 3 pt."""
         self._p(parts, after=60 if before_list else 100)
 
-    def item(self, label, text):
-        """A list-like paragraph led by an ITALIC label, 3 pt after."""
-        self._p([(label, True, False), (text, False, False)], after=60)
+    def item(self, label, text, ind=0, after=60):
+        """A list-like paragraph led by an ITALIC label, 3 pt after.
 
-    def step(self, parts):
-        """A numbered step, 3 pt after."""
+        Pass ind=720 to tuck it under a numbered step so the two read as one block.
+        """
+        self._p([(label, True, False), (text, False, False)], after=after, ind=ind)
+
+    def step(self, parts, before=0):
+        """A numbered step, 3 pt after. `before` separates one step's block from the previous."""
         self.numbered = True
-        self._p(parts, after=60, num=True)
+        self._p(parts, before=before, after=60, num=True)
 
     def new_list(self):
         """Begin a fresh numbered list: the next step() starts again at 1.
@@ -216,6 +234,20 @@ class Doc:
                '<w:color w:val="000000"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>')
         self.paras.append('<w:p>%s<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r></w:p>'
                           % (ppr, rpr, esc(text)))
+
+    def listing(self, text):
+        """A multi-line code listing: Consolas 9 pt, indented, lines tight together.
+
+        Deliberately NOT code(): that glues its line to the paragraph below with keepNext, which is
+        right for one command under the step that names it and wrong for a block - sixty lines
+        cannot be kept with the next paragraph, and 6 pt between every line makes a script unreadable.
+        """
+        rpr = ('<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>'
+               '<w:color w:val="000000"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>')
+        ppr = '<w:pPr><w:ind w:left="360"/><w:spacing w:before="0" w:after="0"/></w:pPr>'
+        for line in text.splitlines():
+            self.paras.append('<w:p>%s<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r></w:p>'
+                              % (ppr, rpr, esc(line)))
 
     def page_break(self):
         self.paras.append('<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
