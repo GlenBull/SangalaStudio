@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-02.184 -->
+<!-- SANGALA_VERSION: 2026-08-09.185 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2550,13 +2550,17 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   all=all.filter(o=>!isGuide(o));
   const guideTris=[].concat.apply([], guideObjs.map(o=>{ try{ return bodyTris(o,false); }catch(e){ return []; } }));
   const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
-  const parts=[], pcols=[];   // pcols[i] = fixed display color for parts[i] (a mosaic mass wears its tile color); null -> the piece-color cycle
-  const partCol=o=>{ if(!isMosaicPart(o)) return null; const f=fillOf(o), m=f&&/^#([0-9a-f]{6})$/i.exec(f);
+  const parts=[], pcols=[];   // pcols[i] = fixed display color for parts[i] (the color the shape was given); null -> the piece-color cycle
+  // A shape's own color is what it wears in the 3D view. That started with mosaic masses, which carry their
+  // tile color across from Sangala Mosaic, but the color belongs to any shape - one drawn here reads the same
+  // way - so the test on isMosaicPart is gone (Glen, 2026-08-09). An uncolored piece still takes the cycle.
+  const partCol=o=>{ const f=fillOf(o), m=f&&/^#([0-9a-f]{6})$/i.exec(f);
     if(!m) return null; const n=parseInt(m[1],16); return [n>>16&255,n>>8&255,n&255]; };
   const bper={}; brickBodies.forEach(o=>{ if(o.group!=null)bper[o.group]=(bper[o.group]||0)+1; });   // bricks keep the old weld-by-group; their hollow meshes do not go through the boolean
-  const bmap=new Map();
-  brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse)); });
-  bmap.forEach(t=>{ parts.push(t); pcols.push(null); });
+  const bmap=new Map(), bcols=new Map();
+  brickBodies.forEach(o=>{ const fuse=o.group!=null&&bper[o.group]>1, key=o.group!=null?"g"+o.group:"o"+o.id; if(!bmap.has(key))bmap.set(key,[]); bmap.get(key).push(...bodyTris(o,fuse));
+    if(!bcols.get(key)) bcols.set(key, partCol(o)); });   // a fused group prints as ONE piece, so it wears the color of the first colored brick in it
+  bmap.forEach((t,key)=>{ parts.push(t); pcols.push(bcols.get(key)||null); });
   // Non-brick bodies group by their OUTERMOST bundle. A bundle with NO hole stays a plain bundle (each solid
   // its own piece - non-touching shapes are fine, they just coexist). A bundle that HOLDS a hole previews the
   // boolean: each solid is carved by every hole that reaches it (a hole that misses a solid leaves it whole),
@@ -3357,7 +3361,9 @@ function bool3Dn(op, ops){
   const kind=(wm.find(x=>!isHole(x.o))||wm[0]).o.kind;
   wm.forEach(x=>{ if(x.o.el&&x.o.el.remove) x.o.el.remove(); });   // remove only the shapes we actually combined; a selected flat shape (no Depth) is left alone
   objects=objects.filter(o=>!wm.some(x=>x.o===o));
-  makeMeshObj(fp, mesh, kind, openings);
+  const baked=makeMeshObj(fp, mesh, kind, openings);
+  const col=fillOf((solids[0]||wm[0]).o);   // the baked part keeps the color of the first solid it was made from, so boring a hole doesn't drop a shape back to gray
+  if(col) baked.el.setAttribute("data-fill",col);
   selId=null; selId2=null; selMulti=[]; selNode=null;
   renderBg(); draw(); refreshEditPanel(); pvRefresh();   // update the 3D view so the combined part shows at once
   const n=wm.length;
@@ -4475,7 +4481,9 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
   $("kindrow1").style.display = mode3D?"none":"";
   $("ePrint").style.display   = mode3D?"none":"";
   $("eDelete").style.gridColumn = mode3D?"1/-1":"";
-  $("fillrow").style.display  = mode3D?"none":"";   // paper color is a collage idea; a 3D part has no card
+  // Paper color is assigned in the 2D view - a 3D part has no card - and it CARRIES OVER: whatever color a
+  // shape was given there is the color it wears in the 3D view (Glen, 2026-08-09). See partCol in buildTris.
+  $("fillrow").style.display  = mode3D?"none":"";
   $("layerrow").style.display = mode3D?"none":"";   // and in 3D, what sits in front is real geometry, not an order
 }
 /* ---------- Paper color: fill a shape to preview the finished collage ----------
