@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-09.188 -->
+<!-- SANGALA_VERSION: 2026-08-10.189 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2549,6 +2549,7 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   const guideObjs=all.filter(isGuide);
   all=all.filter(o=>!isGuide(o));
   const guideTris=[].concat.apply([], guideObjs.map(o=>{ try{ return bodyTris(o,false); }catch(e){ return []; } }));
+  const ghostTris=[];   // holes with nothing to carve: shown, never exported - see the bucket loop below
   const brickBodies=all.filter(o=>o.el.hasAttribute("data-brick")), nonBrick=all.filter(o=>!o.el.hasAttribute("data-brick"));
   const parts=[], pcols=[];   // pcols[i] = fixed display color for parts[i] (the color the shape was given); null -> the piece-color cycle
   // A shape's own color is what it wears in the 3D view. That started with mosaic masses, which carry their
@@ -2572,6 +2573,12 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   buckets.forEach((members,key)=>{
     const holes=members.filter(isHole), solids=members.filter(o=>!isHole(o));
     if(!holes.length){ solids.forEach(o=>{ const t=bodyTris(o,false); if(t.length){ parts.push(t); pcols.push(partCol(o)); } }); return; }   // bundle with no hole -> plain bundle
+    // A hole with nothing to carve makes no material, so it used to show NOTHING in the 3D view - and a
+    // student could not tell whether the hole was where they meant it to be until they had committed to a
+    // Combine (Glen, 2026-08-10). It is now drawn as a GHOST: the shape it would remove, in its own color,
+    // painted only where no real part covers it. Like a guide it never reaches the STL, because it is
+    // returned on its own channel rather than as a piece.
+    if(!solids.length){ holes.forEach(o=>{ try{ const t=bodyTris(o,false); for(const x of t) ghostTris.push(x); }catch(e){} }); return; }
     const stamp=grpStamp(members); let c=useCache?_grpPrev.get(key):null;
     if(!c || c.stamp!==stamp){
       const holeMeshes=holes.map(operandMesh).filter(m=>m&&m.length);
@@ -2592,15 +2599,16 @@ function buildTris(onlyIds){   // assemble the 3D triangle soup (mm, Z up) that 
   let lo=Infinity;
   for(const p of list) for(const t of p) for(const v of t) if(v[2]<lo) lo=v[2];
   for(const t of guideTris) for(const v of t) if(v[2]<lo) lo=v[2];
-  let out=list, gout=guideTris;
+  for(const t of ghostTris) for(const v of t) if(v[2]<lo) lo=v[2];
+  let out=list, gout=guideTris, hout=ghostTris;
   if(isFinite(lo) && lo<0){ const up=-lo;
     // COPIED, never shifted in place: a grouped bundle's mesh is held in _grpPrev between renders, and
     // raising the cached triangles themselves would lift it again on every redraw.
     const raise=tris=>tris.map(t=>t.map(v=>[v[0],v[1],v[2]+up]));
-    out=list.map(raise); gout=raise(guideTris);
+    out=list.map(raise); gout=raise(guideTris); hout=raise(ghostTris);
   }
   return {tris:[].concat.apply([],out), n:all.length, bricks:bricks.length, parts:out, cols:lcols,
-          guides:gout, nGuide:guideObjs.length};
+          guides:gout, nGuide:guideObjs.length, ghosts:hout};
 }
 // Export the SELECTED piece, the way TinkerCAD does and the way the pilot taught. A browser grants ONE Save
 // dialog per click, so the old loop - asking for five files from one press - was refused after the first and
@@ -2634,6 +2642,7 @@ $("bStl").onclick=()=>exportSTL();
 
 /* ---------- 3D preview: render the SAME triangle soup as the STL (mm, Z up) with an orthographic painter's-algorithm renderer ---------- */
 let pvOn=false, pvTris=null, pvCol=null, pvYaw=-0.6, pvPitch=0.95, pvZoom=1, pvBase=1, pvCenter=[0,0,0], pvDrag=null, pvPlate=false, pvZbuf=null, pvGuide=null;
+let pvGhost=null;   // loose holes, drawn as the shape they would remove
 let pvPart=null, pvIdBuf=null, pvNrm=null, pvEdge=null;   // which PIECE each triangle belongs to, the piece under each pixel, the surface normal there, and the line weight drawn over it - see the outline pass
 // One color per printed PIECE. Fused shapes share a color because they ARE one piece; separate pieces get
 // different ones. Without this there is no way to SEE whether a Fuse took: the preview draws every body into
@@ -2643,6 +2652,7 @@ let pvPart=null, pvIdBuf=null, pvNrm=null, pvEdge=null;   // which PIECE each tr
 const PIECE_COLORS=[[214,74,48],[62,116,178],[86,150,90],[196,150,54],[142,96,166],[70,150,150]];
 function pvSetTris(b){   // parts are concatenated in order by buildTris, so a per-triangle color array lines up
   pvTris=b.tris; pvCol=[]; pvPart=[]; pvGuide=b.guides&&b.guides.length?b.guides:null;
+  pvGhost=b.ghosts&&b.ghosts.length?b.ghosts:null;   // holes that carve nothing yet
   (b.parts||[]).forEach((tris,i)=>{ const c=(b.cols&&b.cols[i])||PIECE_COLORS[i%PIECE_COLORS.length];   // a mosaic mass wears its tile color; everything else keeps the piece cycle (which is how a Fuse stays visible)
     for(let k=0;k<tris.length;k++){ pvCol.push(c); pvPart.push(i+1); } });   // piece number, 1-based: 0 is left for "no piece here" in the pixel id buffer
 }
@@ -2650,7 +2660,10 @@ const A1_BED=180;   // Bambu Lab A1 Mini build plate: 180 x 180 mm
 const pvBed=(mn,mx)=>{ const cx=(mn[0]+mx[0])/2, cy=(mn[1]+mx[1])/2, h=A1_BED/2; return {x0:cx-h,y0:cy-h,x1:cx+h,y1:cy+h}; };   // bed centered under the footprint (slicer centers the part too)
 function pvBounds(){   // fit/center on the model PLUS the A1 Mini bed at z=0, so the whole bed and the Base gap stay framed
   let mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
-  const framed = pvGuide ? pvTris.concat(pvGuide) : pvTris;   // frame the guide too, or a design that is only a guide has nothing to fit to
+  // Frame the guides and the loose holes as well, or a design made only of those has nothing to fit to -
+  // the camera lands on a degenerate box and they are projected off the canvas, which looks exactly like
+  // the bug the ghost was added to fix.
+  const framed = pvTris.concat(pvGuide || [], pvGhost || []);
   framed.forEach(t=>t.forEach(p=>{ for(let i=0;i<3;i++){ if(p[i]<mn[i])mn[i]=p[i]; if(p[i]>mx[i])mx[i]=p[i]; } }));
   let bx0=mn[0],bx1=mx[0],by0=mn[1],by1=mx[1],bz0=mn[2],bz1=mx[2];
   if(pvPlate){ const b=pvBed(mn,mx); bx0=Math.min(bx0,b.x0);bx1=Math.max(bx1,b.x1);by0=Math.min(by0,b.y0);by1=Math.max(by1,b.y1);bz0=Math.min(0,bz0); }   // include the whole bed when it's shown
@@ -2712,6 +2725,12 @@ function renderPreview(){
     const s = lit>0.72 ? 1.0 : lit>0.34 ? 0.80 : 0.62;
     const R=(base[0]*s)|0, G=(base[1]*s)|0, B=(base[2]*s)|0;
     const pid=(pvPart && pvPart[ti])||0;
+    // A PIECE-SIZED DEPTH BIAS, a thousandth of a millimetre per piece. Where two pieces share a surface -
+    // a column standing with its top flush against a box, say - the two faces are at the SAME depth, and
+    // rounding decides which wins at each pixel, so the overlap came out in stripes (Glen, 2026-08-10).
+    // The bias breaks that tie the same way everywhere, so the later piece covers the earlier one cleanly.
+    // It is far below any real feature, and far above the float noise that caused the striping.
+    const bias=pid*1e-3;
     const qnx=(nx*127)|0, qny=(ny*127)|0, qnz=(nz*127)|0;   // this face's normal, packed for the crease test
     let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
     let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
@@ -2724,8 +2743,8 @@ function renderPreview(){
         const w1=((c[1]-a[1])*(fx-c[0])+(a[0]-c[0])*(fy-c[1]))*inv; if(w1<-1e-6) continue;
         const w2=1-w0-w1; if(w2<-1e-6) continue;
         const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
-        if(z>=pvZbuf[i]) continue;                    // something nearer is already there
-        pvZbuf[i]=z; pvIdBuf[i]=pid; const q=i*3; pvNrm[q]=qnx; pvNrm[q+1]=qny; pvNrm[q+2]=qnz;
+        if(z-bias>=pvZbuf[i]) continue;               // something nearer is already there
+        pvZbuf[i]=z-bias; pvIdBuf[i]=pid; const q=i*3; pvNrm[q]=qnx; pvNrm[q+1]=qny; pvNrm[q+2]=qnz;
         const p=i<<2; px[p]=R; px[p+1]=G; px[p+2]=B; px[p+3]=255;
       } }
   }
@@ -2761,6 +2780,42 @@ function renderPreview(){
       if(!gc[i] || pvZbuf[i]!==Infinity) continue;    // a real part here wins outright
       const s=gc[i]/255, p=i<<2;                     // clearly darker than the sky behind it, or a ghost
       px[p]=(104+62*s)|0; px[p+1]=(120+62*s)|0; px[p+2]=(142+58*s)|0; px[p+3]=255;   // reads as no ghost at all
+    }
+  }
+  // ---- loose holes: a hole with nothing to carve makes no material, so without this it is INVISIBLE in
+  // the 3D view and there is no way to tell whether it sits where it was meant to before committing to a
+  // Combine. Drawn exactly as a guide is - its own depth buffer, painted only where no real part covers -
+  // but in the hole's own blue, the color it already has on the plan, so the two cannot be confused. It is
+  // returned on its own channel by buildTris and so never reaches the STL. ----
+  if(pvGhost && pvGhost.length){
+    const hz=new Float32Array(W*H); hz.fill(Infinity);
+    const hc=new Uint8Array(W*H);
+    for(const t of pvGhost){
+      const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],
+            vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
+      let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx, nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
+      if((nx*sa+ny*ca)*ce - nz*se >= 0) continue;
+      const a=proj(t[0]),b=proj(t[1]),c=proj(t[2]);
+      const s=0.55+0.45*Math.max(0, nx*L[0]+ny*L[1]+nz*L[2]);
+      let x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))), x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0],c[0])));
+      let y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))), y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1],c[1])));
+      if(x0>x1||y0>y1) continue;
+      const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]); if(Math.abs(den)<1e-9) continue;
+      const inv=1/den;
+      for(let y=y0;y<=y1;y++){ const fy=y+0.5;
+        for(let x=x0;x<=x1;x++){ const fx=x+0.5;
+          const w0=((b[1]-c[1])*(fx-c[0])+(c[0]-b[0])*(fy-c[1]))*inv; if(w0<-1e-6) continue;
+          const w1=((c[1]-a[1])*(fx-c[0])+(a[0]-c[0])*(fy-c[1]))*inv; if(w1<-1e-6) continue;
+          const w2=1-w0-w1; if(w2<-1e-6) continue;
+          const z=w0*a[2]+w1*b[2]+w2*c[2], i=y*W+x;
+          if(z>=hz[i]) continue;
+          hz[i]=z; hc[i]=Math.max(1,Math.min(255,(s*255)|0));
+        } }
+    }
+    for(let i=0;i<W*H;i++){
+      if(!hc[i] || pvZbuf[i]!==Infinity) continue;   // a real part in front of it wins
+      const s=hc[i]/255, p=i<<2;
+      px[p]=(26+70*s)|0; px[p+1]=(95+80*s)|0; px[p+2]=(180+50*s)|0; px[p+3]=255;   // the hole blue, #1a5fb4 lit
     }
   }
   // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim), against the
