@@ -197,10 +197,18 @@ esac
 
 # ---------------------------------------------------------------- 7. the launcher
 # Crostini publishes any .desktop file under ~/.local/share/applications into the ChromeOS launcher,
-# beside the Chrome applications. Installing one here is what removes the Terminal from everyday use:
-# from now on Sangala Studio is an icon to click. Terminal=true so it opens in a visible window - the
-# address is printed there, and Ctrl-C stops it. A bridge running with no window and no obvious way to
-# quit is worse for a beginner than one extra window.
+# beside the Chrome applications. Clicking it must open SANGALA STUDIO - not a Terminal (Glen,
+# 2026-08-10, after Jo's install): the icon opened a Terminal window that printed nothing and then
+# appeared to freeze, and a classroom cannot be asked to tell a working server from a hung one.
+#
+# So the launcher now behaves the way the Windows one does. It starts the bridge in the BACKGROUND,
+# waits until the port actually answers, and hands the address to Chrome. Nothing is shown unless
+# something is wrong, in which case the log is opened so the reason is on screen rather than lost in
+# a window that has already closed.
+#
+# The old version's silent first step is the prime suspect for the freeze: it probed twenty ports
+# with urllib, which resolves and can consult a proxy before any timeout applies. That is replaced
+# by a plain socket connect to the loopback address, which cannot do either.
 BINDIR="$HOME/.local/bin"
 APPDIR="$HOME/.local/share/applications"
 ICONDIR="$HOME/.local/share/icons/hicolor/128x128/apps"
@@ -220,38 +228,77 @@ cd "$HERE" 2>/dev/null || {
   exit 1
 }
 
-# Is a bridge already running? It takes the first free port from 8787 up, so a second copy would
-# start on a different port and the page you already have open would keep talking to the first.
-# Roger Wagner lost a call to exactly this on a Mac. Open the running one instead of stacking another.
-RUNNING=$(python3 - <<'PY' 2>/dev/null
-import urllib.request
+LOG="$HOME/.sangala-studio.log"
+
+# Which port is a bridge already answering on? It takes the first free port from 8787 up, so a second
+# copy would start on a different one and the page already open would keep talking to the first.
+# Roger Wagner lost a call to exactly this on a Mac.
+#
+# A plain socket connect to 127.0.0.1, not a URL fetch: a fetch resolves a host name and may consult a
+# proxy, and neither of those is bounded by the timeout, which is how a launcher that prints nothing
+# can sit forever. This cannot block - the whole sweep is capped at a fifth of a second per port and
+# talks only to the loopback address.
+find_port() {
+  python3 - <<'PY' 2>/dev/null
+import socket
 for p in range(8787, 8808):
+    s = socket.socket(); s.settimeout(0.3)
     try:
-        with urllib.request.urlopen("http://localhost:%d/" % p, timeout=0.4) as r:
-            if b"SANGALA_VERSION" in r.read(4096):
-                print(p); break
+        s.connect(("127.0.0.1", p))
+        s.sendall(b"GET / HTTP/1.0\r\n\r\n")
+        # KEEP READING until the marker turns up: one recv returns whatever has arrived, which is
+        # usually just the HTTP headers, and the marker is on the second line of the page itself.
+        buf = b""
+        while len(buf) < 16384:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+            if b"SANGALA_VERSION" in buf:
+                break
+        if b"SANGALA_VERSION" in buf:
+            print(p); break
     except Exception:
         pass
+    finally:
+        s.close()
 PY
-)
-if [ -n "$RUNNING" ]; then
-  echo "Sangala Studio is already running at http://localhost:$RUNNING/"
-  command -v xdg-open >/dev/null 2>&1 && xdg-open "http://localhost:$RUNNING/" >/dev/null 2>&1
-  echo "Its page has been opened. To stop it, use the window it is already running in."
-  read -r -p "Press Enter to close this window. " _
+}
+
+open_page() {                       # hand the address to the ChromeOS browser
+  if command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1 & return 0; fi
+  return 1
+}
+
+PORT=$(find_port)
+if [ -z "$PORT" ]; then
+  # Not running: start it detached, so the icon opens the application rather than a window to mind.
+  : > "$LOG"
+  nohup python3 sangala_bridge.py >>"$LOG" 2>&1 &
+  for _ in $(seq 1 40); do          # up to about 20 seconds, checked five times a second
+    PORT=$(find_port)
+    [ -n "$PORT" ] && break
+    sleep 0.5
+  done
+fi
+
+if [ -n "$PORT" ]; then
+  open_page "http://localhost:$PORT/" || {
+    # No xdg-open: say where it is, in a window, since there is nothing else to show.
+    echo "Sangala Studio is running at http://localhost:$PORT/"
+    echo "Type that address into Chrome."
+    read -r -p "Press Enter to close this window. " _
+  }
   exit 0
 fi
 
-python3 sangala_bridge.py
-rc=$?
-# 0 is a clean stop and 130 is Ctrl-C. Anything else is a fault worth reading, and the window would
-# otherwise close on top of the message.
-if [ "$rc" -ne 0 ] && [ "$rc" -ne 130 ]; then
-  echo
-  echo "Sangala Studio stopped with an error (code $rc)."
-  read -r -p "Press Enter to close this window. " _
-fi
-exit "$rc"
+# It never came up. Show the reason rather than leaving an empty window: the log opens in the ChromeOS
+# text editor, and failing that it is printed here.
+echo "Sangala Studio did not start. The details are in:"
+echo "    $LOG"
+open_page "$LOG" || { echo; cat "$LOG" 2>/dev/null; }
+read -r -p "Press Enter to close this window. " _
+exit 1
 BODY
 } > "$BINDIR/$APPID"
 chmod +x "$BINDIR/$APPID"
@@ -272,7 +319,7 @@ GenericName=Digital Fabrication Tool
 Comment=Design and cut with a Silhouette die cutter
 Exec=$BINDIR/$APPID
 Icon=$ICONLINE
-Terminal=true
+Terminal=false
 Categories=Education;Graphics;2DGraphics;
 Keywords=Sangala;Silhouette;die cutter;cut;fabrication;
 StartupNotify=false
@@ -280,11 +327,18 @@ EOF
 chmod +x "$APPDIR/$APPID.desktop" 2>/dev/null
 ok "Launcher installed. Sangala Studio is now in the ChromeOS launcher."
 
-# xdg-open is how Linux hands a web address to the ChromeOS browser. Crostini supplies it, but say so
-# plainly if it is missing rather than letting the page silently fail to appear.
+# xdg-open is how Linux hands a web address to the ChromeOS browser, and the icon now depends on it
+# entirely: with no Terminal window there is nowhere else for the address to appear. So install it
+# rather than only warning, which is what left the page unopened on Jo's Chromebook.
 if ! command -v xdg-open >/dev/null 2>&1; then
-  warn "xdg-open is missing, so the page may not open by itself."
-  echo "         The address is printed in the window; click it, or type it into Chrome."
+  say "Installing xdg-utils, which is how Linux hands the page to Chrome..."
+  sudo apt-get install -y -qq xdg-utils >/dev/null 2>&1
+  if command -v xdg-open >/dev/null 2>&1; then
+    ok "xdg-utils installed."
+  else
+    warn "xdg-utils could not be installed, so the icon cannot open the page by itself."
+    echo "         Sangala Studio still runs; type localhost:8787 into Chrome to reach it."
+  fi
 fi
 
 # ---------------------------------------------------------------- 8. make pasting work
