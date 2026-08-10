@@ -367,13 +367,17 @@ cat <<EOF
 
       bash setup.sh
 
-  When it starts it opens its own page in Chrome. If that does not happen,
-  the window prints an address like http://localhost:8787/ - click it.
+  Clicking it opens Sangala Studio in Chrome. Nothing else appears: the part
+  that talks to the die cutter runs out of sight. If the page does not open,
+  type this address into Chrome yourself:
+
+      http://localhost:8787/
+
   Pasting into the Terminal is Ctrl-Shift-V, never Ctrl-V.
 EOF
 
 if [ "$RUN_AFTER" = "1" ]; then
-  say "Starting Sangala Studio now. Press Ctrl-C in this window to stop it."
+  say "Starting Sangala Studio now. It will open in Chrome."
   echo
   exec "$BINDIR/$APPID"
 fi
