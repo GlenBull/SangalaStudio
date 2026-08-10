@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-10.190 -->
+<!-- SANGALA_VERSION: 2026-08-10.191 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2832,10 +2832,18 @@ function renderPreview(){
           hz[i]=z; hc[i]=Math.max(1,Math.min(255,(s*255)|0));
         } }
     }
+    // A hole is nearly always INSIDE the solid it is meant to carve, so the guide rule - draw only where no
+    // real part covers - hid it exactly where it matters, and the first version of this showed nothing at
+    // all for a circle sitting on a box (Glen, 2026-08-10). Where the hole is in the open it is drawn
+    // solidly; where a part covers it, its blue is BLENDED over that part, so it reads as a shape seen
+    // through the material it will remove rather than as something resting on the surface.
     for(let i=0;i<W*H;i++){
-      if(!hc[i] || pvZbuf[i]!==Infinity) continue;   // a real part in front of it wins
+      if(!hc[i]) continue;
       const s=hc[i]/255, p=i<<2;
-      px[p]=(26+70*s)|0; px[p+1]=(95+80*s)|0; px[p+2]=(180+50*s)|0; px[p+3]=255;   // the hole blue, #1a5fb4 lit
+      const r=(26+70*s)|0, g=(95+80*s)|0, b=(180+50*s)|0;                          // the hole blue, #1a5fb4 lit
+      if(pvZbuf[i]===Infinity){ px[p]=r; px[p+1]=g; px[p+2]=b; px[p+3]=255; }      // open space: draw it plainly
+      else { const k=0.55;                                                          // inside a part: show through
+        px[p]=(px[p]*(1-k)+r*k)|0; px[p+1]=(px[p+1]*(1-k)+g*k)|0; px[p+2]=(px[p+2]*(1-k)+b*k)|0; }
     }
   }
   // ---- outline pass: darken a pixel that sits on the NEAR side of a depth cliff (a stud rim), against the
