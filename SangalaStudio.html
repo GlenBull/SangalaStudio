@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-10.189 -->
+<!-- SANGALA_VERSION: 2026-08-10.190 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -112,12 +112,28 @@
   #barfill{height:100%;width:0;background:#1fa85a;transition:width .2s}
   #status{font-size:.92rem;color:#5a4a34;min-height:2.4rem;line-height:1.4}
   .hint{font-size:.76rem;color:#6b5a44;margin-top:.5rem}
+  /* the superseded-tab bar: loud enough to be read before anything is drawn, and out of the way once
+     the tab is the live one again */
+  #tabwarn{display:none;align-items:center;gap:.8rem;padding:.55rem .9rem;background:#f6e2b8;
+    border-bottom:2px solid #c9a34a;color:#5a4320;font-size:.95rem}
+  #tabwarn.on{display:flex}
+  #tabclaim{font:inherit;font-weight:600;padding:.25rem .7rem;border:1px solid #a8823a;border-radius:6px;
+    background:linear-gradient(#fff,#f0e2c4);color:#5a4320;cursor:pointer}
+  #tabclaim:hover{background:linear-gradient(#fff,#e6d3ab)}
   @page{size:Letter;margin:0}
   #printarea{display:none}
   @media print{ body>*{display:none!important} #printarea{display:block!important} #printarea svg{width:215.9mm;height:279.4mm} }
 </style>
 </head>
 <body class="denim">
+<!-- Two tabs of Sangala Studio, one die cutter. Closing the BROWSER WINDOW rather than the tab leaves the
+     old page in Chrome's session, so the next launch restores it and opens a new one beside it (Jo, on the
+     Chromebook, 2026-08-10). Both are live pages talking to the same bridge, which is how a student sends
+     a job from the design they are not looking at. The older tab says so, and offers to take back over. -->
+<div id="tabwarn">
+  <span>Sangala Studio has been opened in another tab. That tab is the one connected to the die cutter.</span>
+  <button type="button" id="tabclaim">Use This Tab Instead</button>
+</div>
 <header class="denim">
   <div class="logo" id="brand"><b class="marker">Sangala Studio</b><small>Digital Fabrication Tool</small></div>
   <div class="tools">
@@ -1077,6 +1093,10 @@ async function connect(){
   }catch(e){say("Could not reach the helper: "+e.message);}
 }
 async function makeIt(){
+  // One die cutter, so one tab drives it. A restored tab is a whole second design session, and sending a
+  // job from the one you are not looking at is the mistake this prevents.
+  if(!tabLive){ say("This tab is not the one connected to the die cutter - Sangala Studio was opened again in another tab. "
+                   +"Use that tab, or press <b>Use This Tab Instead</b> at the top of this one."); return; }
   if(!connected){say("Connect to the Die Cutter first.");return;}
   const m=MATS[$("material").value]||[0,0,0,0,1], pen=m[3];   // Custom isn't a preset -> blade mode; the force/speed/blade/passes come from the fields
   let pl, spl, url;
@@ -4212,6 +4232,28 @@ $("bTestMenu").onclick=(e)=>{e.stopPropagation();const t=$("testmenu"),r=$("bTes
 document.addEventListener("click",(e)=>{const t=$("testmenu");if(t&&t.style.display!=="none"&&!t.contains(e.target)&&!$("bTestMenu").contains(e.target))t.style.display="none";});
 /* ---------- Developer mode: Alt-click the "Sangala Studio" wordmark to show/hide the Test tools.
    Hidden from novices by default, persisted per machine. Documented in the Tech Manual, not the User Guide. ---------- */
+/* ---------- One live tab, because there is only one die cutter ----------
+   Closing the browser WINDOW rather than the tab leaves the page in Chrome's session; the next launch
+   restores it and opens a new one beside it, so a student ends up with two live copies of Sangala Studio
+   pointed at one machine (Jo, on the Chromebook, 2026-08-10). The tab that loaded most recently claims the
+   machine and the others say so plainly. Nothing is closed automatically - a restored tab cannot be closed
+   by script, and a page that vanished on its own would be worse than one that explains itself. */
+let tabLive=true, tabChan=null;
+const TAB_ID = Date.now().toString(36) + Math.random().toString(36).slice(2);
+function tabClaim(){
+  tabLive=true; $("tabwarn").classList.remove("on");
+  try{ tabChan && tabChan.postMessage({claim:TAB_ID}); }catch(e){}
+}
+try{
+  tabChan = new BroadcastChannel("sangala-studio");        // absent in no browser this runs in, but guarded anyway
+  tabChan.onmessage = e=>{
+    if(!e.data || !e.data.claim || e.data.claim===TAB_ID) return;
+    tabLive=false; $("tabwarn").classList.add("on");
+  };
+  tabClaim();                                              // the newest tab to load is the live one
+}catch(e){}
+$("tabclaim").onclick = ()=>{ tabClaim(); say("This tab is now the one connected to the die cutter."); };
+
 let devMode=false; try{ devMode = localStorage.getItem("sangalaDev")==="1"; }catch(e){}
 function applyDevMode(){ $("bTestMenu").style.display = devMode ? "" : "none"; if(!devMode) $("testmenu").style.display="none"; }
 applyDevMode();
