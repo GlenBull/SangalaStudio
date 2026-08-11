@@ -203,14 +203,17 @@
   <button id="mFlipH" title="Flip left-right, about the selection's own center">↔ Flip Horizontal</button>
   <button id="mFlipV" title="Flip top-bottom, about the selection's own center">↕ Flip Vertical</button>
 </div>
+<!-- The icons are drawn by partIcon() from the SAME PARTS table the tool places, in the plan view's own
+     language: a red cut outline with a stud circle per stud. A part therefore appears in the menu exactly as
+     it will appear on the mat, and the menu cannot drift from what it makes. -->
 <div id="partmenu" class="menu" style="position:fixed;z-index:31;display:none">
-  <button data-part="brick">🧱 Brick</button>
-  <button data-part="plate">▬ Plate</button>
-  <button data-part="slope">◺ Slope</button>
-  <button data-part="invslope">◹ Inverted Slope</button>
-  <button data-part="round">⬤ Round Brick</button>
-  <button data-part="cone">🔺 Cone</button>
-  <button data-part="wedge">◣ Wedge Plate</button>
+  <button data-part="brick">Brick</button>
+  <button data-part="plate">Plate</button>
+  <button data-part="slope">Slope</button>
+  <button data-part="invslope">Inverted Slope</button>
+  <button data-part="round">Round Brick</button>
+  <button data-part="cone">Cone</button>
+  <button data-part="wedge">Wedge Plate</button>
 </div>
 <div id="testmenu" class="menu" style="position:fixed;z-index:31;display:none">
   <button id="mTest">⬜ Test Square</button>
@@ -3922,6 +3925,40 @@ const PARTS={
   invslope: {label:"inverted slope",  z:9.6, cols:3, rows:2, slope:1, inv:1},
 };
 let partKind="brick";
+// The menu icon for a part IS the part, drawn the way the mat draws it: a red cut outline with a circle per
+// stud, at the real proportions, from this same table. Nothing new invented, and it cannot drift from what
+// the tool places - change a part's cols, rows or slope and its icon follows. A sloped row carries no stud
+// unless the slope is inverted, which is the one rule that makes slope and inverted slope tell apart at a
+// glance. Brick and plate are identical in plan, as they are on the mat; their labels carry the difference.
+function partIcon(kind){
+  const U=8, r=2.4, ins=U/2, pad=1, K=0.9;
+  let w, h, inner="";
+  if(kind==="round" || kind==="cone"){
+    w=h=U;
+    inner='<circle cx="'+(U/2)+'" cy="'+(U/2)+'" r="'+(U*0.47)+'"/>';
+    if(kind!=="cone") inner+='<circle cx="'+(U/2)+'" cy="'+(U/2)+'" r="'+r+'"/>';   // a cone has no stud
+  } else if(kind==="wedge"){
+    const cols=4, rows=2; w=cols*U; h=rows*U; const tip=(h-U)/2;
+    inner='<polygon points="0,'+tip+' '+w+',0 '+w+','+h+' 0,'+(h-tip)+'"/>';
+    for(let ry=0;ry<rows;ry++) for(let cx=0;cx<cols;cx++)
+      inner+='<circle cx="'+(ins+cx*U)+'" cy="'+(ins+ry*U)+'" r="'+r+'"/>';
+  } else {
+    const P=PARTS[kind]||PARTS.brick;
+    w=P.cols*U; h=P.rows*U;
+    const studRows = P.inv ? P.rows : (P.rows-P.slope);
+    inner='<rect x="0" y="0" width="'+w+'" height="'+h+'"/>';
+    for(let ry=0;ry<P.rows;ry++){ if(!P.inv && ry>=studRows) continue;
+      for(let cx=0;cx<P.cols;cx++) inner+='<circle cx="'+(ins+cx*U)+'" cy="'+(ins+ry*U)+'" r="'+r+'"/>'; }
+  }
+  return '<svg width="'+((w+2*pad)*K)+'" height="'+((h+2*pad)*K)+'" viewBox="'+(-pad)+' '+(-pad)+' '+(w+2*pad)+' '+(h+2*pad)+'"'
+    +' style="display:block;flex:0 0 auto" fill="none" stroke="#ff0000" stroke-width="0.9" aria-hidden="true">'+inner+'</svg>';
+}
+(function(){ const m=$("partmenu"); if(!m) return;   // one icon per entry, built once
+  [...m.querySelectorAll("button[data-part]")].forEach(b=>{
+    b.style.display="flex"; b.style.alignItems="center"; b.style.gap=".5rem";
+    b.insertAdjacentHTML("afterbegin", partIcon(b.dataset.part));
+  });
+})();
 function makeBrick(x0,y0,kind){
   ensureDoc();
   kind = kind || partKind || "brick";
