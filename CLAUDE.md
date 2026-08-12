@@ -187,11 +187,19 @@ USB only, user-mode.** This constraint is absolute.
 - **PUBLISH DOC UPDATES TO DROPBOX — standing practice (set by Glen 2026-07-25).**
   `Sangala Tools` is how **Moses** gets the current **User Guide** and **Tech
   Manual**, so a new version of either is not finished until it is there. When a
-  new version is delivered: copy it into the right subfolder (the guide and manual
-  both live in `Sangala Tools\Sangala Studio Files`), then move the version it
+  new version is delivered: copy it into the right subfolder, then move the version it
   supersedes into that folder's own `Archive` subfolder — so the folder shows only
   the current version, mirroring how `Documents/` and `Documents/.Archive` work in
-  the repo. Do this without being asked; it is part of shipping the doc. (The app
+  the repo. Do this without being asked; it is part of shipping the doc.
+  **WHICH FOLDER: a document about ONE application goes in that application's own
+  subfolder — `Sangala Studio Files`, `Sangala Mosaic Files`, `Sangala Block Design
+  Files` — and the User Guide and Tech Manual are Studio's, so they live in
+  `Sangala Tools\Sangala Studio Files`. A document that governs MORE THAN ONE
+  application goes at the TOP LEVEL of `Sangala Tools`, beside `Shared Repository`,
+  `Merging a Fork into Main` and `Github Merge` (Glen, 2026-08-12, on where the
+  Sangala Tools Technical Manual belongs — I filed it under Studio and he moved it
+  up).** Jo and Moses both read the top level, so a family-wide document buried in
+  one application's folder is a document they will not find. (The app
   itself needs no copying — `Update SangalaStudio.cmd` pulls the page and exe from
   GitHub.)
 - **Commit and push after each verified-good change** — one change, verify it's

@@ -171,6 +171,94 @@ class Doc:
         """
         self.numid += 1
 
+    def table(self, title, headers, rows, weights=None, center_cols=()):
+        """A table in the house format, CLONED from the Tech Manual's Table 4 rather than described.
+
+        Every value below was read out of `Tech Manual (Ver 3.6).docx` — table centered on the page,
+        Arial 10 pt throughout, 3 pt before and 2 pt after on EVERY cell paragraph (60/40 twips; this
+        is paragraph spacing, not cell margins, which are zero), a title row merged across all
+        columns in bold, an italic centered heading row, a double rule dividing the headings from the
+        body, single rules elsewhere, and the label column indented 171 twips.
+
+        title    "Table 1. What the Table Shows" — number it yourself, sequentially through the doc
+        headers  one string per column
+        rows     list of lists of strings, one per column
+        weights  relative column widths; defaults to equal. Scaled to the same 8272 twips Table 4 uses
+        center_cols  indices of body columns to centre rather than left-align (a short column like
+                 "Method" reads better centred; the default is left, per the house rule)
+        """
+        n = len(headers)
+        weights = list(weights or [1] * n)
+        total = 8272
+        w = [int(total * x / float(sum(weights))) for x in weights]
+        w[-1] += total - sum(w)                      # rounding lands on the last column
+
+        SGL = '<w:%s w:val="single" w:sz="6" w:space="0" w:color="000000"/>'
+        DBL = '<w:%s w:val="double" w:sz="4" w:space="0" w:color="000000"/>'
+        ZMAR = ('<w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/>'
+                '<w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar>')
+
+        def cell(text, width, top, bottom, bold=False, italic=False, jc=None, ind=0):
+            rpr = ('<w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="Times New Roman" w:hAnsi="Arial"'
+                   ' w:cs="Arial"/>' + ("<w:b/><w:bCs/>" if bold else "<w:bCs/>")
+                   + ("<w:i/>" if italic else "")
+                   + '<w:sz w:val="20"/><w:szCs w:val="22"/></w:rPr>')
+            ppr = "<w:pPr>"
+            if ind:
+                ppr += '<w:ind w:left="%d"/>' % ind
+            ppr += '<w:spacing w:before="60" w:after="40"/>'
+            if jc:
+                ppr += '<w:jc w:val="%s"/>' % jc
+            ppr += rpr + "</w:pPr>"
+            borders = ("<w:tcBorders>" + (top % "top") + (SGL % "left")
+                       + (bottom % "bottom") + (SGL % "right") + "</w:tcBorders>")
+            return ('<w:tc><w:tcPr><w:tcW w:w="%d" w:type="dxa"/>%s%s</w:tcPr>'
+                    '<w:p>%s<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r></w:p></w:tc>'
+                    % (width, borders, ZMAR, ppr, rpr, esc(text)))
+
+        out = ['<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:jc w:val="center"/>'
+               '<w:tblBorders><w:top w:val="outset" w:sz="6" w:space="0" w:color="auto"/>'
+               '<w:left w:val="outset" w:sz="6" w:space="0" w:color="auto"/>'
+               '<w:bottom w:val="outset" w:sz="6" w:space="0" w:color="auto"/>'
+               '<w:right w:val="outset" w:sz="6" w:space="0" w:color="auto"/></w:tblBorders>'
+               '<w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/>'
+               '</w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0"'
+               ' w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+               '<w:tblGrid>' + "".join('<w:gridCol w:w="%d"/>' % x for x in w) + "</w:tblGrid>"]
+
+        # title row: one cell spanning the table, bold
+        hdr_tr = '<w:trPr><w:tblHeader/><w:jc w:val="center"/></w:trPr>'
+        out.append("<w:tr>" + hdr_tr
+                   + ('<w:tc><w:tcPr><w:tcW w:w="%d" w:type="dxa"/><w:gridSpan w:val="%d"/>'
+                      % (total, n))
+                   + "<w:tcBorders>" + (SGL % "top") + (SGL % "left") + (SGL % "bottom")
+                   + (SGL % "right") + "</w:tcBorders>" + ZMAR + "</w:tcPr>"
+                   + ('<w:p><w:pPr><w:spacing w:before="60" w:after="40"/></w:pPr>'
+                      '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="Times New Roman"'
+                      ' w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:bCs/><w:sz w:val="20"/>'
+                      '<w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">%s</w:t></w:r></w:p>'
+                      % esc(title))
+                   + "</w:tc></w:tr>")
+
+        # heading row: italic, centred, double rule beneath
+        out.append("<w:tr>" + hdr_tr + "".join(
+            cell(h, w[i], SGL, DBL, italic=True, jc="center") for i, h in enumerate(headers)) + "</w:tr>")
+
+        # body rows: the first takes the double rule on top, to meet the heading row's
+        for r, row in enumerate(rows):
+            top = DBL if r == 0 else SGL
+            out.append('<w:tr><w:trPr><w:jc w:val="center"/></w:trPr>' + "".join(
+                cell(str(c), w[i], top, SGL,
+                     jc=("center" if i in center_cols else None),
+                     ind=(171 if i == 0 else 0))
+                for i, c in enumerate(row)) + "</w:tr>")
+
+        out.append("</w:tbl>")
+        self.paras.append("".join(out))
+        # Word needs a paragraph after a table: without one, two tables in a row merge into one and
+        # a table cannot be the last block before sectPr.
+        self._p("", after=100)
+
     def caption(self, text):
         """A figure caption carrying the document's Caption STYLE, not hand-applied formatting.
 
