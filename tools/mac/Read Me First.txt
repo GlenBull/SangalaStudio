@@ -1,0 +1,83 @@
+Sangala Studio on a Mac
+=======================
+
+Everything here is the Mac version. There is nothing to install: the launcher
+fetches the one Python library it needs, the first time you run it.
+
+
+STARTING IT
+
+1. Unzip this folder anywhere. The Desktop is fine.
+
+2. Double-click "Sangala Studio".
+
+   The first time only, macOS will refuse: it says the file is from an
+   unidentified developer, because it arrived over the internet. Right-click
+   (or Control-click) "Sangala Studio" instead, choose Open, and click Open in
+   the box that appears. macOS remembers, so every time after this a plain
+   double-click works.
+
+3. A Terminal window opens and your browser opens the Sangala Studio page.
+
+   That Terminal window IS the program. Leave it be while you work. To stop,
+   press Control-C in it, or just close it.
+
+The first run pauses to install the USB library, which needs the internet for
+a few seconds. After that it starts straight away and works offline.
+
+
+KEEPING IT UP TO DATE
+
+Double-click "Update Sangala Studio". It fetches the current page, engine and
+Snap! blocks, checks each one is complete before replacing anything, and tells
+you if there was nothing new. If a download fails, nothing on your Mac is
+changed. Your previous copies are kept alongside, ending in .bak.
+
+It also puts a "Sangala Studio" icon on your Desktop, so you can start the
+program without opening this folder. macOS may ask once whether Terminal may
+control Finder; that question is only about placing the icon.
+
+After an update, stop the program and start it again, then press Command-R in
+the browser to reload the page.
+
+
+IF YOU HAVE A SILHOUETTE DIE CUTTER
+
+Plug it in, switch it on, and press Connect on the page. It should name the
+machine. There is also a smaller test that moves nothing:
+
+       python3 mac_usb_probe.py
+
+
+IF YOU DO NOT HAVE ONE
+
+The page still runs. Everything except cutting works: drawing, tracing a photo,
+the three-dimensional tools, and exporting an STL. Connect will report that no
+die cutter was found.
+
+
+IF IT WILL NOT START
+
+The launcher explains what to do in the Terminal window; the two things it
+cannot solve by itself are these.
+
+   The python3 command requires the command line developer tools
+
+       macOS offers to install them. Click Install, wait for it to finish, and
+       double-click the launcher again. That is how a Mac gets python3.
+
+   pyusb has no libusb backend
+
+       The launcher installs a library that should prevent this. If you see it
+       anyway, please report it - that is worth knowing. To carry on:
+
+           brew install libusb
+
+       and start it again.
+
+
+BROWSER NOTE
+
+On one Mac this has run on, Chrome would not print at all - not only from
+Sangala Studio but from any page - while Safari printed correctly. If printing
+does nothing, try Safari before assuming the fault is here.
