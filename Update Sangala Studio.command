@@ -27,8 +27,16 @@ BRIDGE_BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/mac-bridge
 
 HTML="SangalaStudio.html"
 XML="Sangala for Snap.xml"
-BRIDGE="tools/sangala_bridge.py"
 LAUNCHER="Sangala Studio.command"
+
+# The engine sits in tools/ in a copy of the repository, and beside the page in
+# the "Sangala Studio for Mac" download. Replace the one that is actually here,
+# or there would be two copies and the stale one would keep being run.
+if [ -f "tools/sangala_bridge.py" ]; then
+  BRIDGE="tools/sangala_bridge.py"
+else
+  BRIDGE="sangala_bridge.py"
+fi
 
 if [ ! -f "$HTML" ]; then
   echo "This updater has to sit in the same folder as SangalaStudio.html."
@@ -88,7 +96,7 @@ else
   # Keep the current copies as backups, then move the new ones into place.
   # Replacing a file the running program opened is safe on a Mac: the copy it
   # is already using stays valid until it stops.
-  mkdir -p tools
+  mkdir -p "$(dirname "$BRIDGE")"
   [ -f "$HTML" ]   && cp -p "$HTML"   "$HTML.bak"
   [ -f "$XML" ]    && cp -p "$XML"    "$XML.bak"
   [ -f "$BRIDGE" ] && cp -p "$BRIDGE" "$BRIDGE.bak"

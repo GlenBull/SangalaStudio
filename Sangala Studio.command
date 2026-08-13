@@ -38,9 +38,15 @@ else
   exit 1
 fi
 
-BRIDGE="$HOME_DIR/tools/sangala_bridge.py"
+# The engine sits in tools/ in a copy of the repository, and beside the page in
+# the "Sangala Studio for Mac" download. Take whichever is here.
+if [ -f "$HOME_DIR/tools/sangala_bridge.py" ]; then
+  BRIDGE="$HOME_DIR/tools/sangala_bridge.py"
+else
+  BRIDGE="$HOME_DIR/sangala_bridge.py"
+fi
 if [ ! -f "$BRIDGE" ]; then
-  echo "The engine file is missing: tools/sangala_bridge.py"
+  echo "The engine file is missing: sangala_bridge.py"
   echo "Run \"Update Sangala Studio.command\" to fetch it, then try again."
   echo
   echo "Press any key to close this window."
