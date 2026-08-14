@@ -184,6 +184,14 @@ USB only, user-mode.** This constraint is absolute.
   system/account settings, network to anywhere other than this GitHub
   repo, and any history-losing git — force-push, hard reset that drops commits,
   branch deletion.
+- **NEVER CREATE A NEW FOLDER IN THE SHARED TREE WITHOUT THE WORDS THAT ANNOUNCE IT (Glen, 2026-08-14).**
+  Dropbox tells nobody anything. On the day Jo's updater failed I invented
+  `Application (Manual Update)`, then replaced it with `Sangala Studio (Program)` — so a forwarded note
+  about the first would have sent him to a folder that no longer existed. **Glen is the only channel to Jo
+  and Moses; a folder they have not been told about is a file that does not exist.** So: put files where
+  they ALREADY live by preference, and when a new place is genuinely warranted, deliver the exact sentence
+  Glen can forward IN THE SAME MESSAGE that creates it — folder name, what to do, how to check it worked.
+  Renaming or deleting a folder testers already use needs his say-so first, for the same reason.
 - **PUBLISH DOC UPDATES TO DROPBOX — standing practice (set by Glen 2026-07-25).**
   `Sangala Tools` is how **Moses** gets the current **User Guide** and **Tech
   Manual**, so a new version of either is not finished until it is there. When a
