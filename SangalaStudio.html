@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-14.192 -->
+<!-- SANGALA_VERSION: 2026-08-14.193 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2388,6 +2388,45 @@ function socketedSolid(ring,z0,z1,fit,skips,solid){
   }
   return t;
 }
+// A SLOPED TOP AND SOCKETS UNDERNEATH ARE NOT IN CONFLICT - that is a LEGO slope brick, and Jo needs one
+// (2026-08-14). The roof gate used to refuse any socketed shape, reasoning that "a socketed top is not
+// level"; but a socket is cut into the UNDERSIDE and a roof ramps the TOP. What genuinely cannot coexist is
+// STUDS on a sloped top, and that still holds - the roof branch returns before studsFor is ever reached.
+// The cavities are cut with the same CSG the group preview uses to carve a hole (see :2607), one at a time
+// and weld-only, rather than by the cell-prism trick socketedSolid uses: that chops the shape into 8 mm
+// prisms, which a ramped top is not made of.
+function roofSockets(tris, ring, z0, fit, skips){
+  const cells=socketCells(ring,fit).filter(c=>!(skips&&skips.has(c.i+","+c.j)));
+  if(!cells.length) return tris;
+  const r=socketRadius(fit);
+  let m=tris;
+  for(const c of cells){
+    // How much material is over this cell? On a ramp it is less than the full height, and near the thin
+    // edge there may be none worth speaking of - so the depth is measured from the roof itself.
+    const top=meshTopAt(m,c.x,c.y);
+    if(!isFinite(top)) continue;
+    const d=Math.min(SOCK_DEPTH,(top-z0)-SOCK_WALL);
+    if(d<=0.4) continue;                       // too thin here: leave it solid rather than break through the slope
+    const cut=cleanMesh(mesh3D("subtract",m,cylTris(c.x,c.y,r,z0-0.1,z0+d)),1e-4,true);
+    if(!cut.length) break;                     // a cut that empties the solid is a cut not worth making
+    m=cut;
+  }
+  return m;
+}
+function meshTopAt(tris,x,y){   // the highest surface above (x,y): the local thickness a socket has to fit under
+  let best=-Infinity;
+  for(const t of tris){
+    const a=t[0], b=t[1], c=t[2];
+    const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
+    if(Math.abs(den)<1e-9) continue;           // edge-on triangle: it has no area in plan
+    const u=((b[1]-c[1])*(x-c[0])+(c[0]-b[0])*(y-c[1]))/den,
+          v=((c[1]-a[1])*(x-c[0])+(a[0]-c[0])*(y-c[1]))/den, w=1-u-v;
+    if(u<-1e-9||v<-1e-9||w<-1e-9) continue;
+    const z=u*a[2]+v*b[2]+w*c[2];
+    if(z>best) best=z;
+  }
+  return best;
+}
 /* ---------- Fuse: shapes bound into one group print as ONE piece ---------- */
 const FUSE_GROW=0.1;   // grow each fused member by a hair so touching members OVERLAP. Two solids that merely meet face to
                        // face are a coin toss for the slicer; an overlap always welds - the same trick that sticks studs on.
@@ -2508,19 +2547,23 @@ function bodyTrisOne(o,fuse){   // the solid for ONE body. fuse = it shares a gr
     }
   }
   // Sloped top ("roof"): each edge can ramp inward (see roofTris). Gated (Stage A) to AXIS-ALIGNED rectangles
-  // with no sockets or holes - a socketed/holed top is not level, so a ramp would contradict it, and a sloped
-  // top carries no studs. Per-edge angles come from data-slopes (or the legacy single slope); all-0 = flat.
+  // and convex outlines with no interior holes. A sloped top carries no studs - this branch returns before
+  // studsFor - but it MAY carry sockets underneath, which is what a LEGO slope brick is; roofSockets cuts
+  // them. Per-edge angles come from data-slopes (or the legacy single slope); all-0 = flat.
   const slopeInv = o.el.getAttribute("data-slope-inv")==="1";   // Invert: mirror the slope in Z (top stays full, the underside falls away - fills an overhang)
-  if((t==="rect"||t==="polygon") && o.el.getAttribute("data-sockets")!=="1" && !(o.holes&&o.holes.length)){
+  const socketed = o.el.getAttribute("data-sockets")==="1";
+  if((t==="rect"||t==="polygon") && !(o.holes&&o.holes.length)){
     const outer = t==="rect" ? [[g("x"),g("y")],[g("x")+g("width"),g("y")],[g("x")+g("width"),g("y")+g("height")],[g("x"),g("y")+g("height")]] : o.poly;
     if(isRectRing(outer)){
       const bb=bbox([outer]), gr=[[bb[0]-G,bb[1]-G],[bb[2]+G,bb[1]-G],[bb[2]+G,bb[3]+G],[bb[0]-G,bb[3]+G]];   // grown outline, canonical order: edge 0 front / 1 right / 2 back / 3 left
       const angles=rfEdgeAngles(o, gr);
-      if(angles.some(a=>a>0)) return roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
+      if(angles.some(a=>a>0)){ const rt=roofTris(gr, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
+        return socketed ? roofSockets(rt, o.poly, z0, fit, skips) : rt; }
     } else if(t==="polygon" && objClosed(o) && rfConvex(o.poly)){   // any convex outline (triangle, pentagon, ...): per-edge slope aligned to its own edges
       const base = G>0 ? offsetRing(o.poly,G) : rfOpen(o.poly);
       const angles=rfEdgeAngles(o, base);
-      if(angles.some(a=>a>0)) return roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
+      if(angles.some(a=>a>0)){ const rt=roofTris(base, z0, z1, rfRuns(angles, z1-z0, ROOF_LIP), ROOF_LIP, slopeInv);
+        return socketed ? roofSockets(rt, o.poly, z0, fit, skips) : rt; }
     }
   }
   // Cone: a circle whose rim tapers inward toward the top (one angle for the whole rim). Moderate taper -> a
