@@ -129,8 +129,19 @@ def main(argv):
             # rebuild that ships nothing new is visible as such.
             info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
-            # 755 on the launchers or Finder will not run them on a double-click.
-            info.external_attr = (0o755 if name.endswith(".command") else 0o644) << 16
+            # 755 on the launchers or Finder will not run them on a double-click...
+            mode = 0o755 if name.endswith(".command") else 0o644
+            # ...and the mode alone is not enough. A zip records WHICH KIND OF SYSTEM wrote it, and an
+            # extractor honours the Unix mode only when that says Unix. Python stamps the host from the
+            # machine it runs on, so a zip built here declared itself DOS/FAT and every Unix mode in it
+            # was ignored: Moses's Mac unpacked the launchers without the executable bit and macOS
+            # refused them with "you do not have appropriate access privileges" before Gatekeeper was
+            # ever reached - and Finder's Get Info has no execute checkbox to repair it with.
+            # create_system 3 is Unix. S_IFREG marks a regular file, which some extractors require
+            # before they will read the mode at all. Verify with `unzip -Z`: the host column must read
+            # "unix" and the launchers "-rwxr-xr-x". "fat" means this is broken again.
+            info.create_system = 3
+            info.external_attr = (0o100000 | mode) << 16
             z.writestr(info, data)
 
     total = sum(len(d) for _, d in members)
