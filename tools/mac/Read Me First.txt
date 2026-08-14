@@ -9,13 +9,19 @@ STARTING IT
 
 1. Unzip this folder anywhere. The Desktop is fine.
 
-2. Double-click "Sangala Studio".
+2. Double-click "Sangala Studio". It should start.
 
-   The first time only, macOS will refuse: it says the file is from an
-   unidentified developer, because it arrived over the internet. Right-click
-   (or Control-click) "Sangala Studio" instead, choose Open, and click Open in
-   the box that appears. macOS remembers, so every time after this a plain
-   double-click works.
+   IF INSTEAD macOS refuses, saying the file is from an unidentified developer:
+   right-click (or Control-click) "Sangala Studio", choose Open, and click Open
+   in the box that appears. macOS remembers, so a plain double-click works from
+   then on.
+
+   Whether that refusal happens depends on how the folder reached the Mac, not
+   on the program. A zip downloaded through a web browser is marked as having
+   come from the internet and is checked; the same zip arriving through the
+   Dropbox application is not, and simply runs. Moses saw no prompt at all on
+   2026-08-14, which is why this step is written as a contingency rather than
+   as something to expect.
 
 3. A Terminal window opens and your browser opens the Sangala Studio page.
 
