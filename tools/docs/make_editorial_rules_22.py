@@ -47,7 +47,13 @@ anchor = esc("C. Words")
 i = s.find(anchor)
 if i < 0:
     sys.exit("could not find the C. Words heading")
-start = s.rfind("<w:p", 0, i)          # insert before that heading's paragraph
+# THE PARAGRAPH START, NOT THE FIRST THING THAT LOOKS LIKE ONE. `rfind("<w:p")` also matches the
+# prefix of <w:pPr>, so it landed inside the heading paragraph and nested a paragraph within a
+# paragraph - well-formed XML that Word refuses to open. Match the opening tag properly.
+opens = [m.start() for m in re.finditer(r"<w:p(?:\s[^>]*)?>", s[:i])]
+if not opens:
+    sys.exit("no paragraph start before the heading")
+start = opens[-1]
 if "22. Numerals" in s:
     sys.exit("Rule 22 is already in this document")
 s = s[:start] + RULE + s[start:]
