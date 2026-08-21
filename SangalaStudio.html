@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-20.198 -->
+<!-- SANGALA_VERSION: 2026-08-21.199 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -167,6 +167,13 @@
       <div><label class="fld">Scale %</label><input type="number" id="scale" min="10" max="1000" value="100"></div>
       <div></div>
     </div>
+    <!-- THE BUILD SELECTOR, Sangala Blocks' control with Sangala Blocks' words, so the two
+         applications cannot teach two names for one idea (the standing-mode work, Glen,
+         2026-08-21: "it is important to be able to have seamless transfers between programs").
+         Relief is the default: it is everything Studio has ever done, so an existing design,
+         an existing habit and an existing document all stay exactly true. -->
+    <label class="fld" style="margin-top:.6rem" title="Standing: the figure is stacked in courses, studs across and plates of height up, the way the LEGO crane is built - made to transfer to Sangala Blocks. Relief: the parts lie on the plate with their studs towards you, a plate of depth at a time, the way a Studio relief is built.">Build</label>
+    <select id="selMode"><option value="standing">Standing figure</option><option value="relief" selected>Relief</option></select>
     <label class="fld" style="margin-top:.6rem">Page size (material)</label>
     <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option><option value="baseplate">LEGO baseplate 32 x 32 studs</option></select>
     <label class="fld" style="margin-top:.6rem">Units <span style="font-weight:normal;color:#8a7350">(2D only; 3D always in mm)</span></label>
@@ -509,6 +516,11 @@ function applyRanges(){const ox=$("offx"),oy=$("offy");
    (Glen, 2026-07-30). Sized from the stud pitch rather than a literal 256, so the two cannot drift. */
 const BASEPLATE_STUDS=32, STUD_MM=8, BASEPLATE_MM=BASEPLATE_STUDS*STUD_MM;   // STUD_MM lives here now: Snap to Studs below uses the same one, so the lattice and the plate cannot disagree
 let pageKind="letter";
+/* The build mode - "standing" or "relief" - Sangala Blocks' own pair, chosen in Settings.
+   Step 1 of the standing-mode work (Glen, 2026-08-21): the selector and the variable. The
+   lattice, the floor, the saved flag and the standing 3D view follow in later steps; until
+   the lattice step lands, choosing Standing changes nothing but this variable. */
+let buildMode="relief";
 function setPageSize(v){ pageKind=v;
   if(v==="12x12"){PAGE_W=304.8;PAGE_H=304.8;}
   else if(v==="baseplate"){PAGE_W=BASEPLATE_MM;PAGE_H=BASEPLATE_MM;}
@@ -1139,6 +1151,10 @@ $("material").onchange=applyMat;
 ["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
 $("units").onchange=e=>setUnits(e.target.value);
 $("pagesize").onchange=e=>setPageSize(e.target.value);
+$("selMode").onchange=e=>{ buildMode=e.target.value;
+  say(buildMode==="standing"
+    ? "A standing figure: studs across, plates of height up, built to transfer to Sangala Blocks."
+    : "A relief: both axes in studs, the parts lying on the plate."); };
 $("bConnect").onclick=connect;
 /* ---------- Snap! bridge: a turtle drawing made in Snap! lands on the mat ----------
    Snap! logs its pen strokes as vectors (its "Log pen vectors" setting) and can hand them over as
