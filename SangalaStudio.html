@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-21.202 -->
+<!-- SANGALA_VERSION: 2026-08-21.203 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -383,7 +383,7 @@
     </div>
     <div id="zoomctl">
       <button id="zoomOut" title="Zoom out">&minus;</button>
-      <span id="zoomPct">100%</span>
+      <input id="zoomPct" value="100%" title="Type a zoom percentage - the same number in Sangala Blocks shows the same size (100 = actual size)" style="width:3.6em;text-align:center;border:1px solid #c9b48c;border-radius:6px;background:#fffdf7;font:inherit;color:inherit;padding:2px 0">
       <button id="zoomIn" title="Zoom in">+</button>
       <button id="zoomFit" title="Fit the whole page">Fit</button>
       <span class="zsep" aria-hidden="true"></span>
@@ -5574,7 +5574,8 @@ function clampPan(){   // keep the view within the park-able world (page + WS_MA
   const by=bound(cv.height, (w.MY-WS_MARGIN)*k, (w.vh+2*WS_MARGIN)*k);
   view.panX=Math.max(bx[0], Math.min(bx[1], view.panX));
   view.panY=Math.max(by[0], Math.min(by[1], view.panY)); }
-function updateZoomUI(){ $("zoomPct").textContent=Math.round(view.zoom*100)+"%"; }
+function updateZoomUI(){ const z=$("zoomPct");
+  if(document.activeElement!==z) z.value=Math.round(view.zoom*100)+"%"; }
 function fitZoom(){   /* the zoom that fits the page in the window - what 100% used to mean */
   const w=worldParams();
   const fk=Math.min(cv.width/(w.vw+2*VIEW_MARGIN), cv.height/(w.vh+2*VIEW_MARGIN));
@@ -5587,10 +5588,15 @@ cv.addEventListener("wheel",(e)=>{ e.preventDefault(); const p=canvasPt(e); setZ
 $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
 $("zoomOut").onclick=()=>setZoom(view.zoom/1.3);
 $("zoomFit").onclick=()=>{ view.zoom=fitZoom(); view.panX=0; view.panY=0; draw(); updateZoomUI(); };
-/* the percentage is a BUTTON to true size - Fit lands where the window earns, one click lands on 100 */
-$("zoomPct").style.cursor="pointer";
-$("zoomPct").title="Click for 100% - actual size, the same scale in Sangala Blocks";
-$("zoomPct").onclick=()=>setZoom(1);
+/* THE PERCENTAGE IS TYPED (Glen, 2026-08-21: 100% at his monitor "seems unwieldy and not very
+   useful"). Comparability needs a SHARED number, not a particular one: type the same percentage
+   in both applications and the two windows show one size, at whatever size is comfortable. */
+$("zoomPct").addEventListener("focus",e=>e.target.select());
+$("zoomPct").addEventListener("keydown",e=>{ if(e.key==="Enter") e.target.blur(); });
+$("zoomPct").addEventListener("change",e=>{
+  const v=parseInt(String(e.target.value).replace(/[^0-9]/g,""),10);
+  if(v>=5 && v<=2000) setZoom(v/100); else updateZoomUI();
+});
 view.zoom=fitZoom(); updateZoomUI();   /* open fitted, reported truthfully */
 $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
   $("bOrient").classList.toggle("on",matLandscape);
