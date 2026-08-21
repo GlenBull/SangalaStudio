@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-21.204 -->
+<!-- SANGALA_VERSION: 2026-08-21.205 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -83,6 +83,10 @@
   /* Wide enough for the widest label the zoom can reach ("2000%"), and no wider: the old 3.4em left ~6 px of
      dead slack either side of "100%", which read as a gap and made + and - look detached from the number. */
   #zoomctl #zoomPct{min-width:3.05em;text-align:center;font-variant-numeric:tabular-nums}
+  /* the pan scrollbars: thin, on the canvas's own edges, visible only when there is somewhere to pan */
+  .sbar{position:fixed;z-index:18;background:rgba(90,67,38,.12);border-radius:5px}
+  .sbthumb{position:absolute;background:#c9b48c;border:1px solid #b9a67f;border-radius:5px;cursor:grab;min-width:9px;min-height:9px}
+  .sbthumb:hover{background:#d8c4a0}
   canvas{display:block;width:100%;height:calc(100vh - 178px);border-radius:6px;touch-action:none;background:transparent}
   .go{width:100%;font-size:1.5rem;font-weight:800;color:#fff;background:linear-gradient(#1fa85a,#178047);
       border:1px solid #0f6e34;border-radius:14px;padding:1rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 6px rgba(0,0,0,.3)}
@@ -298,7 +302,7 @@
     <button class="ltbtn" id="bRemoveBg" style="display:none" title="Remove the background from the selected photo to make a silhouette">🪄<small>Remove BG</small></button>
   </div>
   <div class="board cork">
-    <canvas id="cv" width="560" height="760"></canvas>
+    <canvas id="cv" width="560" height="760"></canvas><div id="sbH" class="sbar" style="display:none;height:9px"><div id="sbHt" class="sbthumb" style="top:0;height:100%"></div></div><div id="sbV" class="sbar" style="display:none;width:9px"><div id="sbVt" class="sbthumb" style="left:0;width:100%"></div></div>
     <canvas id="pv" width="560" height="760" style="display:none"></canvas>
     <div id="pvhint" style="display:none">Drag to rotate &middot; Scroll to zoom &middot; press <b>3D View</b> again to edit</div>
   </div>
@@ -5601,6 +5605,57 @@ $("zoomPct").addEventListener("change",e=>{
   if(v>=5 && v<=2000) setZoom(v/100); else updateZoomUI();
 });
 view.zoom=fitZoom(); updateZoomUI();   /* open fitted, reported truthfully */
+/* ---------- Pan scrollbars, Sangala Blocks' control by the same names (Glen, 2026-08-21:
+   "what happened to the pan sliders in both?" - there never were any; panning was Space-drag
+   and middle-mouse, invisible). Shown only when the park-able world (page + WS_MARGIN of
+   cork, clampPan's own bounds) overflows the window; dragging a thumb pans. */
+function syncScrollbars(){
+  const rct=cv.getBoundingClientRect();
+  const hs=$("sbH"), vs=$("sbV");
+  if(rct.width<40){ hs.style.display="none"; vs.style.display="none"; return; }
+  const w=worldParams(), k=w.baseK*view.zoom;
+  const wpx=(w.vw+2*WS_MARGIN)*k, hpx=(w.vh+2*WS_MARGIN)*k;
+  const x0=(w.MX-WS_MARGIN)*k+view.panX, y0=(w.MY-WS_MARGIN)*k+view.panY;
+  const fx=cv.width/wpx, fy=cv.height/hpx;
+  hs.style.display = fx<0.999 ? "" : "none";
+  vs.style.display = fy<0.999 ? "" : "none";
+  if(fx<0.999){
+    hs.style.left=(rct.left+3)+"px"; hs.style.width=(rct.width-18)+"px";
+    hs.style.top=(rct.top+rct.height-12)+"px";
+    const len=Math.max(8, fx*100), pos=Math.max(0, Math.min(100-len, (-x0/wpx)*100));
+    $("sbHt").style.width=len+"%"; $("sbHt").style.left=pos+"%";
+  }
+  if(fy<0.999){
+    vs.style.top=(rct.top+3)+"px"; vs.style.height=(rct.height-18)+"px";
+    vs.style.left=(rct.left+rct.width-12)+"px";
+    const len=Math.max(8, fy*100), pos=Math.max(0, Math.min(100-len, (-y0/hpx)*100));
+    $("sbVt").style.height=len+"%"; $("sbVt").style.top=pos+"%";
+  }
+}
+function sbDrag(thumb, horiz){
+  thumb.addEventListener("pointerdown",e=>{
+    e.preventDefault(); e.stopPropagation();
+    thumb.setPointerCapture(e.pointerId); thumb.style.cursor="grabbing";
+    const track=thumb.parentElement.getBoundingClientRect();
+    const w=worldParams(), k=w.baseK*view.zoom;
+    const world=horiz ? (w.vw+2*WS_MARGIN)*k : (w.vh+2*WS_MARGIN)*k;
+    const start=horiz ? e.clientX : e.clientY;
+    const pan0=horiz ? view.panX : view.panY;
+    const move=ev=>{
+      const d=(horiz?ev.clientX:ev.clientY)-start;
+      const track_len=horiz ? track.width : track.height;
+      const np=pan0 - d/track_len*world;
+      if(horiz) view.panX=np; else view.panY=np;
+      clampPan(); draw(); syncScrollbars();
+    };
+    const up=ev=>{ thumb.style.cursor="grab";
+      thumb.removeEventListener("pointermove",move); thumb.removeEventListener("pointerup",up); };
+    thumb.addEventListener("pointermove",move); thumb.addEventListener("pointerup",up);
+  });
+}
+sbDrag($("sbHt"),true); sbDrag($("sbVt"),false);
+/* every path that changes the view already ends in draw(); the bars follow it */
+const __draw_sb=draw; draw=function(){ __draw_sb(); syncScrollbars(); };
 $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
   $("bOrient").classList.toggle("on",matLandscape);
   view.zoom=fitZoom(); view.panX=0; view.panY=0;   // reframe the turned mat
