@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-21.203 -->
+<!-- SANGALA_VERSION: 2026-08-21.204 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -383,7 +383,7 @@
     </div>
     <div id="zoomctl">
       <button id="zoomOut" title="Zoom out">&minus;</button>
-      <input id="zoomPct" value="100%" title="Type a zoom percentage - the same number in Sangala Blocks shows the same size (100 = actual size)" style="width:3.6em;text-align:center;border:1px solid #c9b48c;border-radius:6px;background:#fffdf7;font:inherit;color:inherit;padding:2px 0">
+      <input id="zoomPct" value="100%" title="Type a zoom percentage - the same number in Sangala Blocks shows the same size; at 100 the page fits a typical window" style="width:3.6em;text-align:center;border:1px solid #c9b48c;border-radius:6px;background:#fffdf7;font:inherit;color:inherit;padding:2px 0">
       <button id="zoomIn" title="Zoom in">+</button>
       <button id="zoomFit" title="Fit the whole page">Fit</button>
       <span class="zsep" aria-hidden="true"></span>
@@ -442,7 +442,10 @@ const WS_MARGIN=150;  // mm of corkboard you can PARK on and pan to reach. Large
 let matLandscape=false;   // the mat/cut are the same 8x12 either way; landscape only TURNS the workspace 90 deg for
                           // designs that sit better wide. The design's stored + cut coords stay portrait, so the
                           // machine never knows - landscape is purely a rotation of the view (see draw() / evtMM).
-const SCALE100=96/25.4;   /* CSS px per design mm at 100% - the family's shared scale, the same constant by the same name in Sangala Blocks */
+/* SIZED TO SCREENS, NOT TO PAPER (Glen, 2026-08-21: "the crane should fit on the screen at
+   100%"). 2.4 css px per mm stands a Letter page 670 css px tall; the value matters less than
+   its being the SAME, by the same name, in Sangala Blocks. */
+const SCALE100=2.4;   /* CSS px per design mm at 100% - the family's shared scale */
 function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; vw/vh = how it is DISPLAYED (turned in landscape)
   const dw=printFile?PAGE_LW:PAGE_W, dh=printFile?PAGE_LH:PAGE_H;   // plain-cut workspace = the material page, not the mat
   const vw=matLandscape?dh:dw, vh=matLandscape?dw:dh;
