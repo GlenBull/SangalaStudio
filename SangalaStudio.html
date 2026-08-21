@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-21.200 -->
+<!-- SANGALA_VERSION: 2026-08-21.201 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -389,7 +389,7 @@
       <span class="zsep" aria-hidden="true"></span>
       <button id="bOrient" title="Rotate the mat between portrait and landscape. The mat and the cut are the same 8 x 12 either way - landscape just turns the workspace for designs that sit better wide."><svg width="17" height="17" viewBox="0 0 24 24" style="display:block"><rect x="9" y="1" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="2" y="10" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 1.5A6 6 0 0 0 2 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M0.3 3.2L2 6l3-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="bSnapTog" class="on" title="Snap to Fit: dragging near another shape pulls the corners together. Click to turn it off. (While on, hold Alt to drag free.)">🧲</button>
-      <button id="bStudSnap" class="on" style="display:none" title="Snap to Studs: dragging a 3D part lands it on the 8 mm stud grid, so parts line up with each other and with an imported mosaic. Click to turn it off. (While on, hold Alt to drag free.)">⊞</button>
+      <button id="bStudSnap" class="on" style="display:none" title="Snap to Studs: dragging a 3D part lands it on the lattice - 8 mm studs across, and in the Side view 3.2 mm plates up - so parts line up with each other and with an imported design. Click to turn it off. (While on, hold Alt to drag free.)">⊞</button>
     </div>
   </div>
 </div>
@@ -517,6 +517,15 @@ function applyRanges(){const ox=$("offx"),oy=$("offy");
    wider than a Letter page, so a full-plate mosaic overflows a page it was never meant to sit on
    (Glen, 2026-07-30). Sized from the stud pitch rather than a literal 256, so the two cannot drift. */
 const BASEPLATE_STUDS=32, STUD_MM=8, BASEPLATE_MM=BASEPLATE_STUDS*STUD_MM;   // STUD_MM lives here now: Snap to Studs below uses the same one, so the lattice and the plate cannot disagree
+/* PLATE_MM is declared with PLATE_UNIT above (:504) - the SAME 3.2 every 3D height field
+   already counts in, which is exactly the point: the side view's vertical pitch IS the
+   builder's plate, not a new number. */
+/* THE VERTICAL PITCH FOLLOWS THE VIEW - the one line that carries Glen's reframing (2026-08-21:
+   "the inherent coordinates don't change, it is just a matter of whether you are looking at it
+   top down or from the side - plates vs studs"). Top-down, a vertical millimeter is distance
+   across the plate, so the lattice is studs both ways; from the side it is stacked height, and
+   stacking comes in plates. Blocks' vUnit() is this same line in the other application. */
+const latY=()=>viewMode==="standing" ? PLATE_MM : STUD_MM;
 let pageKind="letter";
 /* The VIEW the design is authored in, chosen in Settings. The values keep Sangala Blocks'
    field names - "relief" is the top-down view (studs both ways, Studio's whole life so far)
@@ -3895,7 +3904,9 @@ let studSnapOn=true;
 function studSnapDelta(poly, ddx, ddy){   // extra offset that lands the moved footprint on the lattice
   if(!studSnapOn || !mode3D || !poly || !poly.length) return null;
   const bb=bbox([poly]), nx=bb[0]+ddx, ny=bb[1]+ddy;
-  const ox=Math.round(nx/STUD_MM)*STUD_MM-nx, oy=Math.round(ny/STUD_MM)*STUD_MM-ny;
+  /* the vertical pitch follows the view - latY(): studs top-down, plates from the side */
+  const vy=latY();
+  const ox=Math.round(nx/STUD_MM)*STUD_MM-nx, oy=Math.round(ny/vy)*vy-ny;
   return (ox||oy) ? {ox:ox, oy:oy} : {ox:0, oy:0};
 }
 function snapTargets(excl){     // everything else on the mat, gathered once when the drag starts
@@ -4209,7 +4220,7 @@ function rebuildBrick(o){   // regenerate a brick's body size + stud grid from i
 function placeBrick(e){
   const {mx,my}=evtMM(e), pp=placeParams();
   let bx=(mx-pp.ox)/pp.s, by=(my-pp.oy)/pp.s;
-  if(studSnapOn && !e.altKey){ bx=Math.round(bx/STUD_MM)*STUD_MM; by=Math.round(by/STUD_MM)*STUD_MM; }   // a brick dropped on the lattice needs no nudging afterwards
+  if(studSnapOn && !e.altKey){ const vy=latY(); bx=Math.round(bx/STUD_MM)*STUD_MM; by=Math.round(by/vy)*vy; }   // a brick dropped on the lattice needs no nudging afterwards; the vertical pitch follows the view
   makeBrick(bx, by, partKind);
   suppressClick=true; setTool("select");
 }
@@ -5576,7 +5587,7 @@ $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
   say(matLandscape ? "Mat turned to landscape - the workspace is wider now. The mat and the cut are unchanged."
                    : "Mat back to portrait."); };
 $("bStudSnap").onclick=()=>{ studSnapOn=!studSnapOn; $("bStudSnap").classList.toggle("on",studSnapOn);
-  say(studSnapOn ? "<i>Snap to Studs</i> is on - a part you drag lands on the 8 mm stud grid, so it lines up with the other parts and with an imported mosaic (hold Alt to drag free)."
+  say(studSnapOn ? "<i>Snap to Studs</i> is on - a part you drag lands on the lattice: 8 mm studs across, and in the Side view 3.2 mm plates up (hold Alt to drag free)."
                  : "<i>Snap to Studs</i> is off - parts drag to any position. Click the grid button to turn it back on."); };
 $("bSnapTog").onclick=()=>{ snapOn=!snapOn; $("bSnapTog").classList.toggle("on",snapOn);
   say(snapOn ? "<i>Snap to Fit</i> is on - dragging near another shape pulls the corners together (hold Alt to drag free)."
