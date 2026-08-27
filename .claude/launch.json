@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "blocks",
+      "runtimeExecutable": "C:\\Users\\glenb\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "runtimeArgs": ["-m", "http.server", "8831", "--directory", "D:\\Code Projects\\Block Tools", "--bind", "127.0.0.1"],
+      "port": 8831,
+      "url": "http://localhost:8831"
+    }
+  ]
+}
