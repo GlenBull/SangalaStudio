@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-21.205 -->
+<!-- SANGALA_VERSION: 2026-08-26.206 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -460,6 +460,11 @@ function worldParams(){   // dw/dh = the page in its STORED (portrait) coords; v
   return { dw:dw, dh:dh, vw:vw, vh:vh, baseK:baseK, MX:(cv.width/k-vw)/2, MY:(cv.height/k-vh)/2 };
 }
 let selNode=null;            // index of the selected node within the selected object (node tool)
+// A SWEEP OF NODES, so several can go at once (Glen, 2026-08-26): flat indices into editNodes(), plus the
+// object they belong to - held apart from selNode so a single click still behaves exactly as it always did.
+// `selNodesFor` is what makes this safe without hunting down every `selNode=null` in the file: the set is
+// read only while it still names the selected object, so changing shape or tool retires it by itself.
+let selNodes=[], selNodesFor=null;
 let slopeHi=null;            // footprint edge index to highlight while a per-side Slope field is focused/hovered
 let mode3D=false;            // Setup toggle: reveals per-shape Depth (Z) + STL export
 const $=id=>document.getElementById(id);
@@ -1057,13 +1062,15 @@ function draw(){
         const nodes=placePoly((activeTool==="node"?editNodes(o).map(n=>n.p):shapeNodes(o)));   // node mode shows EVERY ring's nodes (outer + holes); otherwise just the outline corners
         const many=nodes.length>16, hs=many?2:4;   // dense curve -> small dots so it reads as a tidy path, not a blob
         const sel=(activeTool==="node"&&selNode!=null&&nodes[selNode])?selNode:-1;
+        // the swept set draws filled too, so what Delete is about to take is visible before you press it
+        const multi=(activeTool==="node"&&selNodesFor===o.id&&selNodes.length)?new Set(selNodes):null;
         ctx.save();ctx.strokeStyle="#1a5fb4";ctx.lineWidth=many?1:1.5;
         const nodeAt=(q,on)=>{const x=q[0]*k,y=q[1]*k;ctx.beginPath();ctx.rect(x-hs,y-hs,2*hs,2*hs);
           ctx.fillStyle=on?"#1a5fb4":"#fff"; ctx.fill(); ctx.stroke();};
         // The selected node goes on LAST. Breaking a closed ring open leaves TWO coincident ends at that
         // corner, and painting in index order put the white end on top of the blue one - so the node you had
         // just broken looked deselected, and nothing on the mat said where the break was. Nothing may cover it.
-        nodes.forEach((q,i)=>{ if(i!==sel) nodeAt(q,false); });
+        nodes.forEach((q,i)=>{ if(i!==sel) nodeAt(q, !!(multi&&multi.has(i))); });
         if(sel>=0) nodeAt(nodes[sel],true);   // selected node = filled
         ctx.restore();}
       if(activeTool==="select"){ const rh=rotHandle(o,k);   // rotate handle above the shape (rect / polygon)
@@ -4277,7 +4284,9 @@ function startNodeDrag(e){
   // Not on a node? Let the click through to selection. This used to insert a node wherever it landed on the
   // outline, so merely clicking a shape to look at its nodes cost it one. Adding a node is a DOUBLE-click now
   // (insertNodeAt), which is the gesture Inkscape uses and cannot happen by accident.
-  if(hit<0){ selNode=null; draw(); refreshEditPanel(); return; }
+  // Not on a node: begin a rubber-band over the nodes instead of only clearing the selection. A press that
+  // never drags still clears, which is what it always did - mouseup tells the two apart by the box size.
+  if(hit<0){ selNode=null; marquee={x0:mx,y0:my,x1:mx,y1:my,nodes:true}; draw(); refreshEditPanel(); e.preventDefault(); return; }
   ensurePolygon(o);
   selNode=hit;                                         // mark the node selected (drawn filled)
   const rc=editNodes(o)[hit];                          // which ring + index this node is (re-read: ensurePolygon keeps the order)
@@ -4319,6 +4328,34 @@ function deleteNode(){
   if(rc.r===0) o.poly=newRing; else o.holes[rc.r-1]=newRing;
   placeEl(o);
   selNode=null; draw(); refreshEditPanel(); say("Deleted a node.");
+  return true;
+}
+// Delete every node a sweep caught. Two things make this more than a loop over deleteNode():
+//   - INDICES SHIFT as nodes go, so each ring is emptied from its HIGHEST index downwards;
+//   - each ring keeps its own floor (3 corners closed, 2 ends open), so a greedy sweep across a whole
+//     shape thins it instead of destroying it, and the count of what was kept is reported.
+function deleteNodes(){
+  const o=selObj(); if(!o||!o.el||!selNodes.length) return false;
+  const t=o.el.tagName.toLowerCase(); if(t!=="polygon"&&t!=="polyline") return false;
+  const all=editNodes(o), byRing=new Map();
+  selNodes.forEach(fi=>{ const rc=all[fi]; if(!rc) return;
+    if(!byRing.has(rc.r)) byRing.set(rc.r,[]); byRing.get(rc.r).push(rc.i); });
+  let removed=0, kept=0;
+  byRing.forEach((idxs,r)=>{
+    const ring=nodeRing(o,r); if(!ring) return;
+    const closed = r===0 ? objClosed(o) : isClosedRing(ring);
+    const nodes = closed?ring.slice(0,-1):ring.slice();
+    const least = closed?3:2;
+    idxs.sort((a,b)=>b-a).forEach(i=>{
+      if(nodes.length<=least){ kept++; return; }
+      nodes.splice(i,1); removed++; });
+    const newRing = closed ? nodes.concat([[nodes[0][0],nodes[0][1]]]) : nodes;
+    if(r===0) o.poly=newRing; else o.holes[r-1]=newRing;
+  });
+  if(removed) placeEl(o);
+  selNodes=[]; selNodesFor=null; selNode=null; draw(); refreshEditPanel();
+  say(removed ? "Deleted "+removed+" node"+(removed!==1?"s":"")+(kept?" - "+kept+" kept so the outline survives.":".")
+              : "Nothing deleted - a shape needs at least 3 nodes.");
   return true;
 }
 // Break the shape apart at the selected node - the fold-tab enabler. A CLOSED shape opens there: the
@@ -5533,6 +5570,7 @@ document.addEventListener("keydown",(e)=>{
   if(e.key!=="Delete"&&e.key!=="Backspace") return;
   const t=e.target, tag=t&&t.tagName&&t.tagName.toLowerCase();
   if(tag==="input"||tag==="textarea"||tag==="select"||(t&&t.isContentEditable)) return;
+  if(activeTool==="node"&&selNodes.length&&selNodesFor===selId){ e.preventDefault(); deleteNodes(); return; }   // a swept set of nodes -> all of them
   if(activeTool==="node"&&selNode!=null){ e.preventDefault(); deleteNode(); return; }   // a selected node -> delete the node, not the object
   if(refImg && refImg.sel){ e.preventDefault(); refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none"; draw(); refreshEditPanel(); say("Removed the reference image."); return; }
   if(selMulti.length){ e.preventDefault(); const set=new Set(selMulti), n=selMulti.length;   // delete the whole marquee selection
@@ -6119,7 +6157,21 @@ window.addEventListener("mouseup",()=>{
   if(panDrag){ panDrag=null; suppressClick=true; cv.style.cursor=spaceHeld?"grab":"default"; return; }
   if(marquee){   // finish a rubber-band: select every object whose bbox is fully inside it
     const x0=Math.min(marquee.x0,marquee.x1), y0=Math.min(marquee.y0,marquee.y1), x1=Math.max(marquee.x0,marquee.x1), y1=Math.max(marquee.y0,marquee.y1);
-    const isDrag=(x1-x0>1||y1-y0>1); marquee=null;
+    const isDrag=(x1-x0>1||y1-y0>1); const nodeSweep=marquee.nodes; marquee=null;
+    // A NODE SWEEP catches nodes, not shapes: every node of the selected object inside the box. It never
+    // touches selMulti, so the Node tool cannot accidentally arm an object-wide delete.
+    if(nodeSweep){
+      const o=selObj();
+      if(isDrag && o && o.el){
+        ensurePolygon(o);                                  // same moment a single click would have converted it
+        const disp=placePoly(editNodes(o).map(n=>n.p));
+        const hits=[]; disp.forEach((q,i)=>{ if(q[0]>=x0&&q[0]<=x1&&q[1]>=y0&&q[1]<=y1) hits.push(i); });
+        selNodes=hits; selNodesFor=o.id; selNode=null; suppressClick=true;
+        draw(); refreshEditPanel();
+        say(hits.length ? "Selected "+hits.length+" node"+(hits.length!==1?"s":"")+" - press Delete to remove them."
+                        : "No nodes inside the box.");
+      } else { selNodes=[]; selNodesFor=null; selNode=null; draw(); refreshEditPanel(); }
+      return; }
     if(isDrag){ const ids=[]; objects.forEach(o=>{ const bb=bbox([placePoly(o.poly)]); if(bb[0]>=x0&&bb[1]>=y0&&bb[2]<=x1&&bb[3]<=y1) ids.push(o.id); });
       // The photo lives in refImg, OUTSIDE objects, so a sweep never caught it - which is why Align came up
       // one item short and had to be driven by Shift+click instead (Glen, 2026-07-28: "sweep doesn't capture
