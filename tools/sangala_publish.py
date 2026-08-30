@@ -59,6 +59,14 @@ APPS = [
         "marker": "SANGALA_VERSION",
         "cmds": ["Update SangalaBlocks.cmd", "Create Desktop Shortcut.cmd"],
         "ldraw": True,
+        # THE DOWNLOAD, built from git ls-files over exactly these paths. Source, tools, Documents
+        # and CLAUDE.md are not here on purpose: a student never needs them.
+        "zip_dir": os.path.join(DROPBOX, "Sangala Blocks Files"),
+        "zip_glob": "Sangala Blocks (Ver ",
+        "zip_inner": "Sangala Blocks/",
+        "zip_build": ["SangalaBlockDesigner.exe", "SangalaBlockDesigner.html", "Crane.ico",
+                      "Create Desktop Shortcut.cmd", "Update SangalaBlocks.cmd", "LICENSE",
+                      "LDraw", "LDView", "Projects"],
     },
 ]
 
@@ -234,6 +242,76 @@ def check_ldraw(app, publish, out):
     return False
 
 
+def build_zip(app, publish, out):
+    """Build the download from the REPOSITORY's own tracked files, never by hand.
+
+    Glen, 2026-08-30: "why not put all the essential files in a Zip folder that mirrors the folder
+    on Github. Why not make Github and the Blocks folder on dropbox parallel, so that they are
+    always in sync." They cannot be identical - the repository also carries the C# source, the build
+    script, CLAUDE.md, tools\\ and 328 files of Documents, none of which should reach a student. What
+    CAN be kept in step is this: the zip holds exactly the RUNTIME subset of what git tracks, listed
+    below and taken from `git ls-files`, so an untracked stray cannot travel and a file the
+    repository gains under these paths arrives on the next publish without anyone remembering.
+
+    It replaces "copy this whole folder", which was the advice in the first Read Me and was wrong:
+    it would have brought Archive, the build photographs and every superseded document onto a
+    student's machine. And it carries the WHOLE tracked parts library - 11,288 files, 113 MB loose
+    but 9 MB compressed - not the narrow closure of the current designs, which would break the
+    moment somebody picked a different part from the menu."""
+    ver = marker_of(os.path.join(app["repo"], app["page"]), app["marker"])
+    want = "%s%s).zip" % (app["zip_glob"], ver.split(".")[-1])
+    dest = os.path.join(app["zip_dir"], want)
+    have = [f for f in os.listdir(app["zip_dir"])
+            if f.startswith(app["zip_glob"]) and f.endswith(".zip")]
+    # The Read Me travels INSIDE the zip, so a change to it makes the zip stale even when the
+    # version has not moved. Compare the copy in the folder against the copy in the download.
+    fresh = have == [want] and os.path.isfile(dest)
+    readme = os.path.join(app["dest"], "Read Me First.txt")
+    if fresh and os.path.isfile(readme):
+        try:
+            inzip = zipfile.ZipFile(dest).read(app["zip_inner"] + "Read Me First.txt")
+            fresh = inzip == open(readme, "rb").read()
+        except KeyError:
+            fresh = False
+    if fresh:
+        out.append("   %-11s %-44s %s" % ("zip", want, "current"))
+        return True
+    out.append("   %-11s %-44s %s" % ("zip", want, "MISSING" if not have else "STALE"))
+    if not publish:
+        return False
+
+    import subprocess
+    tracked = subprocess.run(["git", "-C", app["repo"], "ls-files"] + app["zip_build"],
+                             capture_output=True, text=True).stdout.split("\n")
+    inner = app["zip_inner"]
+    zo = zipfile.ZipFile(dest + ".tmp", "w", zipfile.ZIP_DEFLATED)
+    n = 0
+    for rel in tracked:
+        rel = rel.strip()
+        if not rel or "/Archive/" in rel or rel.startswith("Archive/"):
+            continue
+        src = os.path.join(app["repo"], rel.replace("/", os.sep))
+        if not os.path.isfile(src):
+            continue
+        zo.write(src, inner + rel)
+        n += 1
+    # The Read Me lives beside the program in Dropbox, not in the repository - it is written for
+    # whoever downloads this, and the zip is the thing they download.
+    readme = os.path.join(app["dest"], "Read Me First.txt")
+    if os.path.isfile(readme):
+        zo.write(readme, inner + "Read Me First.txt")
+        n += 1
+    zo.close()
+    arch = os.path.join(app["zip_dir"], "Archive")
+    os.makedirs(arch, exist_ok=True)
+    for f in have:
+        if f != want:
+            shutil.move(os.path.join(app["zip_dir"], f), os.path.join(arch, f))
+    os.replace(dest + ".tmp", dest)
+    out.append("      built %s — %d files, %.1f MB" % (want, n, os.path.getsize(dest) / 1e6))
+    return True
+
+
 def check_zip(app, publish, out):
     zdir = app["zip_dir"]
     zips = [f for f in os.listdir(zdir) if f.startswith(app["zip_glob"]) and f.endswith(".zip")]
@@ -313,7 +391,10 @@ def main():
             clean = False
         if app.get("ldraw") and not check_ldraw(app, publish, out):
             clean = False
-        if app.get("zip_dir") and not check_zip(app, publish, out):
+        if app.get("zip_build"):
+            if not build_zip(app, publish, out):
+                clean = False
+        elif app.get("zip_dir") and not check_zip(app, publish, out):
             clean = False
         print(app["name"])
         for line in out:
