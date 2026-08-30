@@ -127,6 +127,12 @@ def stamp_readme(app, publish, out):
     ver = marker_of(os.path.join(app["repo"], app["page"]), app["marker"])
     text = open(path, encoding="utf-8").read()
     fixed = re.sub(r"\b20\d\d-\d\d-\d\d\.\d+\b", ver, text)
+    # AND THE NAME OF THE DOWNLOAD, which carries the release number rather than the date. Stamping
+    # only the date left the Blocks Read Me telling a user to fetch "Sangala Blocks (Ver 202).zip"
+    # on the day 203 replaced it - a file that was no longer in the folder.
+    if app.get("zip_glob"):
+        fixed = re.sub(re.escape(app["zip_glob"]) + r"\d+\)\.zip",
+                       "%s%s).zip" % (app["zip_glob"], ver.split(".")[-1]), fixed)
     if fixed == text:
         return True
     out.append("   %-11s %-44s %s" % ("read me", "version inside it", "STALE"))
