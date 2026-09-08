@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-08-26.206 -->
+<!-- SANGALA_VERSION: 2026-09-08.207 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -361,6 +361,10 @@
         <div id="swatches"></div>
         <input type="color" id="fillPick" value="#2e7d32" aria-hidden="true" tabindex="-1"
                style="position:absolute;width:0;height:0;padding:0;border:0;opacity:0;pointer-events:none">
+      </div>
+      <div id="labelrow" style="margin-top:.5rem;display:none">
+        <div class="hint lbl" title="How tall the label\u2019s text is on the design. The label is for identification only \u2014 it is never cut, never printed, and never appears in an export.">Label size (mm)</div>
+        <input type="number" id="eLabelSize" min="2" max="80" step="1" value="12">
       </div>
       <div id="layerrow" style="margin-top:.5rem;display:none">
         <div class="hint lbl" title="Which shape sits in front where they overlap. Back and Front jump to the ends; Lower and Raise move one step.">Layer</div>
@@ -770,6 +774,37 @@ const RING_TOL=0.02;
 function isClosedRing(p){ return p.length>2 && Math.abs(p[0][0]-p[p.length-1][0])<RING_TOL && Math.abs(p[0][1]-p[p.length-1][1])<RING_TOL; }
 // Whether an OBJECT is a closed shape. Geometry alone cannot answer this: a ring broken open at a node
 // still has both ends at the SAME spot, and would read as closed forever. data-open="1" says otherwise.
+/* ---------- LABELS: identification only, never fabrication -----------------------------------
+   A label is text attached to a shape (or to a grouped part) and carried with it in 2D. Glen,
+   2026-09-08: "this is solely for identification purposes - the label should not affect the
+   fabrication process or output in any way."
+   It CANNOT reach the machine or the paper, and that is structural rather than a flag someone has
+   to remember: the text lives in a data-* attribute and is drawn on the CANVAS, while the cut path
+   reads geometry, and Export SVG, Export STL and printSheet all build from the retained SVG
+   document. None of them looks at the canvas, and none of them turns an attribute into a mark.
+   The position is held RELATIVE to the shape's own bounding box, the way data-mesh-tris is, so the
+   label travels with the shape and a Save-SVG crop cancels out. Both attributes ride through save
+   and Undo for free, because serializeState copies every attribute of the element. */
+function labelOf(o){ return (o&&o.el&&o.el.getAttribute) ? (o.el.getAttribute("data-label")||"") : ""; }
+function labelRel(o){ const v=(o&&o.el&&o.el.getAttribute)?o.el.getAttribute("data-label-rel"):null;
+  if(!v) return [0,0]; const p=v.split(",").map(Number);
+  return (p.length===2 && p.every(n=>isFinite(n))) ? p : [0,0]; }
+function labelSet(o,text,dx,dy){ if(!o||!o.el) return;
+  if(text){ o.el.setAttribute("data-label",text); o.el.setAttribute("data-label-rel",dx.toFixed(2)+","+dy.toFixed(2)); }
+  else { o.el.removeAttribute("data-label"); o.el.removeAttribute("data-label-rel"); } }
+const LABEL_MM = 12;            // default height of the text, in mm on the design
+function labelSize(o){ const v=(o&&o.el&&o.el.getAttribute)?+o.el.getAttribute("data-label-size"):0;
+  return (isFinite(v)&&v>0)? v : LABEL_MM; }
+function labelSizeSet(o,mm){ if(o&&o.el) o.el.setAttribute("data-label-size", String(mm)); }
+let labelBoxes = new Map();    // id -> {x,y,w,h} in stored mm, recorded by draw() so a label can be grabbed
+function labelAt(mx,my){       // topmost label under the pointer
+  for(let i=objects.length-1;i>=0;i--){ const b=labelBoxes.get(objects[i].id);
+    if(b && mx>=b.x && mx<=b.x+b.w && my>=b.y && my<=b.y+b.h) return objects[i]; }
+  return null; }
+function labelAnchor(o){        // where the text sits, in stored mm
+  const p=placePoly(o.poly||[]); if(!p.length) return null;
+  let bx=Infinity, by=Infinity; p.forEach(q=>{ if(q[0]<bx)bx=q[0]; if(q[1]<by)by=q[1]; });
+  const r=labelRel(o); return [bx+r[0], by+r[1]]; }
 function objClosed(o){ return !(o&&o.el&&o.el.getAttribute&&o.el.getAttribute("data-open")==="1") && isClosedRing(o.poly); }
 // A closed shape in a file usually repeats its first point to shut the ring - and re-sampling then adds a
 // closing point of its own on TOP of it, so the corner ends up in the list three times running. Two of them
@@ -1122,6 +1157,25 @@ function draw(){
     ctx.save(); ctx.fillStyle="rgba(26,95,180,.08)"; ctx.strokeStyle="#1a5fb4"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
     ctx.fillRect(x0,y0,x1-x0,y1-y0); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.restore(); }
   ctx.restore();   // end magnify (pan/zoom) transform
+  /* LABELS are drawn HERE, after the transform is restored, for the same reason the mat's own
+     label below is: text inside the transform would turn on its side on a landscape mat and would
+     grow with the zoom. Mapped by hand instead, so it stays upright and legible at any zoom. */
+  /* JUST THE TEXT - no plate, no border (Glen, 2026-09-08: "it should just be the text of the
+     label and nothing else"). The size is the student's, held in mm on the design so a label keeps
+     its proportion to the part it names, with a floor in screen pixels so it can never shrink out
+     of sight at a low zoom - which is the fault this replaced. */
+  labelBoxes = new Map();
+  if(!mode3D) objects.forEach(o=>{ const t=labelOf(o); if(!t) return;
+    const a=labelAnchor(o); if(!a) return;
+    const X = matLandscape ? a[1] : a[0], Y = matLandscape ? (dw-a[0]) : a[1];
+    const px = view.panX+(X+MX)*k, py = view.panY+(Y+MY)*k;
+    const fpx = Math.max(14, labelSize(o)*k);
+    ctx.save(); ctx.font=fpx+"px sans-serif"; ctx.textBaseline="middle"; ctx.textAlign="center";
+    ctx.fillStyle="#1f2933"; ctx.fillText(t,px,py);
+    const tw=ctx.measureText(t).width; ctx.restore();
+    const wmm=tw/k, hmm=fpx/k, r=labelRel(o), p=placePoly(o.poly||[]);   // remember it in mm, so it can be grabbed
+    let bx=Infinity, by=Infinity; p.forEach(q=>{ if(q[0]<bx)bx=q[0]; if(q[1]<by)by=q[1]; });
+    labelBoxes.set(o.id, {x:bx+r[0]-wmm/2, y:by+r[1]-hmm/2, w:wmm, h:hmm}); });
   ctx.fillStyle="#9aa0a6";ctx.font="13px sans-serif";   // label upright at the displayed page's top-left (drawn after restore so it never rotates with a landscape mat)
   ctx.fillText(printFile?"Letter 8.5 x 11 in":matLabel(), view.panX+MX*k+8, view.panY+MY*k+17);
   const chk=pl.concat(sl);
@@ -4940,6 +4994,12 @@ function setKindUI(){   // Cut/Fold/Print classification is a die-cutter (2D) co
   // shape was given there is the color it wears in the 3D view (Glen, 2026-08-09). See partCol in buildTris.
   $("fillrow").style.display  = mode3D?"none":"";
   $("layerrow").style.display = mode3D?"none":"";   // and in 3D, what sits in front is real geometry, not an order
+  {  // the label's size, shown only once there IS a label to size
+    const lo=(selId!=null)?objects.find(x=>x.id===selId):null;
+    const has = !mode3D && lo && labelOf(lo);
+    $("labelrow").style.display = has?"":"none";
+    if(has) $("eLabelSize").value = labelSize(lo);
+  }
 }
 /* ---------- Paper color: fill a shape to preview the finished collage ----------
    The fill stands for the CARD the shape will be cut from, so it is a design aid and nothing else: it never
@@ -5438,6 +5498,11 @@ $("partstable").addEventListener("click",(e)=>{
   scheduleCommit(); refreshPartsTable();
   say(on ? "Studs shown on every part." : "Studs hidden - the massing reads as plain masses now."); });
 
+$("eLabelSize").oninput=()=>{                     // live, like the other numeric fields
+  const o=(selId!=null)?objects.find(x=>x.id===selId):null; if(!o||!labelOf(o)) return;
+  const v=+$("eLabelSize").value; if(!isFinite(v)||v<=0) return;
+  labelSizeSet(o, v); draw(); scheduleCommit();
+};
 function refreshEditPanel(){
   updateCombine();   // keep the Combine buttons in sync with the current selection
   updateAlign();     // ...and Align, which used to be computed ONLY when its menu opened, so arming the
@@ -5822,6 +5887,96 @@ function boxHandles(){   // in RAW design mm - the same frame o.poly lives in, s
 // rect: corner handle resizes (opposite corner anchored), body moves.
 // circle: cardinal handle changes radius (center fixed), body moves the center.
 let drag=null, suppressClick=false, marquee=null;
+/* RIGHT-CLICK A SHAPE TO LABEL IT (Glen, 2026-09-08). One gesture does placement AND attachment:
+   the shape under the pointer is the one labelled, and the point clicked is where the text sits,
+   so a label can be put exactly where it reads best rather than at some centre we chose for it.
+   Right-clicking a labelled shape brings its text back to be revised, and emptying the box removes
+   it - the same "empty clears" convention Sangala Blocks uses when naming a group, so the revise
+   and the delete are one gesture and there is no second control to find.
+   Studio bound nothing to right-click before this, so nothing is displaced. */
+cv.addEventListener("contextmenu",(e)=>{
+  if(mode3D) return;                                  // 3D View has no labels; leave the browser menu alone
+  e.preventDefault();
+  const {mx,my,k}=evtMM(e);
+  let hit=null;
+  for(let i=objects.length-1;i>=0;i--){ const o=objects[i];       // topmost first: the one the eye sees
+    ensurePolygon(o); const p=placePoly(o.poly||[]);
+    if(p.length>=3 && objClosed(o) && ptInPoly(mx,my,p)){ hit=o; break; } }
+  if(!hit){                                            // not inside anything - accept an outline within 8 px
+    let bd=1e9, best=null;
+    objects.forEach(o=>{ const p=placePoly(o.poly||[]);
+      for(let i=0;i+1<p.length;i++){ const d=segDist(mx,my,p[i][0],p[i][1],p[i+1][0],p[i+1][1]);
+        if(d<bd){ bd=d; best=o; } } });
+    if(best && bd*k<=8) hit=best; }
+  if(!hit){ say("Right-click a shape to label it."); return; }
+  openLabelEditor(hit, mx, my);
+});
+
+/* THE EDITOR IS PART OF THE PAGE, not the browser's dialog (Glen, 2026-09-08). window.prompt puts
+   "127.0.0.1:8787 says" above the question - the page's own address, talking as though it were a
+   person - and that cannot be removed or reworded, because Chrome writes it. It also opens in the
+   middle of the screen, nowhere near the shape being named. So the question is asked here instead:
+   one word, "Label", in a small box that appears just ABOVE the object it belongs to. */
+let labelEd=null;
+function labelEditorEl(){
+  if(labelEd) return labelEd;
+  labelEd=document.createElement("div");
+  labelEd.style.cssText="position:fixed;z-index:80;display:none;padding:6px 8px;border-radius:9px;"
+    +"border:2px solid #d8c4a0;background:#fbf4e6;box-shadow:0 8px 20px rgba(0,0,0,.32);"
+    +"font:600 .8rem system-ui,-apple-system,sans-serif;color:#5a4326";
+  labelEd.innerHTML='<div style="margin-bottom:3px">Label</div>'
+    +'<input id="labelEdInput" type="text" style="width:150px;font-size:.95rem;padding:.2rem .3rem;'
+    +'border:1px solid #cbb78f;border-radius:6px;background:#fffaf0;color:#3a2f20">';
+  document.body.appendChild(labelEd);
+  return labelEd;
+}
+function closeLabelEditor(){ if(labelEd) labelEd.style.display="none"; }
+function mmToClient(mx,my){                       // stored mm -> a point on the screen, for placing the editor
+  const w=worldParams(), k=w.baseK*view.zoom, r=cv.getBoundingClientRect();
+  const X = matLandscape? my : mx, Y = matLandscape? (w.dw-mx) : my;
+  const cx = view.panX+(X+w.MX)*k, cy = view.panY+(Y+w.MY)*k;
+  return [ r.left + cx*(r.width/cv.width), r.top + cy*(r.height/cv.height) ];
+}
+function openLabelEditor(o, mx, my){
+  const ed=labelEditorEl(), inp=ed.querySelector("#labelEdInput");
+  const p=placePoly(o.poly||[]); let bx=Infinity, by=Infinity, tx=Infinity, ty=Infinity;
+  p.forEach(q=>{ if(q[0]<bx)bx=q[0]; if(q[1]<by)by=q[1]; if(q[0]<tx)tx=q[0]; if(q[1]<ty)ty=q[1]; });
+  let maxx=-Infinity; p.forEach(q=>{ if(q[0]>maxx)maxx=q[0]; });
+  const had=labelOf(o);
+  inp.value=had;
+  ed.style.display="block";
+  const c=mmToClient((tx+maxx)/2, ty);              // top-centre of the shape...
+  const w=ed.offsetWidth||170, h=ed.offsetHeight||58;
+  ed.style.left=Math.max(6, Math.min(window.innerWidth -w-6, c[0]-w/2))+"px";
+  ed.style.top =Math.max(6, c[1]-h-12)+"px";        // ...and the box sits ABOVE it
+  inp.focus(); inp.select();
+  const finish=(apply)=>{
+    inp.onkeydown=null; inp.onblur=null; closeLabelEditor();
+    if(!apply) return;
+    const txt=inp.value.trim();
+    if(txt===had) return;                            // nothing typed, nothing to record
+    if(txt && !had){                                 // a NEW label starts where the shape was right-clicked
+      labelSet(o, txt, mx-bx, my-by); if(!o.el.getAttribute("data-label-size")) labelSizeSet(o, LABEL_MM); }
+    else { const r=labelRel(o); labelSet(o, txt, r[0], r[1]); }   // revised or cleared: it keeps its place
+    draw(); commit(); refreshEditPanel();
+    say(txt ? 'Labeled "'+txt+'".' : "Label cleared.");
+  };
+  inp.onkeydown=(ev)=>{ if(ev.key==="Enter"){ ev.preventDefault(); finish(true); }
+                        else if(ev.key==="Escape"){ ev.preventDefault(); finish(false); } };
+  inp.onblur=()=>finish(true);
+}
+
+/* A LABEL IS DRAGGED WHERE IT READS BEST. Capture phase, so grabbing the text never also grabs the
+   shape underneath; anything that is not a label falls straight through to the normal handler. */
+cv.addEventListener("mousedown",(e)=>{
+  if(mode3D || e.button!==0) return;
+  const {mx,my}=evtMM(e); const hit=labelAt(mx,my); if(!hit) return;
+  e.stopPropagation(); e.preventDefault(); closeLabelEditor();
+  const r0=labelRel(hit), t=labelOf(hit);
+  const mv=(ev)=>{ const p=evtMM(ev); labelSet(hit, t, r0[0]+(p.mx-mx), r0[1]+(p.my-my)); draw(); };
+  const up=()=>{ window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); commit(); };
+  window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
+}, true);
 cv.addEventListener("mousedown",(e)=>{
   if(e.button===1 || (spaceHeld && e.button===0)){   // pan: middle-mouse, or hold Space + left-drag
     const p=canvasPt(e); panDrag={sx:p[0],sy:p[1],px:view.panX,py:view.panY}; cv.style.cursor="grabbing"; e.preventDefault(); return; }
