@@ -6,6 +6,7 @@ any of the three applications.
 
     python sangala_publish.py            report only; exit code 1 if anything is stale
     python sangala_publish.py --publish  copy what is stale, keeping the superseded file as .bak
+    python sangala_publish.py --publish Studio       just that application
 
 WHAT IT CHECKS, and why each one is here rather than assumed:
   * the page, by hash and by its own version marker - Mosaic's marker is spelled
@@ -367,8 +368,15 @@ def check_zip(app, publish, out):
 
 def main():
     publish = "--publish" in sys.argv
+    # Name one or more applications to work on just those: "sangala_publish.py --publish Studio".
+    # Without a name it does all three, as before. Added 2026-09-12 because publishing Studio should
+    # not push a Mosaic release to testers as a side effect - a different application is a different
+    # decision, and this is the place that makes the difference expressible.
+    only = [a.lower() for a in sys.argv[1:] if not a.startswith("--")]
     stale = 0
     for app in APPS:
+        if only and app["name"].lower() not in only:
+            continue
         out = []
         clean = True
         rp, dp = os.path.join(app["repo"], app["page"]), os.path.join(app["dest"], app["page"])
