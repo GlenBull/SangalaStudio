@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-12.209 -->
+<!-- SANGALA_VERSION: 2026-09-12.210 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -664,7 +664,7 @@ function loadSVG(text){
   let red=0; els.forEach(el=>{ if(isRed(cprop(el,"stroke","stroke"))) red++; });
   const silo = red>0; printFile = silo;
   objects=[]; selId=null; selId2=null; selImg2=false; selMulti=[];
-  view.zoom=fitZoom(); view.panX=0; view.panY=0; updateZoomUI();   // new design -> reset the magnify view
+  fitView(); updateZoomUI();   // new design -> reset the magnify view (re-framed once the objects are in)
   const rootPt=svg.createSVGPoint();
   const PX2MM=25.4/96;
   // A polyline/polygon/line ALREADY carries its vertices, so take them as they are. Walking along it instead
@@ -770,6 +770,9 @@ function loadSVG(text){
   objects.forEach(o=>{ if(o.el&&o.el.getAttribute&&o.el.getAttribute("data-mesh")==="1"){ const mr=parseMeshRel(o.el.getAttribute("data-mesh-tris"));   // rebuild a baked 3D-Combine part's mesh, anchored to its (now normalized) footprint
     if(mr&&o.poly){ const [ox,oy]=meshAnchor(o.poly); o.mesh=mr.map(t=>t.map(v=>[v[0]+ox,v[1]+oy,v[2]])); } } });
   bgImg=null; renderBg();
+  fitView(); updateZoomUI();   // NOW the objects exist, so the workspace knows how big the design
+                               // really is - and the readout must follow, or it keeps the page-only
+                               // figure from the reset at the top of the import
   draw(); refreshEditPanel();
   if(pvOn){                                  // opening a design while the 3D View is up must REPLACE what it shows: the
     const b=buildTris();                     // preview is an overlay canvas, so otherwise it keeps drawing the previous
@@ -1576,7 +1579,7 @@ function importMosaic(text,fname){
   // build the pieces: background (no-mass) tiles first, then masses in id order, so masses draw on top
   clearDoc(); ensureDoc();
   objects=[]; selId=null; selId2=null; selImg2=false; selMulti=[]; bgImg=null;
-  view.zoom=fitZoom(); view.panX=0; view.panY=0; updateZoomUI();
+  fitView(); updateZoomUI();
   const massIds=[...byMass.keys()].sort((a,q)=>a-q);
   let pieces=0, unTiles=(byMass.get(0)||[]).length;
   for(const mid of massIds){
@@ -1756,7 +1759,7 @@ function importBlock(text,fname){
   // figure, so nothing moves relative to anything else, and the back of the bird sits on the plate.
   clearDoc(); ensureDoc();
   objects=[]; selId=null; selId2=null; selImg2=false; selMulti=[]; bgImg=null;
-  view.zoom=fitZoom(); view.panX=0; view.panY=0; updateZoomUI();
+  fitView(); updateZoomUI();
   // EACH NAMED ELEMENT BECOMES A PLANE, which is Studio's own list of named things - a row carrying
   // the name, a disclosure triangle that folds its parts away, show and hide, mirror, and Depth and
   // Base for the whole element at once. The builder decomposed the figure while building it; this is
@@ -5709,14 +5712,41 @@ function clampPan(){   // keep the view within the park-able world (page + WS_MA
   const w=worldParams(), k=w.baseK*view.zoom;   // than the viewport on an axis, center on that axis instead
   const bound=(vp,startPx,sizePx)=>{ if(sizePx<=vp){ const c=(vp-sizePx)/2-startPx; return [c,c]; }
     return [vp-(startPx+sizePx), -startPx]; };
-  const bx=bound(cv.width,  (w.MX-WS_MARGIN)*k, (w.vw+2*WS_MARGIN)*k);   // the DISPLAYED page (turned in landscape) sets the world extent
-  const by=bound(cv.height, (w.MY-WS_MARGIN)*k, (w.vh+2*WS_MARGIN)*k);
+  const b=contentBox();   // the workspace - page OR design, whichever is larger - sets the world extent
+  const bx=bound(cv.width,  (w.MX+b.x0-WS_MARGIN)*k, ((b.x1-b.x0)+2*WS_MARGIN)*k);
+  const by=bound(cv.height, (w.MY+b.y0-WS_MARGIN)*k, ((b.y1-b.y0)+2*WS_MARGIN)*k);
   view.panX=Math.max(bx[0], Math.min(bx[1], view.panX));
   view.panY=Math.max(by[0], Math.min(by[1], view.panY)); }
 function updateZoomUI(){ const z=$("zoomPct");
   if(document.activeElement!==z) z.value=Math.round(view.zoom*100)+"%"; }
-function fitZoom(){   /* the zoom that fits the page in the window - what 100% used to mean */
-  const w=worldParams();
+/* THE WORKSPACE IS THE PAGE, OR THE DESIGN, WHICHEVER IS LARGER (Glen, 2026-09-12, from Elaine
+   Wolfe's first bug report: "I am unable to zoom out to see the entire design on the screen").
+   A Silhouette file may park pieces well outside the page - her Easter Egg Lantern runs from
+   X -175.5 mm to +203.7 mm against a 215.9 mm page, because her staging area sits to the left of it,
+   and a silo file keeps those coordinates (normalize() runs only on non-silo designs). Both the fit
+   and the pan bounds used to be keyed to the page alone, so Fit framed 256 mm of a 379 mm design and
+   clampPan put the leftmost 25 mm beyond reach at ANY zoom. Both now measure this box. A design that
+   sits on its page leaves the box exactly equal to the page, so nothing changes for one that always
+   fitted. Returned in DISPLAYED mm, so a turned mat needs no special case downstream. */
+function contentBox(){
+  const w=worldParams(), land=matLandscape, dw=w.dw;
+  const b={x0:0, y0:0, x1:w.vw, y1:w.vh};                  // the page is always part of the workspace
+  objects.forEach(o=>{ if(!o.poly) return; placePoly(o.poly).forEach(q=>{
+    const X = land ? q[1] : q[0], Y = land ? dw-q[0] : q[1];   // draw() turns the mat AFTER the pan, so match it here
+    if(X<b.x0)b.x0=X; if(X>b.x1)b.x1=X; if(Y<b.y0)b.y0=Y; if(Y>b.y1)b.y1=Y; }); });
+  return b;
+}
+/* Frame the whole workspace, centred on IT rather than on the page - panX=0 centres the page, which
+   is why a design hanging off one edge used to open half out of view even at the right zoom. */
+function fitView(){
+  const w=worldParams(); view.zoom=fitZoom();
+  const b=contentBox(), k=w.baseK*view.zoom;
+  view.panX = k*(w.vw/2 - (b.x0+b.x1)/2);
+  view.panY = k*(w.vh/2 - (b.y0+b.y1)/2);
+  clampPan();
+}
+function fitZoom(){   /* the zoom that fits the WORKSPACE in the window */
+  const w=worldParams(), b=contentBox();
   /* Measure the canvas where it actually IS, not by cv.width/cv.height. Those are the backing store,
      and until the first draw() has run they still hold the element's declared width="560" height="760",
      so the fit taken at load framed a canvas that does not exist: the page opened at 52% of its proper
@@ -5724,7 +5754,7 @@ function fitZoom(){   /* the zoom that fits the page in the window - what 100% u
      touching the zoom. (Glen, 2026-09-12: "when the file is started, zoom does not fill the space.") */
   const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
   const W=r.width>2?r.width*dpr:cv.width, H=r.width>2?r.height*dpr:cv.height;
-  const fk=Math.min(W/(w.vw+2*VIEW_MARGIN), H/(w.vh+2*VIEW_MARGIN));
+  const fk=Math.min(W/((b.x1-b.x0)+2*VIEW_MARGIN), H/((b.y1-b.y0)+2*VIEW_MARGIN));
   return fk/w.baseK; }
 function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: center)
   nz=Math.min(20, Math.max(0.05, nz)); if(cx==null){ cx=cv.width/2; cy=cv.height/2; }
@@ -5743,7 +5773,7 @@ function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cur
 cv.addEventListener("wheel",(e)=>{ e.preventDefault(); const p=canvasPt(e); setZoom(view.zoom*(e.deltaY<0?1.15:1/1.15), p[0], p[1]); }, {passive:false});
 $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
 $("zoomOut").onclick=()=>setZoom(view.zoom/1.3);
-$("zoomFit").onclick=()=>{ view.zoom=fitZoom(); view.panX=0; view.panY=0; draw(); updateZoomUI(); };
+$("zoomFit").onclick=()=>{ fitView(); draw(); updateZoomUI(); };
 /* THE PERCENTAGE IS TYPED (Glen, 2026-08-21: 100% at his monitor "seems unwieldy and not very
    useful"). Comparability needs a SHARED number, not a particular one: type the same percentage
    in both applications and the two windows show one size, at whatever size is comfortable. */
@@ -5753,7 +5783,7 @@ $("zoomPct").addEventListener("change",e=>{
   const v=parseInt(String(e.target.value).replace(/[^0-9]/g,""),10);
   if(v>=5 && v<=2000) setZoom(v/100); else updateZoomUI();
 });
-view.zoom=fitZoom(); updateZoomUI();   /* open fitted, reported truthfully */
+fitView(); updateZoomUI();   /* open fitted, reported truthfully */
 /* ---------- Pan scrollbars, Sangala Blocks' control by the same names (Glen, 2026-08-21:
    "what happened to the pan sliders in both?" - there never were any; panning was Space-drag
    and middle-mouse, invisible). Shown only when the park-able world (page + WS_MARGIN of
@@ -5807,7 +5837,7 @@ sbDrag($("sbHt"),true); sbDrag($("sbVt"),false);
 const __draw_sb=draw; draw=function(){ __draw_sb(); syncScrollbars(); };
 $("bOrient").onclick=()=>{ matLandscape=!matLandscape;
   $("bOrient").classList.toggle("on",matLandscape);
-  view.zoom=fitZoom(); view.panX=0; view.panY=0;   // reframe the turned mat
+  fitView();   // reframe the turned mat
   draw(); updateZoomUI();
   say(matLandscape ? "Mat turned to landscape - the workspace is wider now. The mat and the cut are unchanged."
                    : "Mat back to portrait."); };
