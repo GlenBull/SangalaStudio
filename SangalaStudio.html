@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-08.207 -->
+<!-- SANGALA_VERSION: 2026-09-12.208 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -690,32 +690,51 @@ function loadSVG(text){
     }
     return out.length>=2 ? closeRing(dedupePoly(out)) : null;
   }
-  function sample(el){
-    const v=verts(el); if(v) return v;                 // it has real vertices - no need to walk it
+  /* A <path> may hold SEVERAL subpaths - Silhouette writes a shape and its interior detail as one
+     compound path - and each subpath is its own ring. Walking the element's whole length into a
+     single polyline joined them end to start, drawing a straight line across every gap: lines that
+     exist in no file, and that the classifier then CUT. (Elaine Wolfe, 2026-09-12, "Easter Egg
+     Lantern": 38 of its 99 paths are compound, and the red ones alone gained 73 phantom cut
+     segments. Inkscape never showed them, because it strokes each subpath separately.)
+     The walk is by ARC length, so two consecutive samples can never be further apart than one step -
+     except across a subpath break, where getPointAtLength jumps to the next subpath's start. That
+     makes the break exact to detect rather than a guess, and needs no parsing of the d string. */
+  function sampleRings(el){
+    const v=verts(el); if(v) return [v];               // it has real vertices - no need to walk it
     const len=el.getTotalLength?el.getTotalLength():0; if(!len) return null;
     const m=el.getCTM(); const sc=m?Math.hypot(m.a,m.b):1;
     // getCTM() maps to pixel space -> convert px->mm; if no CTM the raw points are
     // already in user units -> convert with the svg's mm-per-unit scale.
     const mmlen = m ? len*sc*PX2MM : len*scale;
-    const n=Math.max(8,Math.ceil(mmlen*4)); const poly=[];
+    const n=Math.max(8,Math.ceil(mmlen*4)), step=mmlen/n, BREAK=Math.max(3*step,0.5);
+    const rings=[]; let poly=[], prev=null;
     for(let i=0;i<=n;i++){const p=el.getPointAtLength(len*i/n);rootPt.x=p.x;rootPt.y=p.y;
       let X,Y;
       if(m){const q=rootPt.matrixTransform(m); X=q.x*PX2MM; Y=q.y*PX2MM;}
       else { X=p.x*scale; Y=p.y*scale; }
       if(!isFinite(X)||!isFinite(Y)) return null;   // bad point -> skip the whole path (no mangled shapes)
-      poly.push([X,Y]);}
-    return poly.length>=2?closeRing(dedupePoly(simplify(poly,0.08))):null;   // one node per corner, and a closed shape's ends exactly together
+      if(prev && Math.hypot(X-prev[0],Y-prev[1])>BREAK && poly.length>=2){ rings.push(poly); poly=[]; }
+      poly.push([X,Y]); prev=[X,Y];}
+    if(poly.length>=2) rings.push(poly);
+    const out=rings.map(r=>closeRing(dedupePoly(simplify(r,0.08)))).filter(r=>r&&r.length>=2);   // one node per corner, and a closed shape's ends exactly together
+    return out.length?out:null;
   }
   const gmap={};   // remap saved data-group ids to fresh session group ids (avoid collisions with groupSeq)
   els.forEach(el=>{
     // silo files classify by line style; a plain (no-red) design cuts every shape (old behavior).
     const kind = silo ? classifyKind(el) : "cut";
-    const poly = sample(el); if(!poly) return;   // un-flattenable stays in svgDoc, just not an editable object
+    const rings = sampleRings(el); if(!rings) return;   // un-flattenable stays in svgDoc, just not an editable object
+    // A compound path becomes ONE object per OUTER ring, each carrying the rings it encloses as holes -
+    // which is exactly what cutPolys() already cuts (the outline plus every inner loop) and what draw()
+    // already shows. nestRings decides which is which by even-odd containment, the same rule the SVG
+    // fill uses, so a shape with interior detail comes in as one piece rather than several.
+    const groups = rings.length>1 ? nestRings(rings) : [{outer:rings[0], holes:[]}];
     const dgp = el.getAttribute && el.getAttribute("data-gpath"), dg = el.getAttribute && el.getAttribute("data-group");   // restore (nested) grouping saved by Save SVG
     let gpath=[];
     if(dgp) gpath = dgp.trim().split(/\s+/).filter(Boolean).map(id=>{ if(!(id in gmap)) gmap[id]=++groupSeq; return gmap[id]; });   // remap each level, preserving which objects share which level
     else if(dg!=null && dg!==""){ if(!(dg in gmap)) gmap[dg]=++groupSeq; gpath=[gmap[dg]]; }   // legacy flat group -> one-level path
-    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:poly, group:gpath.length?gpath[0]:null, gpath:gpath.length?gpath:null};
+    const o={id:++objSeq, el:el, kind:kind, orig:kind, poly:groups[0].outer, group:gpath.length?gpath[0]:null, gpath:gpath.length?gpath:null};
+    if(groups[0].holes.length) o.holes=groups[0].holes;   // a Sangala-saved data-holes below overrides this
     const hs=parseHoles(el);                                     // a frame saved by Sangala carries its inner loops in data-holes,
     if(hs){ const m=el.getCTM();                                 // in the element's OWN user units - so map them through the SAME
       o.holes=hs.map(ring=>ring.map(p=>{                         // transform sample() gives the outer. Without this, Save SVG's cropped
@@ -735,6 +754,16 @@ function loadSVG(text){
       else if(tag==="circle"){ const c=mapP(+el.getAttribute("cx")||0,+el.getAttribute("cy")||0); el.setAttribute("cx",fmtn(c[0])); el.setAttribute("cy",fmtn(c[1])); el.setAttribute("r",fmtn((+el.getAttribute("r")||0)*sc)); }
       else if(tag==="ellipse"){ const c=mapP(+el.getAttribute("cx")||0,+el.getAttribute("cy")||0); el.setAttribute("cx",fmtn(c[0])); el.setAttribute("cy",fmtn(c[1])); el.setAttribute("rx",fmtn((+el.getAttribute("rx")||0)*sc)); el.setAttribute("ry",fmtn((+el.getAttribute("ry")||0)*sc)); } }
     objects.push(o);
+    // Disjoint outer rings in the SAME path are separate shapes, so each gets its own object on a clone
+    // of the element - the clone carries the stroke it is classified by and any data-* it holds. The id
+    // does not come with it: two elements sharing one id would break every <use> that refers to it.
+    for(let gi=1; gi<groups.length; gi++){
+      const c=el.cloneNode(false); if(c.removeAttribute) c.removeAttribute("id");
+      if(el.parentNode) el.parentNode.insertBefore(c, el.nextSibling);
+      const o2={id:++objSeq, el:c, kind:kind, orig:kind, poly:groups[gi].outer, group:o.group, gpath:o.gpath};
+      if(groups[gi].holes.length) o2.holes=groups[gi].holes;
+      objects.push(o2);
+    }
   });
   if(!cutObjs().length && !scoreObjs().length && !objects.some(o=>isBar(o)||o.mesh)){say("No cut lines found in that SVG.");clearDoc();return;}   // a 3D-only design (bars / combined parts) is valid though it has no cut lines
   if(!silo) normalize();
