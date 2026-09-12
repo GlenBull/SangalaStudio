@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-12.208 -->
+<!-- SANGALA_VERSION: 2026-09-12.209 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -5717,11 +5717,28 @@ function updateZoomUI(){ const z=$("zoomPct");
   if(document.activeElement!==z) z.value=Math.round(view.zoom*100)+"%"; }
 function fitZoom(){   /* the zoom that fits the page in the window - what 100% used to mean */
   const w=worldParams();
-  const fk=Math.min(cv.width/(w.vw+2*VIEW_MARGIN), cv.height/(w.vh+2*VIEW_MARGIN));
+  /* Measure the canvas where it actually IS, not by cv.width/cv.height. Those are the backing store,
+     and until the first draw() has run they still hold the element's declared width="560" height="760",
+     so the fit taken at load framed a canvas that does not exist: the page opened at 52% of its proper
+     size on a 1241 x 1264 board, and never re-fitted, because draw() resizes the backing store without
+     touching the zoom. (Glen, 2026-09-12: "when the file is started, zoom does not fill the space.") */
+  const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const W=r.width>2?r.width*dpr:cv.width, H=r.width>2?r.height*dpr:cv.height;
+  const fk=Math.min(W/(w.vw+2*VIEW_MARGIN), H/(w.vh+2*VIEW_MARGIN));
   return fk/w.baseK; }
 function setZoom(nz, cx, cy){   // cx,cy = canvas px to keep fixed under the cursor (default: center)
   nz=Math.min(20, Math.max(0.05, nz)); if(cx==null){ cx=cv.width/2; cy=cv.height/2; }
-  view.panX = cx-(cx-view.panX)*(nz/view.zoom); view.panY = cy-(cy-view.panY)*(nz/view.zoom); view.zoom = nz;
+  /* draw() puts the page on screen at  pan + MX*k + x*k , and MX*k is (cv.width - vw*k)/2 - a CENTRING
+     term that moves with the zoom. Anchoring on pan alone ignored it, so the point that actually stayed
+     still was nowhere near the cursor: measured on a 1241 x 1264 board, one press of + slid the page
+     centre 113 px left and 190 px up, the fixed point sitting at (992, 1256) - the bottom-right corner.
+     (Glen, 2026-09-12: "zoom does not zoom from the center".) Solve for the design point under (cx,cy)
+     and put that same point back under (cx,cy) at the new scale, centring term included. */
+  const w=worldParams(), k=w.baseK*view.zoom, k2=w.baseK*nz;
+  const dx=(cx-view.panX-(cv.width -w.vw*k)/2)/k, dy=(cy-view.panY-(cv.height-w.vh*k)/2)/k;
+  view.panX = cx-(cv.width -w.vw*k2)/2-dx*k2;
+  view.panY = cy-(cv.height-w.vh*k2)/2-dy*k2;
+  view.zoom = nz;
   clampPan(); draw(); updateZoomUI(); }
 cv.addEventListener("wheel",(e)=>{ e.preventDefault(); const p=canvasPt(e); setZoom(view.zoom*(e.deltaY<0?1.15:1/1.15), p[0], p[1]); }, {passive:false});
 $("zoomIn").onclick=()=>setZoom(view.zoom*1.3);
