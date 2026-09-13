@@ -73,12 +73,35 @@ curl -fsSL "$BASE/tools/sangala_bridge.py" -o "$TMP/bridge" || fail "could not d
 # The launcher is a convenience, not a requirement: an older copy still starts
 # the program, so a missing one must not stop the rest of the update.
 curl -fsSL "$BASE/Sangala%20Studio.command" -o "$TMP/launcher" 2>/dev/null
+# And a copy of this updater, which has to be able to replace itself: nothing else
+# ever replaces it. The app bundle carries a template of the program, but it only
+# fills in files the folder does not already have, so an updater already sitting
+# here would keep its old rules forever.
+curl -fsSL "$BASE/Update%20Sangala%20Studio.command" -o "$TMP/self" 2>/dev/null
 
 # ---- 2. Check each download is complete and is the file it claims to be.
 grep -q "</html>" "$TMP/html"   || fail "the page downloaded incomplete."
 grep -q "<blocks" "$TMP/xml"    || fail "the blocks file downloaded incomplete."
 grep -q "Sangala Studio bridge" "$TMP/bridge" || fail "the engine downloaded incomplete."
 if [ "$(wc -c < "$TMP/bridge")" -lt 20000 ]; then fail "the engine downloaded incomplete."; fi
+
+# ---- 2a. Is this updater itself out of date? Replace it and hand straight over to
+#          the new copy, so the rest of the update runs under the new rules. bash
+#          reads a script as it goes, so a script that rewrites itself and carries
+#          on is reading a file that has changed underneath it: exec is what makes
+#          this safe. SANGALA_UPDATER_REPLACED stops a loop if the two copies
+#          somehow never match.
+SELF="$(basename "$0")"
+if [ -z "$SANGALA_UPDATER_REPLACED" ] && [ -s "$TMP/self" ] \
+   && grep -q "Checking for a newer Sangala Studio" "$TMP/self" \
+   && ! cmp -s "$TMP/self" "$SELF"; then
+  [ -f "$SELF" ] && cp -p "$SELF" "$SELF.bak"
+  mv "$TMP/self" "$SELF" || fail "the updater could not replace itself."
+  chmod +x "$SELF"
+  echo "The updater itself was out of date. Starting the new one..."
+  echo
+  SANGALA_UPDATER_REPLACED=1 exec "./$SELF"
+fi
 
 # ---- 3. Is any of it actually new? If not, change nothing at all.
 NEW=0
@@ -116,7 +139,11 @@ fi
 # ---- 4. Refresh the launcher, whether or not anything else was new, and make
 #         sure it is allowed to run. A copy that arrived by email, Dropbox or a
 #         zip file loses that permission; this puts it back.
-if [ -s "$TMP/launcher" ] && grep -q "Sangala Studio" "$TMP/launcher"; then
+#         Only when there IS one to refresh. In the notarized Mac package the
+#         launcher lives inside "Sangala Studio.app", where nothing may write, and
+#         a copy dropped here would be a second, stale way to start the program -
+#         which step 5 would then put on the Desktop in place of the app.
+if [ -f "$LAUNCHER" ] && [ -s "$TMP/launcher" ] && grep -q "Sangala Studio" "$TMP/launcher"; then
   cmp -s "$TMP/launcher" "$LAUNCHER" || mv "$TMP/launcher" "$LAUNCHER"
 fi
 [ -f "$LAUNCHER" ] && chmod +x "$LAUNCHER"
