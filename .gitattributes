@@ -11,3 +11,6 @@
 # (tools/chromebook/build_zip.py normalises on the way into the zip as well - belt and braces.)
 *.sh                                text eol=lf
 tools/chromebook/99-silhouette.rules text eol=lf
+
+# Mac launchers must keep Unix line endings or macOS will not run them.
+*.command text eol=lf
