@@ -19,11 +19,9 @@
 
 cd "$(dirname "$0")" || exit 1
 
-# The page and the blocks come from the main line of the project. The Mac
-# engine and these two launchers still live on the mac-bridge branch; when
-# that branch is merged, BRIDGE_BASE becomes the same address as BASE.
+# The page, the blocks, the engine and the launchers all come from the main
+# line of the project.
 BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
-BRIDGE_BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/mac-bridge"
 
 HTML="SangalaStudio.html"
 XML="Sangala for Snap.xml"
@@ -71,10 +69,10 @@ echo
 #         good file with a page of HTML apologising.
 curl -fsSL "$BASE/$HTML"                        -o "$TMP/html" || fail "could not download the page."
 curl -fsSL "$BASE/Sangala%20for%20Snap.xml"     -o "$TMP/xml"  || fail "could not download the blocks file."
-curl -fsSL "$BRIDGE_BASE/tools/sangala_bridge.py" -o "$TMP/bridge" || fail "could not download the engine."
+curl -fsSL "$BASE/tools/sangala_bridge.py" -o "$TMP/bridge" || fail "could not download the engine."
 # The launcher is a convenience, not a requirement: an older copy still starts
 # the program, so a missing one must not stop the rest of the update.
-curl -fsSL "$BRIDGE_BASE/Sangala%20Studio.command" -o "$TMP/launcher" 2>/dev/null
+curl -fsSL "$BASE/Sangala%20Studio.command" -o "$TMP/launcher" 2>/dev/null
 
 # ---- 2. Check each download is complete and is the file it claims to be.
 grep -q "</html>" "$TMP/html"   || fail "the page downloaded incomplete."
