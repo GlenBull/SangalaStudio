@@ -209,7 +209,9 @@ USB only, user-mode.** This constraint is absolute.
   up).** Jo and Moses both read the top level, so a family-wide document buried in
   one application's folder is a document they will not find.
 - **THE APPLICATION IS PUBLISHED TOO, AND ON EVERY COMMIT (Glen, 2026-09-13: "the standing protocol is
-  that whenever a commit is made, the dropbox version is also updated").** This file used to end the rule
+  that whenever a commit is made, the dropbox version is also updated").**
+  **This is a family-wide rule and its authority is the GLOBAL guide** - `C:\Users\glenb\.claude\CLAUDE.md`, section "A push to GitHub is not a delivery. Dropbox is." - because a rule about all three filed under one of them is invisible in the other two. What follows here is the same rule with this application's own paths.
+ This file used to end the rule
   above with "(the app itself needs no copying — `Update SangalaStudio.cmd` pulls the page and exe from
   GitHub)". That is true of a tester who RUNS the updater and false of everyone else: the Dropbox folder
   is what Jo, Moses and the students install from, so a copy left behind there is the version they get.
