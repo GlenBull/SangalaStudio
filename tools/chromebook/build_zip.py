@@ -7,24 +7,20 @@ Read Me drifted out of the repository - two of those three existed ONLY inside t
 it contains now has a tracked source, so rebuilding is repeatable and a change can be reviewed as a
 diff rather than by unzipping.
 
-Two things this handles that a plain zip command would not:
+One thing this handles that a plain zip command would not:
 
   * LINE ENDINGS. The target is Linux. Every text member is written with LF, whatever the working
     copy has, because a setup.sh with CRLF fails on the Chromebook with an unreadable error about
     '\\r'. Binary members (the wasm, the ONNX model, the icon) are copied byte for byte.
 
-  * THE BRIDGE IS ON ANOTHER BRANCH. sangala_bridge.py lives on mac-bridge, which Glen has kept
-    unmerged. It is read with `git show mac-bridge:tools/sangala_bridge.py` rather than from the
-    working tree, so the zip cannot pick up whatever branch happens to be checked out. When
-    mac-bridge is merged, drop BRIDGE_REF and read it from the tree like everything else.
+sangala_bridge.py was read from the mac-bridge branch until that branch was merged; it is an
+ordinary tracked file now, and SIGNATURE below still checks that the file is the bridge.
 """
 
 import os
-import subprocess
 import sys
 import zipfile
 
-BRIDGE_REF = "mac-bridge:tools/sangala_bridge.py"
 ZIP_NAME = "Sangala Studio for Chromebook.zip"
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,6 +30,7 @@ CB = os.path.join(REPO, "tools", "chromebook")
 TEXT = [
     ("Read Me First.txt", "tools/chromebook/Read Me First.txt"),
     ("setup.sh", "tools/setup_chromebook.sh"),
+    ("sangala_bridge.py", "tools/sangala_bridge.py"),
     ("99-silhouette.rules", "tools/chromebook/99-silhouette.rules"),
     ("SangalaStudio.html", "SangalaStudio.html"),
     ("Sangala for Snap.xml", "Sangala for Snap.xml"),
@@ -53,6 +50,10 @@ BINARY = [
     ("assets/u2netp.onnx", "assets/u2netp.onnx"),
 ]
 
+# What a member must contain to count as itself: the check bridge_bytes() used to make, kept now
+# that the bridge is read from the tree.
+SIGNATURE = {"sangala_bridge.py": b"class Cutter"}
+
 
 def lf(raw):
     """Normalise to LF without touching anything else."""
@@ -67,17 +68,6 @@ def read(rel):
         return f.read()
 
 
-def bridge_bytes():
-    try:
-        out = subprocess.run(["git", "-C", REPO, "show", BRIDGE_REF],
-                             capture_output=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError) as e:
-        sys.exit("could not read %s from git (%s)" % (BRIDGE_REF, e))
-    if b"class Cutter" not in out:
-        sys.exit("%s does not look like the bridge" % BRIDGE_REF)
-    return lf(out)
-
-
 def main(argv):
     out_dir = argv[1] if len(argv) > 1 else CB
     os.makedirs(out_dir, exist_ok=True)
@@ -86,9 +76,13 @@ def main(argv):
     members = []
     for name, rel in TEXT:
         members.append((name, lf(read(rel))))
-    members.append(("sangala_bridge.py", bridge_bytes()))
     for name, rel in BINARY:
         members.append((name, read(rel)))
+
+    for name, data in members:
+        sig = SIGNATURE.get(name)
+        if sig is not None and sig not in data:
+            sys.exit("%s does not look like itself (no %r)" % (name, sig))
 
     # Order the members the way the old zip listed them: the three files a person needs first, the
     # bridge, then the page and its assets.

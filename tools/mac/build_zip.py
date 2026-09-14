@@ -13,39 +13,31 @@ Two things this handles that a plain zip command would not:
     executable, and that mark has to survive the round trip through the zip. Both launchers are
     written with mode 755; everything else is 644.
 
-  * LINE ENDINGS, and THE BRANCH. The target is macOS, so every text member is written with LF -
-    a .command with CRLF fails with an unreadable complaint about '\\r'. The engine and the two
-    launchers live on the mac-bridge branch, which Glen has kept unmerged, so they are read with
-    `git show mac-bridge:...` rather than from the working tree: the kit cannot then depend on
-    which branch happens to be checked out. When mac-bridge is merged, drop GIT_MEMBERS and read
-    them from the tree like everything else.
+  * LINE ENDINGS. The target is macOS, so every text member is written with LF - a .command with
+    CRLF fails with an unreadable complaint about '\\r'. The engine and the two launchers were read
+    from the mac-bridge branch until that branch was merged; they are ordinary tracked files now.
 
 The default output folder is the Mac folder in Dropbox, because that is where Moses fetches it.
 """
 
 import os
-import subprocess
 import sys
 import zipfile
 
 ZIP_NAME = "Sangala Studio for Mac.zip"
-BRANCH = "mac-bridge"
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DROPBOX = os.path.join(os.path.expanduser("~"), "UVa Lab School Dropbox", "AI Sandbox",
                        "Design through Making", "Sangala Tools", "Other Platforms", "Mac")
 
-# (path in the zip, path on the mac-bridge branch). These are the Mac-only files.
-GIT_MEMBERS = [
-    ("Sangala Studio.command", "Sangala Studio.command"),
-    ("Update Sangala Studio.command", "Update Sangala Studio.command"),
-    ("sangala_bridge.py", "tools/sangala_bridge.py"),
-]
 # (path in the zip, source on disk relative to the repo). Order is the order a person unzipping
 # sees. The engine sits BESIDE the page here, not in tools/ - the launchers accept either, and a
 # flat folder is kinder to someone who has just unzipped it.
 TEXT = [
     ("Read Me First.txt", "tools/mac/Read Me First.txt"),
+    ("Sangala Studio.command", "Sangala Studio.command"),
+    ("Update Sangala Studio.command", "Update Sangala Studio.command"),
+    ("sangala_bridge.py", "tools/sangala_bridge.py"),
     ("mac_usb_probe.py", "tools/mac_usb_probe.py"),
     ("SangalaStudio.html", "SangalaStudio.html"),
     ("Sangala for Snap.xml", "Sangala for Snap.xml"),
@@ -88,16 +80,6 @@ def read(rel):
         return f.read()
 
 
-def from_git(rel):
-    ref = "%s:%s" % (BRANCH, rel)
-    try:
-        out = subprocess.run(["git", "-C", REPO, "show", ref],
-                             capture_output=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError) as e:
-        sys.exit("could not read %s from git (%s)" % (ref, e))
-    return lf(out)
-
-
 def main(argv):
     out_dir = argv[1] if len(argv) > 1 else DROPBOX
     if not os.path.isdir(out_dir):
@@ -105,8 +87,6 @@ def main(argv):
     out_path = os.path.join(out_dir, ZIP_NAME)
 
     members = []
-    for name, rel in GIT_MEMBERS:
-        members.append((name, from_git(rel)))
     for name, rel in TEXT:
         members.append((name, lf(read(rel))))
     for name, rel in BINARY:
