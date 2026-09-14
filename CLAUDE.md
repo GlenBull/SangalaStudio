@@ -207,9 +207,23 @@ USB only, user-mode.** This constraint is absolute.
   `Merging a Fork into Main` and `Github Merge` (Glen, 2026-08-12, on where the
   Sangala Tools Technical Manual belongs — I filed it under Studio and he moved it
   up).** Jo and Moses both read the top level, so a family-wide document buried in
-  one application's folder is a document they will not find. (The app
-  itself needs no copying — `Update SangalaStudio.cmd` pulls the page and exe from
-  GitHub.)
+  one application's folder is a document they will not find.
+- **THE APPLICATION IS PUBLISHED TOO, AND ON EVERY COMMIT (Glen, 2026-09-13: "the standing protocol is
+  that whenever a commit is made, the dropbox version is also updated").** This file used to end the rule
+  above with "(the app itself needs no copying — `Update SangalaStudio.cmd` pulls the page and exe from
+  GitHub)". That is true of a tester who RUNS the updater and false of everyone else: the Dropbox folder
+  is what Jo, Moses and the students install from, so a copy left behind there is the version they get.
+  Mosaic sat at `.93` in Dropbox while the repository moved to `.102` because I believed that
+  parenthetical. **`tools\sangala_publish.py` is the tool and it says so in its own first line — "Run
+  this after ANY commit or update to any of the three applications."** Run it bare to report, then
+  `--publish` (optionally naming one application) to fix, then bare again to confirm:
+
+      python tools\sangala_publish.py
+      python tools\sangala_publish.py --publish Mosaic
+      python tools\sangala_publish.py
+
+  It checks the page by hash AND by its own version marker, the exe by hash, the helper `.cmd` files by
+  normalized content, the Studio and Blocks zips, and for Blocks every LDraw part the parts list needs.
 - **Commit and push after each verified-good change** — one change, verify it's
   good (see line-14 physical-test rule for machine-facing changes), then commit
   and push so any regression is a `git diff` away, not a guess.
