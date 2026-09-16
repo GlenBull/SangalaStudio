@@ -19,6 +19,18 @@
 
 cd "$(dirname "$0")" || exit 1
 
+# --quiet is how the app runs this at startup: no window to read, nobody waiting to
+# press a key. Everything the interactive run prints goes nowhere, and the script
+# never stops for input. A person who double-clicks this file passes no argument and
+# sees exactly what they saw before.
+QUIET=""
+[ "$1" = "--quiet" ] && QUIET=1
+[ -n "$QUIET" ] && exec >/dev/null 2>&1
+
+# A download that never answers must not hold the program shut. These apply to the
+# interactive run as well: a wait with no end is no kinder with a window open.
+CURL="curl -fsSL --connect-timeout 5 --max-time 120"
+
 # The page, the blocks, the engine and the launchers all come from the main
 # line of the project.
 BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
@@ -56,8 +68,10 @@ fail() {
   echo "Your current Sangala Studio was NOT changed, so it still works."
   echo "Check the internet connection and run this again."
   echo
-  echo "Press any key to close this window."
-  read -r -n 1 -s
+  if [ -z "$QUIET" ]; then
+    echo "Press any key to close this window."
+    read -r -n 1 -s
+  fi
   exit 1
 }
 
@@ -67,17 +81,17 @@ echo
 # ---- 1. Download. curl is built into macOS. -f fails on an error page rather
 #         than saving it, which is what stops a web outage from overwriting a
 #         good file with a page of HTML apologising.
-curl -fsSL "$BASE/$HTML"                        -o "$TMP/html" || fail "could not download the page."
-curl -fsSL "$BASE/Sangala%20for%20Snap.xml"     -o "$TMP/xml"  || fail "could not download the blocks file."
-curl -fsSL "$BASE/tools/sangala_bridge.py" -o "$TMP/bridge" || fail "could not download the engine."
+$CURL "$BASE/$HTML"                        -o "$TMP/html" || fail "could not download the page."
+$CURL "$BASE/Sangala%20for%20Snap.xml"     -o "$TMP/xml"  || fail "could not download the blocks file."
+$CURL "$BASE/tools/sangala_bridge.py" -o "$TMP/bridge" || fail "could not download the engine."
 # The launcher is a convenience, not a requirement: an older copy still starts
 # the program, so a missing one must not stop the rest of the update.
-curl -fsSL "$BASE/Sangala%20Studio.command" -o "$TMP/launcher" 2>/dev/null
+$CURL "$BASE/Sangala%20Studio.command" -o "$TMP/launcher" 2>/dev/null
 # And a copy of this updater, which has to be able to replace itself: nothing else
 # ever replaces it. The app bundle carries a template of the program, but it only
 # fills in files the folder does not already have, so an updater already sitting
 # here would keep its old rules forever.
-curl -fsSL "$BASE/Update%20Sangala%20Studio.command" -o "$TMP/self" 2>/dev/null
+$CURL "$BASE/Update%20Sangala%20Studio.command" -o "$TMP/self" 2>/dev/null
 
 # ---- 2. Check each download is complete and is the file it claims to be.
 grep -q "</html>" "$TMP/html"   || fail "the page downloaded incomplete."
@@ -100,7 +114,7 @@ if [ -z "$SANGALA_UPDATER_REPLACED" ] && [ -s "$TMP/self" ] \
   chmod +x "$SELF"
   echo "The updater itself was out of date. Starting the new one..."
   echo
-  SANGALA_UPDATER_REPLACED=1 exec "./$SELF"
+  SANGALA_UPDATER_REPLACED=1 exec "./$SELF" "$@"
 fi
 
 # ---- 3. Is any of it actually new? If not, change nothing at all.
@@ -184,6 +198,8 @@ OSA
 fi
 
 echo
-echo "Press any key to close this window."
-read -r -n 1 -s
+if [ -z "$QUIET" ]; then
+  echo "Press any key to close this window."
+  read -r -n 1 -s
+fi
 exit 0
