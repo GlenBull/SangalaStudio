@@ -32,7 +32,7 @@ from pptx.enum.text import PP_ALIGN
 PHOTOS = (r"C:\Users\glenb\UVa Lab School Dropbox\AI Sandbox\Design through Making"
           r"\_Drafts\Working\NTLS Photos")
 OUT = (r"C:\Users\glenb\UVa Lab School Dropbox\AI Sandbox\Design through Making"
-       r"\_Drafts\Networked Weather Station (Ver 2.0).pptx")
+       r"\_Drafts\Networked Weather Station (Ver 3.0).pptx")
 
 W, H = Inches(13.333), Inches(7.5)
 INK = RGBColor(0x1A, 0x1A, 0x1A)
@@ -41,7 +41,10 @@ QUIET = RGBColor(0x8A, 0x8A, 0x8A)
 
 # (photo | None, time mark, on-slide line, speaker notes)
 SLIDES = [
-    (None, "0:00",
+    # TITLE. photo_07 is the establishing shot: a deep valley between two ridges, the far slope
+    # covered to the top with small farms and pale scattered homesteads - it shows in one frame the
+    # thing the network has to cover, and it reads from the back of a room.
+    ("photo_07.jpg", "0:00",
      "The Networked Weather Station",
      "Mount Elgon, eastern Uganda.\n\nJOHN: \u201cThis is the Mount Elgon region of eastern Uganda, on "
      "the border with Kenya. In a moment you are going to watch a weather reading leave it.\u201d"),
@@ -166,6 +169,7 @@ def main():
             p = os.path.join(PHOTOS, photo)
             if not os.path.exists(p):
                 sys.exit("missing photograph: " + p)
+            title = photo == "photo_07.jpg"
             flat = photo == "weather_station.png"
             if flat:
                 fit_image(slide, p, 1.5)
@@ -175,7 +179,13 @@ def main():
                         mark, 16, True, QUIET, PP_ALIGN.RIGHT)
             else:
                 cover_image(slide, p)
-                if line:
+                if line and title:
+                    scrim(slide, H - Inches(2.3), Inches(2.3))
+                    textbox(slide, Inches(0.7), H - Inches(2.05), W - Inches(1.4), Inches(1.0),
+                            line, 46, True, PAPER)
+                    textbox(slide, Inches(0.75), H - Inches(1.05), W - Inches(1.4), Inches(0.6),
+                            "Mount Elgon, eastern Uganda", 22, False, PAPER)
+                elif line:
                     scrim(slide, H - Inches(1.35), Inches(1.35))
                     textbox(slide, Inches(0.6), H - Inches(1.15), W - Inches(1.2), Inches(0.9),
                             line, 30, True, PAPER)
