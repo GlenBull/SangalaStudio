@@ -32,7 +32,7 @@ from pptx.enum.text import PP_ALIGN
 PHOTOS = (r"C:\Users\glenb\UVa Lab School Dropbox\AI Sandbox\Design through Making"
           r"\_Drafts\Working\NTLS Photos")
 OUT = (r"C:\Users\glenb\UVa Lab School Dropbox\AI Sandbox\Design through Making"
-       r"\_Drafts\Networked Weather Station (Ver 1.0).pptx")
+       r"\_Drafts\Networked Weather Station (Ver 2.0).pptx")
 
 W, H = Inches(13.333), Inches(7.5)
 INK = RGBColor(0x1A, 0x1A, 0x1A)
@@ -74,12 +74,12 @@ SLIDES = [
      "taken where the people are, and carried out of a place with no infrastructure at all. "
      "Gerald.\u201d"),
 
-    (None, "2:30", "The sending unit \u2014 Gerald",
+    ("weather_station.png", "2:30", "The sending unit \u2014 Gerald",
      "GERALD (2:30\u20134:30): the weather sensors, the transceiver, and the Yagi antenna. LoRa radio "
      "\u2014 long range, very little power, and nothing in between. No tower, no subscription, no "
      "wire. Takes a reading."),
 
-    (None, "4:30", "The base station \u2014 Roger",
+    ("weather_station.png", "4:30", "The base station \u2014 Roger",
      "ROGER (4:30\u20136:30): the receiver built on the MakerPort microcontroller. The reading Gerald "
      "just took arrives on screen.\n\n6:30\u20137:30 IS UNASSIGNED. If the link did not take, this is "
      "the retry. Use it and say nothing about it."),
@@ -130,6 +130,19 @@ def cover_image(slide, path):
                              Inches(w), Inches(h))
 
 
+def fit_image(slide, path, bottom_clear):
+    """CONTAIN rather than cover. The weather station is a wide flat-lay on white and the sensors sit
+    at the far left and right - cropping it to 16:9 would cut them off, which is the whole subject."""
+    from PIL import Image
+    iw, ih = Image.open(path).size
+    sw = W / 914400.0
+    sh = H / 914400.0 - bottom_clear
+    scale = min(sw / iw, sh / ih)
+    w, h = iw * scale, ih * scale
+    slide.shapes.add_picture(path, Inches((sw - w) / 2), Inches((sh - h) / 2 + 0.2),
+                             Inches(w), Inches(h))
+
+
 def scrim(slide, top, height):
     """A dark band behind the caption so white text reads over any photograph."""
     from pptx.enum.shapes import MSO_SHAPE
@@ -153,13 +166,21 @@ def main():
             p = os.path.join(PHOTOS, photo)
             if not os.path.exists(p):
                 sys.exit("missing photograph: " + p)
-            cover_image(slide, p)
-            if line:
-                scrim(slide, H - Inches(1.35), Inches(1.35))
-                textbox(slide, Inches(0.6), H - Inches(1.15), W - Inches(1.2), Inches(0.9),
-                        line, 30, True, PAPER)
-            textbox(slide, W - Inches(1.5), Inches(0.25), Inches(1.1), Inches(0.4),
-                    mark, 16, True, PAPER, PP_ALIGN.RIGHT)
+            flat = photo == "weather_station.png"
+            if flat:
+                fit_image(slide, p, 1.5)
+                textbox(slide, Inches(0.6), H - Inches(1.25), W - Inches(1.2), Inches(0.9),
+                        line, 30, True, INK)
+                textbox(slide, W - Inches(1.5), Inches(0.25), Inches(1.1), Inches(0.4),
+                        mark, 16, True, QUIET, PP_ALIGN.RIGHT)
+            else:
+                cover_image(slide, p)
+                if line:
+                    scrim(slide, H - Inches(1.35), Inches(1.35))
+                    textbox(slide, Inches(0.6), H - Inches(1.15), W - Inches(1.2), Inches(0.9),
+                            line, 30, True, PAPER)
+                textbox(slide, W - Inches(1.5), Inches(0.25), Inches(1.1), Inches(0.4),
+                        mark, 16, True, PAPER, PP_ALIGN.RIGHT)
         else:
             textbox(slide, Inches(1.0), Inches(2.7), W - Inches(2.0), Inches(2.0),
                     line, 44, True, INK)
