@@ -4,6 +4,10 @@ Who is already in the networked weather station group, and which University of V
 faculty might be approached. Companion to the Rain Gauge survey, whose own collaborators
 section covers the open-source projects beyond the University. Sources gathered 2026-09-19.
 
+Ver 1.1 (2026-09-19): Knezek served as president of SITE, has worked with its founder for more
+than thirty years, worked with Wagner on the Yagi antennas, and was part of the Sangala Strand
+at NTLS 2026.
+
 Glen's instructions, 2026-09-19: Frackson Mumba and Jennie Chiu have been asked and have other
 projects, so they are left out. Rich Nguyen and his graduate students have worked with the
 group for ten years and are part of it, not a prospect; he developed FloodWatch.io.
@@ -48,11 +52,15 @@ d.heading("The Group as It Stands")
 d.item("Roger Wagner and Gerald Knezek. ", "Roger Wagner, of 1010 Technologies, makes the "
        "MakerPort microcontroller on which the station is built (MakerPort, n.d.). With Gerald "
        "Knezek, Regents Professor of Learning Technologies at the University of North Texas "
-       "(University of North Texas, n.d.), he built the working prototype: a matched pair of MakerPort boards on 9-volt "
-       "batteries, one carrying the sensors and a LoRa transceiver with a whip antenna, the "
-       "other the receiver with a three-element Yagi. The pair was demonstrated at the National "
-       "Technology Leadership Summit in September 2026, sending a reading across the room with "
-       "no tower, no subscription and no wire.")
+       "(University of North Texas, n.d.), he built the working prototype: a matched pair of "
+       "MakerPort boards on 9-volt batteries, one carrying the sensors and a LoRa transceiver "
+       "with a whip antenna, the other the receiver with a three-element Yagi. Knezek worked "
+       "with Wagner on the Yagi antennas. He served as president of the Society for Information "
+       "Technology and Teacher Education (SITE), and his collaboration with the founder of SITE, "
+       "who leads this project, now runs to more than thirty years. The pair was demonstrated at "
+       "the National Technology Leadership Summit in September 2026, where Knezek was part of "
+       "the Sangala Strand, sending a reading across the room with no tower, no subscription "
+       "and no wire.")
 d.item("John Maloney. ", "The developer of MicroBlocks, the blocks language the station is "
        "programmed in (MicroBlocks, n.d.). The MakerPort was designed expressly to run "
        "MicroBlocks, in a long collaboration with him that predates this project, so the author "
@@ -140,9 +148,9 @@ d.table(
     [
         ["Roger Wagner", "1010 Technologies", "Makes the MakerPort; built the prototype",
          "In the group"],
-        ["Gerald Knezek", "Learning Technologies, University of North Texas",
-         "Built and demonstrated the prototype",
-         "In the group"],
+        ["Gerald Knezek", "Learning Technologies, University of North Texas; past president "
+         "of SITE", "The Yagi antennas; the Sangala Strand at NTLS 2026; thirty years' "
+         "collaboration", "In the group"],
         ["John Maloney", "MicroBlocks", "The language the station runs; the MakerPort was "
          "designed to run it", "In the group"],
         ["Rich Nguyen and students", "Computer Science, UVA",
