@@ -45,6 +45,27 @@ end tell
 OSA
 fi
 
+# Check for a new version before the program opens, so the page a student sees is the
+# current one and nobody has to find a file and double-click it. --quiet means no
+# window and nothing to answer.
+#
+# The wait is capped: a school network that stalls must not hold the program shut. The
+# updater downloads into a scratch folder and moves files into place only at the very
+# end, so stopping it early leaves the working folder exactly as it was - the next
+# launch tries again.
+UPDATER="$WORKDIR/Update Sangala Studio.command"
+if [ -x "$UPDATER" ]; then
+  "$UPDATER" --quiet &
+  UPD=$!
+  waited=0
+  while kill -0 "$UPD" 2>/dev/null && [ "$waited" -lt 20 ]; do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  kill "$UPD" 2>/dev/null
+  wait "$UPD" 2>/dev/null
+fi
+
 cd "$WORKDIR" || exit 1
 
 # First run: install the USB library if missing.
