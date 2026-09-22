@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-22.211 -->
+<!-- SANGALA_VERSION: 2026-09-22.212 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -603,14 +603,15 @@ function printSheet(){
     const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
     const seg=r=>{ let d=""; r.forEach((q,i)=>{ d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" "; }); return d; };
     let art="", n=0, colored=0, photo=0;
-    // THE REFERENCE PHOTOGRAPH PRINTS, when there is one (Glen, 2026-09-22). It goes down FIRST so the
-    // outlines sit over it. refImg.x/y/w/h are in the same design mm as o.poly - integrateTrace builds the
-    // traced outline from exactly those numbers - and the registered cut uses this same OX/OY offset (see
-    // makeIt), so the printed picture and the blade land in one frame. preserveAspectRatio="none" because
-    // the photo can be resized unevenly on the mat and the print must match what the mat showed.
+    // THE REFERENCE PHOTOGRAPH PRINTS, when there is one (Glen, 2026-09-22), and it prints WHERE IT SITS.
+    // "You should never move the position of the image ever. And it did not do this before." An earlier
+    // build of this added the OX/OY mark clearance to it, which silently shifted the picture 40.9 mm from
+    // where the mat showed it - the computer moving the user's work. The mat now draws the registration
+    // zone instead, so the user can see where not to put things. preserveAspectRatio="none" because the
+    // photo can be resized unevenly and the print must match what the mat showed.
     if(refImg && refImg.img && refImg.img.src){
       const href=refImg.img.src;
-      art+='<image x="'+(ox+refImg.x).toFixed(2)+'" y="'+(oy+refImg.y).toFixed(2)
+      art+='<image x="'+refImg.x.toFixed(2)+'" y="'+refImg.y.toFixed(2)
           +'" width="'+refImg.w.toFixed(2)+'" height="'+refImg.h.toFixed(2)
           +'" preserveAspectRatio="none" xlink:href="'+href+'" href="'+href+'"/>';
       photo=1;
@@ -994,6 +995,22 @@ function draw(){
   ctx.fillStyle="#fff";ctx.fillRect(0,0,dw*k,dh*k);            // the page itself
   if(printFile && bgImg && bgImg.complete && bgImg.naturalWidth){ try{ ctx.drawImage(bgImg,0,0,dw*k,dh*k); }catch(e){} }
   ctx.strokeStyle="#cbb78f";ctx.lineWidth=1;ctx.strokeRect(0,0,dw*k,dh*k);
+  // THE REGISTRATION ZONE, shown only while Marks are on (Glen, 2026-09-22: "You should clearly demarcate
+  // where the image should not be placed when the registration marks are turned [on]"). The printer lays
+  // the marks in this margin and the scanner has to find them, so anything the user puts there is lost or
+  // spoils the read. It is DRAWN, not enforced: the design is never moved for the user.
+  if(showMarks && !printFile){
+    const band=(INSET+MARK_LEN)*k;
+    ctx.save();
+    ctx.fillStyle="rgba(200,40,40,.07)";
+    ctx.fillRect(0,0,dw*k,band);                                  // top
+    ctx.fillRect(0,dh*k-band,dw*k,band);                          // bottom
+    ctx.fillRect(0,band,band,dh*k-2*band);                        // left
+    ctx.fillRect(dw*k-band,band,band,dh*k-2*band);                // right
+    ctx.strokeStyle="rgba(200,40,40,.55)"; ctx.lineWidth=1; ctx.setLineDash([5,4]);
+    ctx.strokeRect(band,band,dw*k-2*band,dh*k-2*band);            // keep inside this line
+    ctx.restore();
+  }
   // reference image (beneath the vectors so you can trace over it). After Remove BG,
   // show the cutout over a checkerboard so the transparent background reads as transparent.
   if(refImg && refImg.img && refImg.img.complete && refImg.img.naturalWidth){
