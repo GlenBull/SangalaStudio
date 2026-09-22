@@ -272,6 +272,23 @@ open_page() {                       # hand the address to the ChromeOS browser
 
 PORT=$(find_port)
 if [ -z "$PORT" ]; then
+  # Check for a new version before the program starts, so the page a student sees is the current one
+  # and nobody has to remember to update (Glen, 2026-09-22: without this a classroom of Chromebooks is
+  # always out of date). The same rule as the Mac application's launcher: the wait is capped, so a
+  # school network that stalls cannot hold the program shut, and the updater moves files into place
+  # only at the very end, so stopping it early leaves the folder exactly as it was. Only when the
+  # bridge is NOT already running - a running one keeps its old engine until it is restarted.
+  if [ -f update.sh ]; then
+    bash update.sh --quiet &
+    UPD=$!
+    waited=0
+    while kill -0 "$UPD" 2>/dev/null && [ "$waited" -lt 20 ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    kill "$UPD" 2>/dev/null
+    wait "$UPD" 2>/dev/null
+  fi
   # Not running: start it detached, so the icon opens the application rather than a window to mind.
   : > "$LOG"
   nohup python3 sangala_bridge.py >>"$LOG" 2>&1 &

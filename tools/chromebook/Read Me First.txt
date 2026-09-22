@@ -39,6 +39,13 @@ just close it.
 
 The first time, the icon can take a few seconds to appear in the launcher.
 
+Staying up to date
+------------------
+Nothing to do. Each time the icon starts Sangala Studio, it first checks for a
+newer version and installs it, which takes a few seconds when the Chromebook is
+online. Offline, it starts the version already here. To update by hand, run
+"bash update.sh" in the Terminal from the Sangala Studio folder.
+
 Two things worth knowing
 ------------------------
   - Do NOT add the die cutter as a printer in ChromeOS Settings. Sangala Studio

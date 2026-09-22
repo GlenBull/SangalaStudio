@@ -30,6 +30,7 @@ CB = os.path.join(REPO, "tools", "chromebook")
 TEXT = [
     ("Read Me First.txt", "tools/chromebook/Read Me First.txt"),
     ("setup.sh", "tools/setup_chromebook.sh"),
+    ("update.sh", "tools/chromebook/update.sh"),
     ("sangala_bridge.py", "tools/sangala_bridge.py"),
     ("99-silhouette.rules", "tools/chromebook/99-silhouette.rules"),
     ("SangalaStudio.html", "SangalaStudio.html"),
@@ -86,7 +87,7 @@ def main(argv):
 
     # Order the members the way the old zip listed them: the three files a person needs first, the
     # bridge, then the page and its assets.
-    order = ["Read Me First.txt", "setup.sh", "99-silhouette.rules", "sangala-studio.png",
+    order = ["Read Me First.txt", "setup.sh", "update.sh", "99-silhouette.rules", "sangala-studio.png",
              "sangala_bridge.py", "SangalaStudio.html", "Sangala for Snap.xml",
              "Calibration Card.svg"]
     members.sort(key=lambda m: (order.index(m[0]) if m[0] in order else len(order), m[0]))
