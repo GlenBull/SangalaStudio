@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-12.210 -->
+<!-- SANGALA_VERSION: 2026-09-22.211 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -437,7 +437,7 @@ let penHover=null;           // Pen tool: current cursor (placed mm) for the rub
 let penObj=null;             // Pen tool: the open outline it picked up, if it is continuing one rather than starting fresh
 let penBase=0;               // Pen tool: how many of penPts came from the outline it picked up - undo stops here, since the Pen did not put those there
 let penUndone=[];            // Pen tool: points taken back with Ctrl-Z, ready for Ctrl-Y
-let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel, mask, trace}. Never cut/printed, but a .model file DOES keep it (source + mask + trace tuning).
+let refImg=null;             // imported .jpg/.png reference layer for tracing: {img, x, y, w, h (mm), sel, mask, trace}. NEVER CUT - the machine only ever gets cut/score OBJECTS - but it DOES print (2026-09-22), and a .model file keeps it (source + mask + trace tuning).
 let traceThreshold=128;      // mask->binary threshold for the trace (0-255); the Silhouette slider re-traces live
 let tracePathomit=8;         // ImageTracer pathomit: drop paths with fewer than N boundary points (specks)
 let view={zoom:1,panX:0,panY:0};   // magnify: geometry scales via k (=baseK*zoom); pan via ctx.translate (canvas px)
@@ -602,18 +602,34 @@ function printSheet(){
     // plain design still shows. Same ox/oy offset as the registered cut (see makeIt), so color and cut line up.
     const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
     const seg=r=>{ let d=""; r.forEach((q,i)=>{ d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" "; }); return d; };
-    let art="", n=0, colored=0;
+    let art="", n=0, colored=0, photo=0;
+    // THE REFERENCE PHOTOGRAPH PRINTS, when there is one (Glen, 2026-09-22). It goes down FIRST so the
+    // outlines sit over it. refImg.x/y/w/h are in the same design mm as o.poly - integrateTrace builds the
+    // traced outline from exactly those numbers - and the registered cut uses this same OX/OY offset (see
+    // makeIt), so the printed picture and the blade land in one frame. preserveAspectRatio="none" because
+    // the photo can be resized unevenly on the mat and the print must match what the mat showed.
+    if(refImg && refImg.img && refImg.img.src){
+      const href=refImg.img.src;
+      art+='<image x="'+(ox+refImg.x).toFixed(2)+'" y="'+(oy+refImg.y).toFixed(2)
+          +'" width="'+refImg.w.toFixed(2)+'" height="'+refImg.h.toFixed(2)
+          +'" preserveAspectRatio="none" xlink:href="'+href+'" href="'+href+'"/>';
+      photo=1;
+    }
     objects.forEach(o=>{   // creation order = back to front, so the mat's layering is what prints
       if(!o.poly || o.poly.length<2) return;
       const f=fillOf(o);
       if(f){ let d=seg(o.poly)+"Z "; (o.holes||[]).forEach(h=>{ d+=seg(h)+"Z "; });   // filled piece + any holes (even-odd)
         art+='<path d="'+d+'" fill="'+f+'" fill-rule="evenodd" stroke="none"/>'; n++; colored++; }
-      else if(o.kind==="cut"){ let d=seg(o.poly); (o.holes||[]).forEach(h=>{ d+=seg(h); });   // uncolored cut -> red outline as before
+      // An uncolored cut prints as a thin red outline so a plain design still shows something. But when a
+      // PHOTOGRAPH is printing, the outline is exactly where the blade is about to go, and printing it puts
+      // red on the finished piece - the July print-and-cut page hid it for that reason. So: photo -> no line.
+      else if(o.kind==="cut" && !photo){ let d=seg(o.poly); (o.holes||[]).forEach(h=>{ d+=seg(h); });
         art+='<path d="'+d+'" fill="none" stroke="#c00" stroke-width="0.2"/>'; n++; }
     });
-    inner='<svg xmlns="http://www.w3.org/2000/svg" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+art+(showMarks?marksSVG():"")+'</svg>';
-    say(!n?"Opening the print dialog (registration marks). Print at 100% / Actual size."
+    inner='<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+PAGE_LW+'mm" height="'+PAGE_LH+'mm" viewBox="0 0 '+PAGE_LW+' '+PAGE_LH+'">'+art+(showMarks?marksSVG():"")+'</svg>';
+    say(!(n+photo)?"Opening the print dialog (registration marks only - there is nothing on the page to print). Print at 100% / Actual size."
          :colored?"Opening the print dialog - the colored pieces print in color. Print at 100% / Actual size, then Make It to cut them all out."
+         :photo?"Opening the print dialog - the photo prints, the cut line does not. Print at 100% / Actual size, then Make It to cut round it."
                  :"Opening the print dialog (marks + design). Print at 100% / Actual size.");
   }
   document.getElementById("printarea").innerHTML=inner;
@@ -1840,7 +1856,7 @@ function loadImageFile(file){
       refImg={img:img, x:(PAGE_W-w)/2, y:(PAGE_H-h)/2, w:w, h:h, sel:true, cutout:null, mask:null};
       $("bRemoveBg").disabled=false;
       selId=null; selId2=null; draw(); refreshEditPanel();
-      say("Imported image (reference only - won't cut or print, but Save keeps it in the project). Drag to move, corner to resize, or Remove BG to make a silhouette.");
+      say("Imported image - it never cuts, but it DOES print, so Print + Marks gives a registered print-and-cut. Drag to move, corner to resize, or Remove BG to make a silhouette.");
     };
     img.onerror=()=>say("Could not read that image file.");
     img.src=ev.target.result; };
@@ -1897,7 +1913,13 @@ function integrateTrace(){
     });
   });
   if(!made.length){ say("Couldn't turn the outline into a cut path."); return; }
-  refImg=null; $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
+  // THE PHOTOGRAPH STAYS (Glen, 2026-09-22: "Why would you ever delete the photograph ... why not give the
+  // user control over this, rather than letting the computer take control away from the user?"). It cannot
+  // reach the blade - makeIt sends cutPolys()/scorePolys(), built from objects, and a reference photo is not
+  // an object - and the user could always remove it by selecting it and pressing Delete. Confirm discarded it
+  // between 2026-07-19 (a2921e1) and today, which is why Print had nothing to put on the page but the marks.
+  refImg.sel=false;                                   // the new shape is what's selected now, not the photo
+  $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   if(made.length>1){ selMulti=made.map(o=>o.id); selId=null; } else { selId=made[0].id; selMulti=[]; }
   selId2=null; selNode=null;
   renderBg(); draw(); refreshEditPanel();
