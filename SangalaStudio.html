@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-22.213 -->
+<!-- SANGALA_VERSION: 2026-09-22.214 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -184,12 +184,7 @@
     <select id="pagesize"><option value="letter" selected>Letter 8.5 x 11 in</option><option value="12x12">Scrapbook 12 x 12 in</option><option value="baseplate">LEGO baseplate 32 x 32 studs</option></select>
     <label class="fld" style="margin-top:.6rem">Units <span style="font-weight:normal;color:#8a7350">(2D only; 3D always in mm)</span></label>
     <select id="units"><option value="in">Inches</option><option value="mm">Millimeters</option></select>
-    <h2 class="marker" id="posHead" style="margin-top:.7rem">Position (in)</h2>
-    <div class="two">
-      <div><label class="fld">From Left</label><input type="number" id="offx" min="0" max="8" step="0.1" value="0.5"></div>
-      <div><label class="fld">From Top</label><input type="number" id="offy" min="0" max="12" step="0.1" value="0.5"></div>
-    </div>
-    <div class="hint">Set your material and position, then close Setup and press Make It!</div>
+    <div class="hint">Set your material, then close Setup and press Make It! A design cuts exactly where it sits on the mat.</div>
   </div>
 
 
@@ -529,9 +524,7 @@ function matLabel(){ const a=matLandscape?PAGE_H:PAGE_W, b=matLandscape?PAGE_W:P
   if(units!=="in") return Math.round(a)+" x "+Math.round(b)+" mm";
   const f=x=>{const r=Math.round(x/25.4*10)/10; return Number.isInteger(r)?String(r):r.toFixed(1);};   // 215.9 mm -> "8.5", not "9"
   return f(a)+" x "+f(b)+" in";}
-function applyRanges(){const ox=$("offx"),oy=$("offy");
-  if(units==="in"){ox.step=oy.step=0.1;ox.max=fmtn(PAGE_W/25.4);oy.max=fmtn(PAGE_H/25.4);}
-  else{ox.step=oy.step=1;ox.max=Math.round(PAGE_W);oy.max=Math.round(PAGE_H);}}
+function applyRanges(){}   // re-ranged the Position fields, which are gone (.214); kept so its callers need not change
 /* A LEGO baseplate is the workspace for mosaic and brick work. The 8.5 x 11 page is the Silhouette
    Portrait's material, and it has nothing to do with building in brick: a 32 x 32 plate is 256 mm,
    wider than a Letter page, so a full-plate mosaic overflows a page it was never meant to sit on
@@ -560,11 +553,7 @@ function setPageSize(v){ pageKind=v;
   else {PAGE_W=215.9;PAGE_H=279.4;}   // Letter is the default; 12x12 is for plain cut / layout (registered print-and-cut stays Letter for now)
   applyRanges(); draw(); }
 function setUnits(u){
-  const oxmm=offMM(+$("offx").value), oymm=offMM(+$("offy").value);
-  units=u; applyRanges();
-  $("offx").value = u==="in"?fmtn(oxmm/25.4):Math.round(oxmm);
-  $("offy").value = u==="in"?fmtn(oymm/25.4):Math.round(oymm);
-  $("posHead").textContent="Position ("+u+")";
+  units=u;
   const o=selObj(); if(o) showDims(o);   // re-render the selected object's readout in the new unit
   draw();
 }
@@ -815,7 +804,12 @@ function normalize(){let mx=1e9,my=1e9;
 
 // per-object placement WITHOUT reordering — same scale/offset math as placeAndOrder.
 // used for the Edit-mode overlay + hit-testing so object identity is preserved.
-function placeParams(){ return { s:printFile?1:((+$("scale").value||100)/100), ox:printFile?0:offMM(+$("offx").value), oy:printFile?0:offMM(+$("offy").value) }; }
+// NO POSITION OFFSET (Glen, 2026-09-22: "Why is any offset applied?"). There used to be a Position setting -
+// From Left / From Top, default 0.5 in - that drew every shape 12.7 mm right and down of its stored coordinates.
+// The photograph was not shifted, so a traced outline landed 12.7 mm off the bird; and the print and registered
+// cut used the unshifted coordinates, so the mat disagreed with both. A design now sits, prints and cuts at one
+// set of coordinates. ox/oy stay in the returned object, always 0, because dozens of callers read them.
+function placeParams(){ return { s:printFile?1:((+$("scale").value||100)/100), ox:0, oy:0 }; }
 function placePoly(poly){ const pp=placeParams(); return poly.map(q=>[q[0]*pp.s+pp.ox, q[1]*pp.s+pp.oy]); }
 // Inkscape-style node handles for a selected object, in design mm (pre-placement).
 // Type-appropriate: rect -> 4 corners; circle -> 4 cardinal points; else poly vertices.
@@ -1306,7 +1300,7 @@ function applyMat(){ const v=$("material").value;
   $("force").value=m[0];$("speed").value=m[1];$("blade").value=m[2];$("passes").value=(m[4]||1);
   if(v==="Custom") openSettings(); }
 $("material").onchange=applyMat;
-["scale","offx","offy"].forEach(id=>$(id).oninput=draw);
+$("scale").oninput=draw;
 $("units").onchange=e=>setUnits(e.target.value);
 $("pagesize").onchange=e=>setPageSize(e.target.value);
 $("selMode").onchange=e=>{ viewMode=e.target.value;
@@ -1672,9 +1666,6 @@ function importMosaic(text,fname){
   // it re-ranges the Position fields, which are zeroed just below.
   if($("pagesize")){ $("pagesize").value="baseplate"; setPageSize("baseplate"); }
   if($("scale")) $("scale").value=100;
-  if($("offx"))  $("offx").value=0;
-  if($("offy"))  $("offy").value=0;
-  applyRanges();
   if(!mode3D) setMode3D(true);   // extruding the tiles is a 3D act - arrive in 3D mode, ready to set Depths. BEFORE draw(): the stud overlay paints only in 3D mode, and setMode3D does not redraw
   draw(); refreshEditPanel();
   if(pvOn){ const t3=buildTris(); if(!t3.n) closePreview(); else { pvSetTris(t3); pvBounds(); renderPreview(); } }
@@ -1836,9 +1827,6 @@ function importBlock(text,fname){
   // row and a column mean the same thing on both pages, so the figure lands where it was built.
   if($("pagesize")){ $("pagesize").value="letter"; setPageSize("letter"); }
   if($("scale")) $("scale").value=100;                                 // 1:1 - a LEGO figure is already a printable size
-  if($("offx"))  $("offx").value=0;
-  if($("offy"))  $("offy").value=0;
-  applyRanges();
   if(!mode3D) setMode3D(true);          // BEFORE draw(): setMode3D does not redraw, and this is a 3D arrival
   draw(); refreshEditPanel();
   if(pvOn){ const t3=buildTris(); if(!t3.n) closePreview(); else { pvSetTris(t3); pvBounds(); renderPreview(); } }
@@ -1921,7 +1909,7 @@ function integrateTrace(){
   if(!refImg||!refImg.trace||!refImg.trace.paths.length){ say("Remove the background first to get an outline."); return; }
   ensureDoc();
   const W=refImg.trace.width, H=refImg.trace.height;
-  const PX=refImg.x, PY=refImg.y, sx=refImg.w/W, sy=refImg.h/H;   // the photo's own placement - the shape takes its exact spot
+  const PX=refImg.x, PY=refImg.y, sx=refImg.w/W, sy=refImg.h/H; const ps=placeParams().s;   // the photo's own placement - the shape takes its exact spot
   const multi=refImg.trace.paths.length>1;
   const gid=multi?++groupSeq:null;                     // more than one piece (e.g. disjoint regions) -> group so they move together
   const made=[];
@@ -1931,7 +1919,7 @@ function integrateTrace(){
       pth.setAttribute("d",sub); s.appendChild(pth); s.style.cssText="position:absolute;left:-9999px;top:0"; document.body.appendChild(s);
       let len=0; try{ len=pth.getTotalLength(); }catch(e){}
       if(len>2){ const n=Math.max(8,Math.ceil(len/1.5)), pts=[];
-        for(let i=0;i<=n;i++){ const p=pth.getPointAtLength(len*i/n); pts.push([PX+p.x*sx, PY+p.y*sy]); }
+        for(let i=0;i<=n;i++){ const p=pth.getPointAtLength(len*i/n); pts.push([(PX+p.x*sx)/ps, (PY+p.y*sy)/ps]); }   // photo is in mat mm; a shape is stored before Scale %, so undo it
         const o=makePolyObj(pts,"cut"); if(gid!=null) o.group=gid; made.push(o);
       }
       s.remove();
@@ -1944,6 +1932,7 @@ function integrateTrace(){
   // an object - and the user could always remove it by selecting it and pressing Delete. Confirm discarded it
   // between 2026-07-19 (a2921e1) and today, which is why Print had nothing to put on the page but the marks.
   refImg.sel=false;                                   // the new shape is what's selected now, not the photo
+  refImg.trace=null; refImg.mask=null;                // the red preview boundary goes: the cut shape now IS the outline, and two outlines read as two images
   $("bRemoveBg").style.display="none"; $("bUseCut").style.display="none"; $("tracetune").style.display="none";
   if(made.length>1){ selMulti=made.map(o=>o.id); selId=null; } else { selId=made[0].id; selMulti=[]; }
   selId2=null; selNode=null;
@@ -2063,7 +2052,7 @@ function collectProject(){
       threshold: traceThreshold, pathomit: tracePathomit } : null;
   return { sangala:"project", version:2,
     mode3D:mode3D, units:units, showMarks:showMarks, pageSize:pageKind,   // a mosaic authored on a LEGO baseplate reopens on the baseplate, not on a Letter page it overflows
-    material: $("material")?$("material").value:null, offx: $("offx")?$("offx").value:null, offy: $("offy")?$("offy").value:null,
+    material: $("material")?$("material").value:null, offx: 0, offy: 0,   // Position is gone; written as 0 so Block Designer's import of a .model reads no shift
     settings: settings, view: {zoom:view.zoom, panX:view.panX, panY:view.panY},
     refImage: refImage, state: serializeState() };
 }
@@ -2094,8 +2083,10 @@ function openProject(text){
   if(proj.units && $("units")){ $("units").value=proj.units; setUnits(proj.units); }   // units first: setUnits rewrites the position fields, then we restore their saved values
   if(proj.settings) for(const id in proj.settings){ const el=$(id); if(el) el.value=proj.settings[id]; }
   if(proj.material && $("material")) $("material").value=proj.material;
-  if(proj.offx!=null && $("offx")) $("offx").value=proj.offx;
-  if(proj.offy!=null && $("offy")) $("offy").value=proj.offy;
+  // A project saved while Position existed showed its shapes shifted by it. Move the shapes by that amount
+  // once, so they reopen where the mat showed them (the photo was never shifted, so it stays put).
+  { const pp=placeParams(), ox=offMM(+proj.offx||0), oy=offMM(+proj.offy||0);
+    if(ox||oy){ objects.forEach(o=>translateObj(o,ox/pp.s,oy/pp.s)); hist=[]; redoStack=[]; commit(); } }
   showMarks=!!proj.showMarks; $("bMarks").classList.toggle("on",showMarks);
   if(proj.view){ view.zoom=proj.view.zoom||1; view.panX=proj.view.panX||0; view.panY=proj.view.panY||0; clampPan(); updateZoomUI(); }
   setMode3D(!!proj.mode3D);                                   // last: re-lays the toolbar for the mode, then redraw
