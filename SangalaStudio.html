@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SANGALA_VERSION: 2026-09-22.212 -->
+<!-- SANGALA_VERSION: 2026-09-22.213 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -600,7 +600,12 @@ function printSheet(){
     // registered to the marks, and cuts every piece at once (no dragging colors to the mat one at a time). The
     // cut line itself stays hidden, like a machine line. Pieces with no color keep the thin red outline, so a
     // plain design still shows. Same ox/oy offset as the registered cut (see makeIt), so color and cut line up.
-    const ox=INSET+MARK_LEN+5, oy=INSET+MARK_LEN+5;   // clear of the corner marks
+    // WHAT YOU SEE IS WHAT YOU GET (Glen, 2026-09-22: "why is there even an offset under any
+    // circumstance"). The mat IS the page, so a design's coordinates are page coordinates, and the sheet
+    // prints them unchanged. This used to add INSET+MARK_LEN+5 to nudge the design clear of the corner
+    // marks - moving the user's work for them, and by an amount the registered cut then had to match.
+    // The mat draws the registration zone instead, so the user can see the margin and stay out of it.
+    const ox=0, oy=0;
     const seg=r=>{ let d=""; r.forEach((q,i)=>{ d+=(i?"L":"M")+(ox+q[0]).toFixed(2)+" "+(oy+q[1]).toFixed(2)+" "; }); return d; };
     let art="", n=0, colored=0, photo=0;
     // THE REFERENCE PHOTOGRAPH PRINTS, when there is one (Glen, 2026-09-22), and it prints WHERE IT SITS.
@@ -1268,9 +1273,12 @@ async function makeIt(){
   if(showMarks){
     // marks on -> register to the printed marks, then cut/score in that frame
     if(printFile){ pl=placed(); spl=placedScore(); }
-    else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
-      pl=cutPolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
-      spl=scorePolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+    // PAGE COORDINATES, UNSHIFTED. The bridge subtracts the mark origin itself - SplitCutScore is handed
+    // inset=15.9 and does (x-sub, y-sub) on every point - so what it wants is the page coordinate, which
+    // is exactly what the mat shows and what printSheet draws. Adding INSET+MARK_LEN+5 here put the blade
+    // 40.9 mm from the design and had to be mirrored in the print to hide it. Both are gone: what you see
+    // is what prints and what cuts.
+    else { pl=cutPolys(); spl=scorePolys(); }
     url="/printcut";
   } else {
     // marks off -> plain cut, no registration
@@ -6571,9 +6579,7 @@ $("jCut").onclick=async()=>{
   if(!cutPolys().length){$("jstatus").textContent="Load and print a design first.";return;}
   let pl, spl;
   if(printFile){ pl=placed(); spl=placedScore(); }
-  else { const OX=INSET+MARK_LEN+5, OY=INSET+MARK_LEN+5;
-    pl=cutPolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]]));
-    spl=scorePolys().map(p=>p.map(q=>[OX+q[0],OY+q[1]])); }
+  else { pl=cutPolys(); spl=scorePolys(); }   // page coordinates, unshifted - same as makeIt; the bridge subtracts the mark origin
   const body=bodyOf(jbody(), pl, perforate(spl,4,1.2));
   $("jstatus").textContent="Cutting on the printed design...";
   const poll=setInterval(async()=>{try{const st=await(await fetch("/status")).json();$("jstatus").textContent=st.status;}catch(e){}},400);
