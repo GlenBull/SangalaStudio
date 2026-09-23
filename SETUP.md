@@ -14,7 +14,7 @@ reading and editing the "Design through Making" Word chapters at full fidelity
 
 2. **Clone this repo.**
    ```
-   git clone https://github.com/GlenBull/SangalaStudio.git
+   git clone https://github.com/maketolearn/SangalaStudio.git
    cd SangalaStudio
    ```
 

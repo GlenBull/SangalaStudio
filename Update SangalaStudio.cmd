@@ -21,7 +21,7 @@ REM ==========================================================================
 setlocal
 cd /d "%~dp0"
 
-set "BASE=https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
+set "BASE=https://raw.githubusercontent.com/maketolearn/SangalaStudio/main"
 set "HTML=SangalaStudio.html"
 set "EXE=SangalaStudio.exe"
 set "TMPHTML=SangalaStudio.html.new"

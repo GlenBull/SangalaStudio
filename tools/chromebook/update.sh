@@ -33,7 +33,7 @@ QUIET=""
 [ -n "$QUIET" ] && exec >>"$HOME/.sangala-studio-update.log" 2>&1
 [ -n "$QUIET" ] && echo "---- $(date)"
 
-BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
+BASE="https://raw.githubusercontent.com/maketolearn/SangalaStudio/main"
 
 HTML="SangalaStudio.html"
 XML="Sangala for Snap.xml"

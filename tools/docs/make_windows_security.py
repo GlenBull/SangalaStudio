@@ -157,6 +157,6 @@ d.body("A useful additional test is to paste the address below into a browser. I
        "downloads a file, the network and the repository are both working and the cause is on the "
        "machine; if it shows a warning or a block page, the wording of that page identifies what "
        "is intercepting the file.")
-d.code("https://raw.githubusercontent.com/GlenBull/SangalaStudio/main/SangalaStudio.exe")
+d.code("https://raw.githubusercontent.com/maketolearn/SangalaStudio/main/SangalaStudio.exe")
 
 print(d.save(DRAFTS, "Updating Sangala Studio Through Windows Security"))

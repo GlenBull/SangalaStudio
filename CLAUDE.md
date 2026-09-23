@@ -229,8 +229,10 @@ USB only, user-mode.** This constraint is absolute.
 - **Commit and push after each verified-good change** — one change, verify it's
   good (see line-14 physical-test rule for machine-facing changes), then commit
   and push so any regression is a `git diff` away, not a guess.
-- **Collaboration is shared-repo, not forks (since 2026-07-24).** Jo Watts is a
-  write collaborator on `GlenBull/SangalaStudio`; he and Glen work on branches in
+- **Collaboration is shared-repo, not forks (since 2026-07-24).** The repository is
+  `maketolearn/SangalaStudio` — transferred from `GlenBull` to the Make to Learn
+  organization on 2026-09-23, with Mosaic and Blocks — and Jo Watts works in it as an
+  organization member; he and Glen work on branches in
   the one repo and integrate via ordinary Pull Requests — no more cross-fork
   merges. The one-time "Github Merge" runbook (the careful bring-in of Jo's 3D
   fork into `main`) was a migration artifact, not the routine process; day-to-day

@@ -33,7 +33,7 @@ CURL="curl -fsSL --connect-timeout 5 --max-time 120"
 
 # The page, the blocks, the engine and the launchers all come from the main
 # line of the project.
-BASE="https://raw.githubusercontent.com/GlenBull/SangalaStudio/main"
+BASE="https://raw.githubusercontent.com/maketolearn/SangalaStudio/main"
 
 HTML="SangalaStudio.html"
 XML="Sangala for Snap.xml"
