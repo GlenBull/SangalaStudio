@@ -11,7 +11,7 @@
 #
 # Needs, as organization or repository secrets: DROPBOX_APP_KEY, DROPBOX_APP_SECRET,
 # DROPBOX_REFRESH_TOKEN; and as a variable: DROPBOX_BASE, the path of the Sangala Tools folder
-# counted from the top of the team's Dropbox.
+# counted from the top of the team's Dropbox. tools/dropbox_setup.py produces all four, once.
 name: Sangala release (shared steps)
 
 on:
