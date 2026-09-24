@@ -1,0 +1,127 @@
+# The release steps shared by all three Sangala applications (Studio, Mosaic, Blocks). Each
+# repository's own release.yml calls this on every push to main; it lives here, once, so the three
+# cannot drift apart. It is callable from the other repositories because this repository is public.
+#
+#   1. changes  - did this push touch the exe's source? (GitHub's compare API, so no deep clone)
+#   2. build    - if so, compile the exe on a Windows machine with the repository's own Build .cmd
+#                 and commit it to main. A commit made with the workflow's own token does not start
+#                 another run, so this cannot loop.
+#   3. publish  - copy whatever is stale into the Dropbox Sangala Tools folder
+#                 (tools/sangala_publish.py), then check again and fail if anything is still stale.
+#
+# Needs, as organization or repository secrets: DROPBOX_APP_KEY, DROPBOX_APP_SECRET,
+# DROPBOX_REFRESH_TOKEN; and as a variable: DROPBOX_BASE, the path of the Sangala Tools folder
+# counted from the top of the team's Dropbox.
+name: Sangala release (shared steps)
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: Studio, Mosaic or Blocks - the name sangala_publish.py knows it by
+        required: true
+        type: string
+      exe:
+        required: true
+        type: string
+      page:
+        required: true
+        type: string
+      build_cmd:
+        required: true
+        type: string
+      engine_files:
+        description: The files the exe is compiled from, one per line. A push touching any of them rebuilds it.
+        required: true
+        type: string
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.c.outputs.build }}
+    steps:
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          ENGINE: ${{ inputs.engine_files }}
+          PAGE: ${{ inputs.page }}
+        run: |
+          # A run started by hand, or the first push of a branch, has no "before": build to be sure.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$AFTER" --jq '.files[].filename' > changed.txt
+          build=false
+          while IFS= read -r f; do
+            if [ -n "$f" ] && grep -qxF "$f" changed.txt; then build=true; fi
+          done <<< "$ENGINE"
+          # The compare API lists at most 300 files; past that, rebuild rather than guess.
+          if [ "$(wc -l < changed.txt)" -ge 300 ]; then build=true; fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          if [ "$build" = true ] && ! grep -qxF "$PAGE" changed.txt; then
+            echo "::warning::The exe's source changed but $PAGE did not, so its version marker was not raised. Updaters on testers' machines compare that marker and will not fetch the new exe until it changes."
+          fi
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Build
+        shell: cmd
+        env:
+          BUILD_CMD: ${{ inputs.build_cmd }}
+        # The build script ends at "Press any key"; input from nul answers it.
+        run: call "%BUILD_CMD%" < nul
+      - name: Commit the exe
+        shell: bash
+        env:
+          EXE: ${{ inputs.exe }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$EXE"
+          if git diff --cached --quiet; then echo "exe unchanged"; exit 0; fi
+          git commit -m "Rebuild $EXE from ${GITHUB_SHA::7}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+  publish:
+    needs: [changes, build]
+    # Runs after a build, and also when no build was needed (build skipped) - but not after a failed one.
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main              # main as it is now, including an exe the build job just committed
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          repository: maketolearn/SangalaStudio
+          ref: main
+          path: sangala
+          sparse-checkout: tools/sangala_publish.py
+          sparse-checkout-cone-mode: false
+      - run: python -m pip install --quiet "dropbox>=12,<13"
+      - name: Publish to Dropbox
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+          DROPBOX_BASE: ${{ vars.DROPBOX_BASE }}
+          APP: ${{ inputs.app }}
+        run: |
+          python sangala/tools/sangala_publish.py --app "$APP" --repo app --publish
+          echo "---- check"
+          python sangala/tools/sangala_publish.py --app "$APP" --repo app

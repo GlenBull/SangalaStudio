@@ -1,0 +1,30 @@
+# Every push to main rebuilds SangalaStudio.exe if its source changed and publishes Sangala Studio
+# to the Dropbox Sangala Tools folder. The steps are shared with Mosaic and Blocks and live in
+# sangala-release.yml beside this file. "Run workflow" on the Actions tab does the same by hand.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/sangala-release.yml
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      app: Studio
+      exe: SangalaStudio.exe
+      page: SangalaStudio.html
+      build_cmd: Build SangalaStudio.cmd
+      engine_files: |
+        DieCutter.cs
+        SangalaServer.cs
+        Sangala.ico
+        Build SangalaStudio.cmd

@@ -216,16 +216,17 @@ USB only, user-mode.** This constraint is absolute.
   GitHub)". That is true of a tester who RUNS the updater and false of everyone else: the Dropbox folder
   is what Jo, Moses and the students install from, so a copy left behind there is the version they get.
   Mosaic sat at `.93` in Dropbox while the repository moved to `.102` because I believed that
-  parenthetical. **`tools\sangala_publish.py` is the tool and it says so in its own first line — "Run
-  this after ANY commit or update to any of the three applications."** Run it bare to report, then
-  `--publish` (optionally naming one application) to fix, then bare again to confirm:
-
-      python tools\sangala_publish.py
-      python tools\sangala_publish.py --publish Mosaic
-      python tools\sangala_publish.py
-
-  It checks the page by hash AND by its own version marker, the exe by hash, the helper `.cmd` files by
-  normalized content, the Studio and Blocks zips, and for Blocks every LDraw part the parts list needs.
+  parenthetical.
+  **Publishing is done by GitHub, not by anyone's computer (Jo, 2026-09-24: "Nothing should be done
+  directly from Glen's machine anymore. It should all be done from Github").** Every push to `main` runs
+  `.github/workflows/release.yml`, which calls the shared steps in maketolearn/SangalaStudio
+  (`.github/workflows/sangala-release.yml`): if the exe's source changed it rebuilds the exe on a Windows
+  machine and commits it to `main`, then `tools/sangala_publish.py` copies whatever is stale into Dropbox
+  through the Dropbox API and checks again. Watch it on the repository's Actions tab; "Run workflow" there
+  runs it by hand. It checks the page by hash AND by its own version marker, the exe by hash, the helper
+  `.cmd` files by normalized content, the Studio and Blocks zips, and for Blocks every LDraw part the parts
+  list needs. The version marker still has to be raised by hand for testers' updaters to fetch a change -
+  the workflow warns when the exe's source changed without it.
 - **Commit and push after each verified-good change** — one change, verify it's
   good (see line-14 physical-test rule for machine-facing changes), then commit
   and push so any regression is a `git diff` away, not a guess.
@@ -267,9 +268,9 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   > 20 KB), then `taskkill`s the running exe and swaps both — both-or-nothing, so a
   half-download changes nothing. `SANGALA_VERSION` is the **release** number: bump it
   on ANY shipped change, **page or engine** (an engine-only fix still bumps the line,
-  else the checker calls it "already up to date"). **After an engine (.cs) change:
-  rebuild the exe (`Build SangalaStudio.cmd`) AND commit the exe**, or testers get the
-  new page over a stale engine.
+  else the checker calls it "already up to date"). **After an engine (.cs) change the
+  release workflow rebuilds the exe and commits it to `main` by itself** (since 2026-09-24);
+  do not commit a hand-built exe alongside the change.
 - **The exe runs the updater at every start (2026-09-24), like the Mac app and the Chromebook icon.**
   `SangalaServer.cs` `UpdateBeforeLaunch()` runs `Update SangalaStudio.cmd --launch` hidden (no pause,
   no taskkill), waits at most 20 s, and — if the exe file's hash changed — starts the new exe with
