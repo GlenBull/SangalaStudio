@@ -32,7 +32,8 @@ REM  can see, so the program never runs one.
 REM  SANGALA_UPDATER: 1
 REM ==========================================================================
 setlocal
-cd /d "%~dp0"
+REM  pushd rather than cd: it also works when the folder is on a network path (\\server\share).
+pushd "%~dp0"
 
 set "LAUNCH="
 set "REPLACED="
@@ -72,8 +73,11 @@ REM     unattended is taken. cmd reads a batch file a line at a time as it goes,
 REM     and the hand-over to the new copy sit in one bracketed block: cmd reads the whole
 REM     block before running any of it, and running the new file without CALL means this one
 REM     is never read again. --replaced stops a loop if the two copies somehow never match.
+REM     Skipped in a developer's copy of the repository, where the file is work in progress.
 if defined REPLACED goto :checkpage
-call :download "%SELFURL%" "%TMPSELF%"
+if exist "%~dp0.git" goto :checkpage
+set "DLURL=%SELFURL%"
+call :download "%TMPSELF%"
 if not exist "%TMPSELF%" goto :checkpage
 findstr /c:"SANGALA_UPDATER:" "%TMPSELF%" >nul 2>&1 || goto :noself
 findstr /c:"%ENDMARK%END" "%TMPSELF%" >nul 2>&1 || goto :noself
@@ -88,7 +92,8 @@ if exist "%TMPSELF%" del "%TMPSELF%" >nul 2>&1
 
 :checkpage
 REM ---- 2. Download the page. curl is built into Windows 10/11; PowerShell is the fallback.
-call :download "%BASE%/%HTML%" "%TMPHTML%"
+set "DLURL=%BASE%/%HTML%"
+call :download "%TMPHTML%"
 if not exist "%TMPHTML%" goto :failed
 
 REM A good page ends with the closing </html> tag; a truncated download will not.
@@ -112,8 +117,10 @@ if defined LOCALVER if "%LOCALVER%"=="%REMOTEVER%" if exist "%XML%" (
 
 REM ---- 4. There is a newer version. Download the engine too, BEFORE we touch anything.
 echo A newer version is available. Downloading...
-call :download "%BASE%/%EXE%" "%TMPEXE%"
-call :download "%XMLURL%" "%TMPXML%"
+set "DLURL=%BASE%/%EXE%"
+call :download "%TMPEXE%"
+set "DLURL=%XMLURL%"
+call :download "%TMPXML%"
 
 REM Sanity-check the engine download: it must exist and be a real program (tens of KB, not an error page).
 set "EXEOK="
@@ -174,17 +181,20 @@ exit /b %RC%
 
 REM ==========================================================================
 :download
-REM  %1 = URL, %2 = output file. curl if present, else PowerShell. A download that never
-REM  answers must not hold the program shut, so both give up after a set time.
-if exist "%~2" del "%~2" >nul 2>&1
+REM  %1 = output file; the address is in DLURL. It travels in a variable, not as an argument,
+REM  because CALL expands percent signs a second time: the %20 in an address would become
+REM  argument 2 followed by a 0, and the download would ask GitHub for a file that does not
+REM  exist. curl if present, else PowerShell. A download that never answers must not hold
+REM  the program shut, so both give up after a set time.
+if exist "%~1" del "%~1" >nul 2>&1
 where curl >nul 2>&1
 if %errorlevel%==0 (
-  curl -L -f -s --connect-timeout 5 --max-time 120 -o "%~2" "%~1"
+  curl -L -f -s --connect-timeout 5 --max-time 120 -o "%~1" "%DLURL%"
 ) else (
-  powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%~1' -OutFile '%~2' -UseBasicParsing -TimeoutSec 120 } catch { exit 1 }"
+  powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%DLURL%' -OutFile '%~1' -UseBasicParsing -TimeoutSec 120 } catch { exit 1 }"
 )
 REM  A download that stopped part-way must not be mistaken for a whole one.
-if errorlevel 1 del "%~2" >nul 2>&1
+if errorlevel 1 del "%~1" >nul 2>&1
 goto :eof
 
 REM ==========================================================================

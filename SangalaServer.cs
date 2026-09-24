@@ -122,7 +122,11 @@ namespace DieCutterApp
                 if (!File.Exists(exe) && File.Exists(exe + ".bak")) File.Copy(exe + ".bak", exe);
                 if (HashFile(exe) == before) return false;
 
-                _onlyOne.ReleaseMutex();              // the new copy has to be able to take it
+                // The new copy has to be able to take the mutex. Releasing it is not enough: while this
+                // process holds a handle the name still exists, and the new copy would read that as
+                // "another bridge is running". Close the handle too.
+                _onlyOne.ReleaseMutex();
+                _onlyOne.Close();
                 try
                 {
                     Process.Start(new ProcessStartInfo(exe, "--no-update") { WorkingDirectory = dir });
@@ -130,6 +134,13 @@ namespace DieCutterApp
                 }
                 catch
                 {
+                    // The new engine would not start (blocked, or not a program at all - a school filter
+                    // can answer with a web page). Put the old engine and page back: this copy keeps
+                    // running, the Desktop icon points at a program that works, and because the page's
+                    // version no longer matches GitHub's, the next start tries the update again.
+                    try { File.Copy(exe + ".bak", exe, true); } catch { }
+                    string html = Path.Combine(dir, "SangalaStudio.html");
+                    try { if (File.Exists(html + ".bak")) File.Copy(html + ".bak", html, true); } catch { }
                     bool again;
                     _onlyOne = new Mutex(true, "SangalaStudioBridge", out again);
                     return false;
@@ -163,19 +174,31 @@ namespace DieCutterApp
             // when they double-clicked, and it leaves the machine connection undisturbed.
             bool first;
             _onlyOne = new Mutex(true, "SangalaStudioBridge", out first);
+            bool justUpdated = Array.IndexOf(args, "--no-update") >= 0;
+            if (!first && justUpdated)
+            {
+                // Started by the copy this one replaced, which has let go of the mutex but may not have
+                // finished exiting. Wait for it rather than mistake it for a running bridge.
+                try { first = _onlyOne.WaitOne(10000); }
+                catch (AbandonedMutexException) { first = true; }
+            }
             if (!first)
             {
                 // Never put up a dialog here. A modal box keeps THIS process alive until someone
                 // clicks it, which is the same pile-up in another form. Open the page the running
-                // bridge is serving and get out. If it is still starting and has not answered yet,
-                // 8787 is the port it will take.
-                int running = FindRunningBridge();
+                // bridge is serving and get out. The first copy may still be checking for an update,
+                // which can take up to 20 seconds before it opens a port, so keep asking for a while.
+                // If nothing has answered by then, 8787 is the port it will take.
+                int running = 0;
+                var waited = Stopwatch.StartNew();
+                while ((running = FindRunningBridge()) == 0 && waited.ElapsedMilliseconds < 25000)
+                    Thread.Sleep(500);
                 try { Process.Start("http://127.0.0.1:" + (running > 0 ? running : 8787) + "/"); } catch { }
                 return;
             }
 
             // Update first, unless this copy was itself just started by an update.
-            if (Array.IndexOf(args, "--no-update") < 0 && UpdateBeforeLaunch()) return;
+            if (!justUpdated && UpdateBeforeLaunch()) return;
 
             _htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SangalaStudio.html");
             _snapLibPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sangala for Snap.xml");

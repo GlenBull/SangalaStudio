@@ -283,6 +283,10 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   the new copy (`--replaced` stops a loop). It is stored CRLF with `-text` in `.gitattributes` so the
   raw bytes match a Windows checkout. Copies older than the marker cannot do any of this and need one
   manual replacement. `SANGALA_UPDATE_BASE` (environment variable) points it at a branch for testing.
+  **Never pass a URL holding `%20` as a CALL argument** — CALL expands percent signs a second time, so
+  `%20` becomes argument 2 plus "0" and the download 404s. `:download` reads the address from `DLURL`.
+  The pre-2026-09-24 updater did exactly this for the blocks file, so by reading every update it ran
+  ended "FAILED" (inferred from the code by four reviewers; not yet confirmed on Windows).
 - **Loopback is addressed as `localhost`, never `127.0.0.1`, anywhere the PAGE can reach.** Glen's preview
   pane blocks raw-IP navigation and shows a "Link to 127.0.0.1 was blocked" banner. The real culprit was
   SangalaStudio.html's own `file://` hop (it fetches the bridge and `location.replace`s to it): the harness
