@@ -269,8 +269,24 @@ browser refresh; engine/server (.cs) changes need a rebuild + relaunch.
   on ANY shipped change, **page or engine** (an engine-only fix still bumps the line,
   else the checker calls it "already up to date"). **After an engine (.cs) change:
   rebuild the exe (`Build SangalaStudio.cmd`) AND commit the exe**, or testers get the
-  new page over a stale engine. The updater .cmd itself is stable infrastructure —
-  distribute a new copy of it by USB the once (it can't update itself while running).
+  new page over a stale engine.
+- **The exe runs the updater at every start (2026-09-24), like the Mac app and the Chromebook icon.**
+  `SangalaServer.cs` `UpdateBeforeLaunch()` runs `Update SangalaStudio.cmd --launch` hidden (no pause,
+  no taskkill), waits at most 20 s, and — if the exe file's hash changed — starts the new exe with
+  `--no-update` and exits. The swap works while the exe runs because Windows allows RENAMING a running
+  program: the updater renames `SangalaStudio.exe` to `.bak`, moves the new one in, and moves the page
+  in LAST (its version line is the gate, so an interrupted swap retries next time). It is skipped when
+  a bridge is already running (the mutex), when the folder is a git checkout (`.git` present — never
+  overwrite a developer's work), and when the local updater lacks the `SANGALA_UPDATER:` marker (an
+  older copy would sit at `pause` in a window nobody can see). The updater also **replaces itself**
+  when GitHub's copy differs byte for byte and ends in the `SANGALA_UPDATER_END` line, then re-runs as
+  the new copy (`--replaced` stops a loop). It is stored CRLF with `-text` in `.gitattributes` so the
+  raw bytes match a Windows checkout. Copies older than the marker cannot do any of this and need one
+  manual replacement. `SANGALA_UPDATE_BASE` (environment variable) points it at a branch for testing.
+  **Never pass a URL holding `%20` as a CALL argument** — CALL expands percent signs a second time, so
+  `%20` becomes argument 2 plus "0" and the download 404s. `:download` reads the address from `DLURL`.
+  The pre-2026-09-24 updater did exactly this for the blocks file, so by reading every update it ran
+  ended "FAILED" (inferred from the code by four reviewers; not yet confirmed on Windows).
 - **Loopback is addressed as `localhost`, never `127.0.0.1`, anywhere the PAGE can reach.** Glen's preview
   pane blocks raw-IP navigation and shows a "Link to 127.0.0.1 was blocked" banner. The real culprit was
   SangalaStudio.html's own `file://` hop (it fetches the bridge and `location.replace`s to it): the harness

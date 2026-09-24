@@ -14,3 +14,7 @@ tools/chromebook/99-silhouette.rules text eol=lf
 
 # Mac launchers must keep Unix line endings or macOS will not run them.
 *.command text eol=lf
+
+# The Windows updater replaces itself when GitHub's copy differs byte for byte, so the bytes GitHub
+# serves must be the bytes a Windows checkout writes. Stored with CRLF and never converted.
+Update[[:space:]]SangalaStudio.cmd -text
