@@ -334,7 +334,17 @@ def check_zip(app, publish, out):
     inner_exe = app["zip_inner"] + app["exe"]
     def zh(n):
         return hashlib.sha256(zf.read(n)).hexdigest()[:12] if n in zf.namelist() else None
-    ok = zh(inner_page) == sha(repo_page) and zh(inner_exe) == sha(repo_exe)
+    # The helper .cmd files travel in the zip too, compared with line endings normalized as they
+    # are for the program folder. Before 2026-09-24 only the page and the exe were replaced, so the
+    # zip kept whatever updater it was first built with - and an updater older than the one that
+    # replaces itself never gets any newer on its own.
+    cmds = {app["zip_inner"] + c: os.path.join(app["repo"], c)
+            for c in app.get("cmds", []) if os.path.isfile(os.path.join(app["repo"], c))}
+    def zt(n):
+        return hashlib.sha256(zf.read(n).replace(b"\r\n", b"\n")).hexdigest()[:12] \
+            if n in zf.namelist() else None
+    ok = zh(inner_page) == sha(repo_page) and zh(inner_exe) == sha(repo_exe) \
+        and all(zt(n) == text_sha(src) for n, src in cmds.items())
     ver = marker_of(repo_page, app["marker"])
     want = "%s%s).zip" % (app["zip_glob"], ver.split(".")[-1])
     named = zips[-1] == want
@@ -350,8 +360,12 @@ def check_zip(app, publish, out):
         zo = zipfile.ZipFile(new + ".tmp", "w", zipfile.ZIP_DEFLATED)
         for i in zf.infolist():
             data = page if i.filename == inner_page else exe if i.filename == inner_exe \
+                else open(cmds[i.filename], "rb").read() if i.filename in cmds \
                 else zf.read(i.filename)
             zo.writestr(i, data)
+        for n, src in cmds.items():
+            if n not in zf.namelist():
+                zo.write(src, n)
         zo.close()
         zf.close()
         arch = os.path.join(zdir, "Archive")
