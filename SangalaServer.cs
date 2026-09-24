@@ -79,8 +79,84 @@ namespace DieCutterApp
             return 0;
         }
 
+        // Check GitHub for a newer version before the program opens, so the page a student sees is the
+        // current one and nobody has to remember to run the updater - the rule the Mac application and
+        // the Chromebook icon already follow. "Update SangalaStudio.cmd" does the work, run with
+        // --launch: no window and nothing to answer.
+        //
+        // The wait is capped at 20 seconds: a school network that stalls must not hold the program
+        // shut. The updater downloads into .new files and moves them into place only at the end, so
+        // stopping it early leaves the folder as it was, and the next start tries again.
+        //
+        // Windows will not let a running program's file be overwritten, but it will let it be renamed,
+        // and that is what the updater does with this one. So when the engine has been replaced, the
+        // file on disk no longer matches this running copy: start the new one and step aside. Returns
+        // true when it has done that and this copy should exit.
+        static bool UpdateBeforeLaunch()
+        {
+            string dir = AppDomain.CurrentDomain.BaseDirectory;
+            string updater = Path.Combine(dir, "Update SangalaStudio.cmd");
+            string exe = Path.Combine(dir, "SangalaStudio.exe");
+            try
+            {
+                // A developer's copy of the repository: never overwrite work in progress with GitHub's.
+                string git = Path.Combine(dir, ".git");
+                if (Directory.Exists(git) || File.Exists(git)) return false;
+                if (!File.Exists(updater) || !File.Exists(exe)) return false;
+                // An older updater has no unattended mode: it would stop at "Press any key" in a window
+                // nobody can see. Only one that carries this marker is run.
+                if (File.ReadAllText(updater).IndexOf("SANGALA_UPDATER:", StringComparison.Ordinal) < 0) return false;
+
+                string before = HashFile(exe);
+                var psi = new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+                    "/d /c \"\"" + updater + "\" --launch\"");
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.WorkingDirectory = dir;
+                using (var p = Process.Start(psi))
+                {
+                    if (!p.WaitForExit(20000)) KillTree(p.Id);
+                }
+
+                // Stopped between its two renames: put the engine back so the Desktop icon still works.
+                if (!File.Exists(exe) && File.Exists(exe + ".bak")) File.Copy(exe + ".bak", exe);
+                if (HashFile(exe) == before) return false;
+
+                _onlyOne.ReleaseMutex();              // the new copy has to be able to take it
+                try
+                {
+                    Process.Start(new ProcessStartInfo(exe, "--no-update") { WorkingDirectory = dir });
+                    return true;
+                }
+                catch
+                {
+                    bool again;
+                    _onlyOne = new Mutex(true, "SangalaStudioBridge", out again);
+                    return false;
+                }
+            }
+            catch { return false; }
+        }
+
+        static void KillTree(int pid)
+        {
+            try
+            {
+                var k = new ProcessStartInfo("taskkill", "/T /F /PID " + pid) { UseShellExecute = false, CreateNoWindow = true };
+                using (var kp = Process.Start(k)) kp.WaitForExit(5000);
+            }
+            catch { }
+        }
+
+        static string HashFile(string path)
+        {
+            using (var s = File.OpenRead(path))
+            using (var h = System.Security.Cryptography.SHA256.Create())
+                return Convert.ToBase64String(h.ComputeHash(s));
+        }
+
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             // One bridge per user session. If this is not the first, hand the user the page the
             // running instance is already serving and exit quietly - that is what they wanted
@@ -97,6 +173,9 @@ namespace DieCutterApp
                 try { Process.Start("http://127.0.0.1:" + (running > 0 ? running : 8787) + "/"); } catch { }
                 return;
             }
+
+            // Update first, unless this copy was itself just started by an update.
+            if (Array.IndexOf(args, "--no-update") < 0 && UpdateBeforeLaunch()) return;
 
             _htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SangalaStudio.html");
             _snapLibPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sangala for Snap.xml");
