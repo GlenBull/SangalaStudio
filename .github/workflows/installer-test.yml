@@ -1,0 +1,16 @@
+# TEMPORARY: compiles the installer from this branch so it can be checked before it joins the
+# release. Publishes nothing. Delete before merging.
+name: Installer test
+
+on:
+  push:
+    branches: [claude/bold-faraday-fno72h]
+
+jobs:
+  installer:
+    uses: ./.github/workflows/sangala-installer.yml
+    with:
+      script: tools/windows/SangalaStudio.iss
+      page: SangalaStudio.html
+      marker: SANGALA_VERSION
+      ref: claude/bold-faraday-fno72h
