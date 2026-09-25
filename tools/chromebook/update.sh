@@ -127,8 +127,9 @@ else
   echo "(The previous version was saved alongside, ending in .bak.)"
 fi
 
-# ---- 4. Refresh setup.sh, so running it again installs the newest launcher.
-if [ -s "$TMP/setup" ] && grep -q "Sangala Studio - Chromebook setup" "$TMP/setup"; then
+# ---- 4. Refresh setup.sh, so running it again installs the newest launcher. Only where there IS one:
+#          a Chromebook installed from the Sangala Studio package has no setup.sh and needs none.
+if [ -f "$SETUP" ] && [ -s "$TMP/setup" ] && grep -q "Sangala Studio - Chromebook setup" "$TMP/setup"; then
   cmp -s "$TMP/setup" "$SETUP" || mv "$TMP/setup" "$SETUP"
 fi
 
