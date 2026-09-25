@@ -1,0 +1,59 @@
+# Build a Windows installer with Inno Setup (iscc, which GitHub's Windows machines carry) and hand
+# it on as the workflow artifact "installer". sangala-release.yml calls this for an application that
+# names an installer script, and its publish job copies the result into Dropbox.
+#
+# The release number comes from the page's own version marker, so the installer, the page and the
+# updater can never disagree about which release this is.
+name: Sangala installer (shared steps)
+
+on:
+  workflow_call:
+    inputs:
+      script:
+        description: The Inno Setup script, e.g. tools/windows/SangalaStudio.iss
+        required: true
+        type: string
+      page:
+        required: true
+        type: string
+      marker:
+        description: The version marker on the page's second line, e.g. SANGALA_VERSION
+        required: true
+        type: string
+      ref:
+        description: What to build from. main for a release.
+        required: false
+        type: string
+        default: main
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Compile
+        shell: pwsh
+        env:
+          SCRIPT: ${{ inputs.script }}
+          PAGE: ${{ inputs.page }}
+          MARKER: ${{ inputs.marker }}
+        run: |
+          $head = Get-Content -LiteralPath $env:PAGE -TotalCount 5 | Out-String
+          $m = [regex]::Match($head, [regex]::Escape($env:MARKER) + ':\s*((\d{4})-(\d{2})-(\d{2})\.(\d+))')
+          if (-not $m.Success) { throw "No $env:MARKER release number in the first lines of $env:PAGE" }
+          $version = $m.Groups[1].Value
+          # The numeric form Windows shows in the file's properties: 2026-09-24.215 -> 2026.9.24.215
+          $numeric = '{0}.{1}.{2}.{3}' -f [int]$m.Groups[2].Value, [int]$m.Groups[3].Value, [int]$m.Groups[4].Value, [int]$m.Groups[5].Value
+          $out = Join-Path $env:RUNNER_TEMP 'installer'
+          iscc "/DAppVersion=$version" "/DVersionNumeric=$numeric" "/O$out" $env:SCRIPT
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed with exit code $LASTEXITCODE" }
+          Get-ChildItem $out | Format-Table Name, Length
+          "version=$version" >> $env:GITHUB_ENV
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer
+          path: ${{ runner.temp }}/installer/*.exe
+          if-no-files-found: error

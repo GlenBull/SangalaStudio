@@ -100,6 +100,22 @@ def _blocked_advice(exc):
             "Sangala Studio never prints to it.")
 
 
+def _fresh_backend(current):
+    """A libusb backend with a context of its own, made now, so a search through it sees the USB
+    devices as they are at this moment. Uses the same libusb library as `current` (the one
+    libusb-package supplied, on a Mac without libusb), or pyusb's default when `current` is None.
+    _LibUSB and its .lib are pyusb internals, the same in 1.2.1 (Debian, so ChromeOS) and 1.3.1
+    (pip, so macOS); if a later pyusb changes them this returns None and nothing else changes."""
+    try:
+        import usb.backend.libusb1 as libusb1
+        if current is None:
+            current = libusb1.get_backend()
+        lib = getattr(current, "lib", None)
+        return libusb1._LibUSB(lib) if lib is not None else None
+    except Exception:
+        return None
+
+
 def SU(mm):
     """Millimetres -> Silhouette Units. 1 mm = 20 SU.
 
@@ -166,6 +182,18 @@ class Cutter:
                     "python3 -m pip install libusb-package (or, if you have Homebrew, "
                     "brew install libusb)"))
             devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID, backend=backend))
+        if not devices:
+            # pyusb makes ONE libusb context per process, on first use, and every later find() asks
+            # that same context (usb/backend/libusb1.py, get_backend caches _lib_object). On a
+            # Chromebook that context never learned of a die cutter shared with Linux, or power-
+            # cycled, after the bridge started: "not found" until the bridge was restarted (Jo,
+            # 2026-09-25 - pkill fixed it every time, because a new process makes a new context).
+            # So look once more through a context made now.
+            fresh = _fresh_backend(backend)
+            if fresh is not None:
+                devices = list(usb.core.find(find_all=True, idVendor=SILHOUETTE_VID, backend=fresh))
+                if devices:
+                    backend = fresh
         self._backend = backend
         if not devices:
             raise CutterError("Die Cutter not found. " + _missing_advice())
